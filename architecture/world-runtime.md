@@ -2,56 +2,83 @@
 
 ## Overview
 
-World Runtime 定义一个世界如何启动、运行、推进时间和持久化。
+World Server 是一个由 Cordis 驱动的活动存档与世界状态服务。
 
-一个世界对应一个独立的 World Server。MVP 中可以理解为：
+它不承担 Godot 的场景、物理和逐帧游戏运行，而是保存需要持久化、跨客户端共享或在客户端关闭后继续存在的世界状态。
+
+一个世界对应：
 
 - 一个 World Server 进程
 - 一个 Cordis Context
 - 一份独立的世界存档
+- 一份该世界使用的 Content Package 列表
 
-World Server 内部由 World Kernel 持有 Component 状态、System Registry、World Scheduler 和 Content Registry。
+## Responsibilities
+
+World Server 主要提供：
+
+- Persistent World State
+- Entity / Component Store
+- Content Registry
+- World Clock
+- Scheduler
+- Persistence
+- Client Sync
+- Gameplay Plugin 所需的共享 Service
+
+Gameplay Plugin 可以直接处理世界操作，也可以注册需要批量或按时间运行的 System。
 
 ## Single-player
 
-单机模式下，打开世界等同于启动一个本地 World Server，再由客户端连接该服务。
+单机模式下，打开世界等同于启动一个本地 World Server，再由 Godot 连接该服务。
 
 ```mermaid
 flowchart LR
     Open[Open World]
-    Start[Start World Server]
-    Load[Load World Save]
+    Start[Start Local World Server]
+    Packages[Load Content Packages]
+    Save[Load World Save]
     Ready[World Ready]
-    Client[Start Client]
+    Godot[Start Godot Client]
     Connect[Connect localhost]
 
     Open --> Start
-    Start --> Load
-    Load --> Ready
-    Ready --> Client
-    Client --> Connect
+    Start --> Packages
+    Packages --> Save
+    Save --> Ready
+    Ready --> Godot
+    Godot --> Connect
 ```
 
-Godot 或桌面启动器可以负责拉起本地服务进程。Web 客户端本身只连接已经运行的 World Server。
+远程世界使用同一运行模型，只改变 World Server 的连接地址。
 
-远程服务器使用相同的运行模型，只改变连接地址。
+## Time and scheduled work
 
-## Time
+World Clock 维护需要由世界服务理解的时间。Scheduler 负责需要在未来重新计算或完成的长期任务。
 
-World Clock 维护世界时间，Scheduler 管理未来需要发生的任务和事件。
+典型内容包括：
 
-玩家操作、计划任务到期和世界时间推进都可以触发 World Step。World Scheduler 在一次 World Step 中按既定阶段执行相关 System。
+- 植物生长
+- 加工进度
+- 自动化生产
+- 需要脱离当前 Godot 场景继续推进的状态
 
-生长、加工、富集和自动化等慢速过程可以根据经过的世界时间直接计算变化，不要求使用高频固定 tick 驱动所有状态。
+这些过程可以根据经过的世界时间直接计算，不要求 World Server 以固定高频 tick 模拟整个游戏。
 
-世界重新加载时，各系统根据存档中的世界时间和任务状态恢复运行。
-
-具体计算模型见 [Simulation Model](./simulation-model.md)。
+具体计算方式见 [World Simulation](./simulation-model.md)。
 
 ## Persistence
 
-World Server 负责持久化世界状态，客户端不持有权威存档。
+World Server 持有权威存档。
 
-System 产生的状态变化由 World Kernel 统一应用，再进入持久化和客户端同步流程。Gameplay Plugin 不直接依赖具体存储实现。
+只有进入 World Model 的状态才需要持久化。Godot 的动画帧、velocity、碰撞接触和其他瞬时运行状态不属于世界存档。
 
-MVP 可以使用本地 SQLite 和资源目录保存世界数据。具体存档结构后续单独定义。
+世界操作或服务器 System 修改持久状态后，由统一的存储层保存，并将相关变化同步给已连接客户端。
+
+MVP 可以使用本地 SQLite 和资源目录。Gameplay Plugin 不直接依赖具体数据库实现。
+
+## Content loading
+
+World Server 启动时根据世界的 Content Package 列表加载内容定义和可选的服务端扩展，再加载引用这些内容的世界存档。
+
+存档不应依赖当前程序中硬编码的植物或角色列表，而应通过稳定的 Content ID 引用已加载内容。
