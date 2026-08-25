@@ -2,65 +2,61 @@
 
 ## Overview
 
-游戏采用独立的世界服务架构。
+游戏由 Godot Client 与 Cordis World Server 共同组成。
 
-一个世界对应一个由 Cordis 驱动的 World Server。Godot、Web 和其他客户端通过统一的 World Protocol 与世界交互。
+Godot 是实际的游戏运行时，负责场景、移动、碰撞、动画、输入、界面和即时交互。World Server 不重新实现 Godot，而是负责保存和同步需要跨客户端共享、需要持久化或需要脱离客户端继续存在的世界状态。
 
-Cordis 负责插件、Service、依赖和生命周期。世界状态采用 Entity + Component 组织，世界计算由 System 按 Schedule 聚合执行，而不是由各个对象自行更新。
+单机模式下，打开世界会同时启动本地 World Server；其他客户端也可以通过同一套 World Protocol 访问这个世界。
 
 ```mermaid
 flowchart TB
+    Packages[Content Packages]
+
     subgraph Clients[Clients]
-        Godot[Godot Client]
-        Web[Web Client]
-        Other[Other Clients]
+        Godot[Godot Client\nScene / Physics / UI]
+        Web[Web / Other Client]
     end
 
     Protocol[World Protocol]
 
-    subgraph Server[World Server / Cordis]
-        Gateway[World Gateway]
-
-        subgraph Kernel[World Kernel]
-            Components[Component Store]
-            Systems[System Registry]
-            Scheduler[World Scheduler]
-            Content[Content Registry]
-        end
-
+    subgraph Server[Cordis World Server]
+        Gateway[Gateway / Sync]
+        State[Persistent World State]
         Gameplay[Gameplay Plugins]
-        ContentPlugins[Content Plugins]
-
-        Gameplay -. register .-> Kernel
-        ContentPlugins -. register .-> Kernel
-        Gateway --> Kernel
+        Content[Content Registry]
+        Time[World Clock / Scheduler]
+        Persistence[Persistence]
     end
 
-    Save[(World Save)]
+    Packages -->|data + optional server extension| Server
+    Packages -->|client resources| Godot
 
-    Godot --> Protocol
-    Web --> Protocol
-    Other --> Protocol
-    Protocol --> Gateway
-    Kernel --> Save
+    Godot <--> Protocol
+    Web <--> Protocol
+    Protocol <--> Gateway
+    Gateway <--> State
+    Gameplay <--> State
+    Time --> Gameplay
+    State <--> Persistence
 ```
 
 ## Principles
 
-- 一个世界对应一个独立的 World Server。
-- World Server 持有世界的权威状态。
-- 客户端只通过 World Protocol 操作世界。
-- Cordis 管理模块生命周期和模块依赖，不承担世界计算顺序。
-- Entity 只是世界对象的标识，Component 保存状态，System 负责行为和计算。
-- 世界计算按 System 聚合执行，不采用逐对象 `update()` 模型。
-- System Schedule 与 Cordis dependency graph 相互独立。
-- 时间推进以世界时间、事件和计划任务为基础，不依赖高频固定 tick。
-- 单机与远程世界使用相同的服务端模型。
+- Godot 负责正常游戏运行，不把物理、动画和逐帧状态搬到 World Server。
+- World Server 只对持久化和共享的世界状态负责，并作为同一世界多个客户端之间的存档与同步服务。
+- Godot 的运行时状态与 World Server 的世界状态不是一一镜像关系。
+- World Server 内部仍采用 Entity + Component 组织状态，并在需要聚合计算时由 System 处理一组 Component，而不是逐对象执行 `update()`。
+- System 是服务器世界规则的实现方式之一，不要求所有普通交互都经过统一的全局调度管线。
+- Cordis 负责 Plugin、Service、依赖和生命周期；游戏状态和计算规则建立在这些能力之上。
+- 植物、角色和其他可扩展内容通过 Content Package 提供数据与客户端资源，并可以按需附带服务端 Cordis 扩展。
+- 单机与远程世界使用相同的 World Server 模型，仅连接方式不同。
+- 生长、加工和自动化等长期过程按世界时间和事件推进，不依赖整个世界的高频固定 tick。
 
 ## Architecture details
 
+- [Client Runtime](./client-runtime.md)
 - [World Runtime](./world-runtime.md)
 - [World Protocol](./world-protocol.md)
 - [World Model](./world-model.md)
-- [Simulation Model](./simulation-model.md)
+- [World Simulation](./simulation-model.md)
 - [Content System](./content-system.md)
