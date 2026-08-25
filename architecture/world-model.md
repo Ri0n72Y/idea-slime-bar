@@ -4,40 +4,50 @@
 
 World Model 定义世界状态如何表示。
 
-世界中的植物、玩家、物品、容器和其他对象都作为 Entity 保存。Entity Store 持有这些实体及其可变状态，Gameplay Plugin 通过 World Services 读取和修改它们。
+世界采用轻量的 Entity + Component 模型。Entity 只提供稳定标识，Component 保存世界状态。行为和计算不放在 Entity 或 Component 中，而由 System 统一处理。
 
 ## Entity
 
-Entity 是世界中的一个具体对象，至少需要稳定的标识和内容类型。
+Entity 是世界中的一个具体对象，本身不承载游戏行为。
 
-例如，一株水瓜和另一株水瓜是两个不同的 Entity，但都可以引用同一个水瓜内容定义。
+一株水瓜、一台机器和玩家都可以是 Entity。不同 Entity 通过组合不同 Component 获得自己的状态结构。
 
-Entity 保存运行时状态，不负责定义完整的游戏规则。
+同一种内容可以对应多个 Entity。例如两株水瓜引用同一个水瓜内容定义，但各自拥有独立的生长、水分和位置状态。
 
-## Components
+## Component
 
-世界模型采用轻量的 Entity + Component 组织方式。
+Component 是附着在 Entity 上的纯状态数据。
 
-不同对象可以组合自己需要的状态，而不是把所有植物、物品和角色字段塞进一个统一的大型结构。
+例如：
 
-例如植物可以组合位置、生长、含水状态和其他组件；玩家可以组合位置、库存、史莱姆身体和能力相关组件。
+- Transform：位置和空间信息
+- Growth：生长阶段和进度
+- Hydration：水分状态
+- Inventory：库存状态
+- Rooting：根系和入土状态
 
-具体 Component 类型随系统实现逐步定义，不要求引入完整 ECS 框架。
+Component 不实现 `update()`、`grow()` 或其他对象行为。
 
-## Entity Store
+不同 Entity 可以自由组合需要的 Component，不要求继承统一的对象层级，也不要求引入完整 ECS 框架。
 
-Entity Store 提供世界实体的统一读取、创建、修改和删除能力。
+## Component Store
 
-Gameplay Plugin 负责解释这些状态的含义。例如 Farming 负责植物生长规则，但植物实体本身仍由 Entity Store 管理。
+Component Store 保存 Entity 与 Component，并为 System 提供查询能力。
+
+System 根据所需 Component 查询一组 Entity，再对这一组状态进行聚合计算。例如 Growth System 可以查询同时拥有植物内容和 Growth Component 的 Entity。
+
+具体索引、存储布局和查询实现后续按开发需要确定。
+
+## Content reference
+
+Entity 的运行时状态与内容定义分离。
+
+Entity 可以通过稳定的内容标识引用 Content Registry 中的植物、物品或其他定义。Content Definition 描述静态内容，Component 保存具体世界实例的可变状态。
 
 ## Authority
 
-Entity Store 中的服务端状态是权威状态。
+World Server 中的 Component 状态是权威状态。
 
-客户端收到的是 Snapshot、State Patch 或 Event，用于表现和交互，不能直接覆盖服务端实体。
+客户端只接收 Snapshot、State Patch 或 Event 用于表现和交互，不能直接覆盖服务端 Component。
 
-## Persistence
-
-Entity 的持久化通过 World Runtime 提供的存储能力完成。
-
-具体数据库表、序列化格式和迁移策略后续单独定义。
+System 的执行和 Component 的变更规则见 [Simulation Model](./simulation-model.md)。
