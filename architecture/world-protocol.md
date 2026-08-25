@@ -2,57 +2,69 @@
 
 ## Overview
 
-World Protocol 是客户端与 World Server 之间的边界。
+World Protocol 是客户端与 World Server 之间的共享世界边界。
 
-客户端不直接访问 Gameplay Plugin、Cordis Service、Component Store 或世界存储，只通过协议读取世界状态并提交操作请求。
+协议不承载 Godot 的逐帧输入、物理和动画。它只用于读取世界状态、提交会修改持久或共享状态的操作，以及接收其他客户端或服务器长期计算产生的变化。
 
-协议主要包含两类数据：
+## Data types
 
-- Command：客户端请求世界执行操作
-- State / Event：服务端返回状态变化和世界事件
+协议主要处理：
 
-## Data flow
+- World Snapshot：客户端进入世界时需要的当前状态
+- World Action：客户端请求执行的世界操作
+- Action Result：操作是否成功及必要返回值
+- State Update：持久世界状态的变化
+- World Event：需要通知客户端的世界事件
+- Content Information：当前世界使用的 Content Package 信息
+
+具体消息 Schema 在进入实现阶段后定义。
+
+## Gameplay flow
+
+Godot 的普通游戏循环不经过 World Server。只有当行为跨越世界边界时才发起 World Action。
 
 ```mermaid
 sequenceDiagram
-    participant C as Client
-    participant G as World Gateway
-    participant K as World Kernel
-    participant S as World Systems
-    participant P as Persistence
+    participant G as Godot Client
+    participant W as World Server
+    participant P as Gameplay Plugin
+    participant S as World State
 
-    C->>G: Command
-    G->>K: Submit Command
-    K->>S: Run World Step
-    S-->>K: Change Set
-    K->>K: Apply Changes
-    K->>P: Persist
-    K-->>G: State Patch / Event
-    G-->>C: State Patch / Event
+    G->>G: Movement / physics / animation
+    G->>W: World Action
+    W->>P: Handle action
+    P->>S: Read / update persistent state
+    S-->>W: State changed
+    W-->>G: Action Result / State Update
 ```
 
-一次操作的基本过程是：
+例如玩家在 Godot 中走到农田不需要通知服务器；真正执行种植时才提交 `plant` 操作。之后植物的持久状态由 World Server 保存。
 
-1. 客户端发送 Command。
-2. World Gateway 将 Command 提交给 World Kernel。
-3. World Scheduler 执行相关 System。
-4. System 产生 Change Set。
-5. World Kernel 统一应用并持久化状态变化。
-6. World Server 将 State Patch 或 Event 发送给客户端。
+## Server-driven changes
 
-客户端不需要知道具体 System 如何计算结果。
+植物生长、加工完成或其他长期世界规则可以在没有 Godot 输入的情况下改变世界状态。
+
+World Server 保存这些变化，并在客户端连接时通过 Snapshot 或 State Update 同步。
+
+## Transform sync
+
+MVP 不同步 Avatar 的逐帧移动。
+
+Godot 可以在保存、切换场景、重要交互或其他必要时机提交需要持久化的位置。World Server 保存的是可恢复的 Persistent Transform，而不是每一帧物理结果。
 
 ## Transport
 
 MVP 可以使用：
 
-- HTTP：连接、初始数据和普通查询
-- WebSocket：持续的 Command、Event 和状态更新
+- HTTP：世界连接、Snapshot、普通查询和资源信息
+- WebSocket：持续的 State Update、World Event 和需要低延迟返回的操作
 
-具体消息格式和版本策略后续单独定义。
+具体 Transport 可以在不改变世界语义的情况下替换。
 
-## Client boundary
+## Multiple clients
 
-Godot、Web 和其他客户端共享同一套 World Protocol。
+Godot、Web 和其他客户端共享同一个 World Server，因此看到的是同一份持久世界状态。
 
-客户端可以有不同的交互方式和表现形式，但不能各自实现独立的世界规则。任何会改变权威世界状态的行为都必须经过 World Server。
+轻量客户端可以执行其支持的 World Action。由这些操作造成的变化会被 World Server 保存，并在 Godot 下次同步时反映到游戏中。
+
+多人实时移动、预测和反作弊同步不属于当前 MVP 协议范围。
