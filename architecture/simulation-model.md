@@ -1,125 +1,96 @@
-# Simulation Model
+# World Simulation
 
 ## Overview
 
-世界计算采用 Component + System + Schedule 模型。
+World Server 只计算属于持久世界状态的规则。
 
-Entity 和 Component 只描述世界当前状态。System 负责读取一组 Component、执行计算并产生状态变化。World Scheduler 按阶段和依赖顺序执行 System。
+Component + System 仍然是服务器内部组织计算的主要思想：当一类世界状态需要统一计算时，由 System 查询相关 Component 并聚合处理，而不是让每个 Entity 自己运行 `update()`。
 
-世界不会让每个对象独立运行 `update()`。一次世界计算以 System 为单位聚合处理满足条件的 Entity。
+这套模型不替代 Godot 的逐帧游戏循环，也不要求所有普通交互都转换成 System。
 
-```mermaid
-flowchart LR
-    State[Component State]
-    Query[System Query]
-    System[System]
-    Changes[Change Set]
-    Apply[Apply Changes]
-    Sync[Persist / Sync]
+## Direct actions and systems
 
-    State --> Query
-    Query --> System
-    System --> Changes
-    Changes --> Apply
-    Apply --> State
-    Apply --> Sync
-```
+服务器世界逻辑分为两类。
 
-## System
+### Direct actions
 
-System 是世界计算的基本单位。
+一次明确的玩家操作可以由对应 Gameplay Plugin 直接验证并修改世界状态，例如：
 
-一个 System 声明自己需要读取或修改的 Component，并查询满足条件的 Entity。System 对这批数据统一计算，而不是调用每个对象自己的行为方法。
+- 种植
+- 收获
+- 开始加工
+- 服务客人
+- 清理餐具
+- 拾取报酬
+
+这类操作不需要为了形式统一而进入全局 System Schedule。
+
+### Systems
+
+当规则天然需要对一组状态进行聚合、按时间推进或由多个来源共同触发时，使用 System。
 
 例如：
 
-- Entity Lifecycle System 处理 Entity 创建、销毁和 Component 增减
-- Transform System 处理位置变化
-- Environment System 计算环境状态
-- Growth System 处理植物生长
-- Hydration System 处理水分变化
-- Processing System 处理加工进度
-
-具体 Gameplay Plugin 可以注册一个或多个 System。
-
-## Schedule
-
-System 的执行顺序由 World Scheduler 管理，与 Cordis 插件依赖分离。
-
-Cordis dependency graph 描述一个模块需要哪些 Service 才能存在。System Schedule 描述一次世界计算中哪些 System 先执行、哪些后执行。
-
-初始阶段划分为：
+- Growth System：根据世界时间更新需要生长的植物
+- Processing System：推进或完成加工任务
+- Automation System：批量处理自动化生产
+- 其他需要统一查询一组 Component 的长期世界规则
 
 ```mermaid
 flowchart LR
-    Input[Input]
-    Lifecycle[Entity Lifecycle]
-    Transform[Transform]
-    Environment[Environment]
-    Simulation[Simulation]
-    Resolve[Resolve]
-    Commit[Commit]
-    Sync[Sync]
+    Trigger[Action / Time / Scheduled Work]
+    Query[Query Components]
+    System[Relevant System]
+    State[Persistent World State]
+    Sync[Persist / Sync]
 
-    Input --> Lifecycle
-    Lifecycle --> Transform
-    Transform --> Environment
-    Environment --> Simulation
-    Simulation --> Resolve
-    Resolve --> Commit
-    Commit --> Sync
+    Trigger --> Query
+    Query --> System
+    System --> State
+    State --> Sync
 ```
 
-阶段保持少量和稳定。Farming、Processing、Restaurant、Automation 等具体游戏逻辑作为 System 挂载到相应阶段，而不是各自成为顶级阶段。
+## Scheduling
 
-同一阶段内的 System 可以声明必要的先后关系。具体调度 API 在实现时定义。
+World Server 不需要一个模拟整个游戏的固定高频 tick。
 
-## World Step
+System 可以由以下条件触发：
 
-World Step 是一次完整的世界计算。
+- 世界时间推进
+- Scheduler 中的任务到期
+- 某个世界操作使相关状态需要重新计算
+- 明确的周期性世界任务
 
-World Step 可以由玩家 Command、计划任务到期、世界时间推进或其他需要重新计算世界状态的事件触发。
+一次服务器计算只运行相关 System，不要求扫描或推进所有 Entity。
 
-System-based 不意味着世界需要持续高频 tick。对生长和加工等慢速过程，System 可以直接根据经过的世界时间计算变化。
+System 之间如果存在真实的计算先后关系，可以声明顺序；不需要预先建立覆盖所有 Gameplay 的大型固定 Phase 图。
 
-例如世界时间从 10:00 推进到 14:00 时，Growth System 可以直接使用这段时间差计算植物状态，而不需要执行大量固定间隔 tick。
+## State changes
 
-## Change Set
+服务器中的世界修改通过统一的状态存储接口完成，以便持久化和客户端同步。
 
-System 的计算结果先表示为状态变化，再由 World Kernel 统一应用。
+实现内部可以使用 transaction、change record 或 Change Set 聚合变化，但这些只是实现手段，不是所有 Gameplay Plugin 必须遵循的额外领域抽象。
 
-Change Set 可以包含：
+System 不直接管理数据库，也不直接向某个具体客户端发送消息。
 
-- Component 创建、修改或删除
-- Entity 创建或删除
-- Gameplay Event
+## Events
 
-统一提交变化可以让持久化、客户端同步和后续调试使用同一份世界变化结果。
+Gameplay Plugin 可以通过普通事件表达已经发生的世界事实，例如收获完成、加工完成或服务完成。
 
-System 不直接向客户端发送状态，也不各自负责持久化。
+事件主要用于解耦其他插件的附加反应，不是世界状态的替代品。
 
-## Query and aggregation
-
-System 根据 Component 组合查询需要处理的 Entity。
-
-世界计算以 System 聚合为主，但不要求每次扫描全部 Entity。Component Store 可以根据需要维护查询索引、变更集合或计划时间索引，只让相关 System 处理需要重新计算的数据。
-
-具体优化策略不属于当前架构约束。
+MVP 的 Score 功能可以监听这些事件并加分；以后任务、教程或其他触发器也可以监听同类事件。它本质上仍然只是事件机制，不构成独立的核心架构层。
 
 ## Cordis boundary
 
-Cordis 负责：
+Cordis 负责 Plugin、Service、依赖和生命周期。
 
-- Plugin 的加载与卸载
-- Service 的提供与依赖
-- System、Component 和 Content 注册的生命周期
+Gameplay Plugin 可以通过 Cordis：
 
-World Kernel 负责：
+- 提供世界操作
+- 注册 Component 类型
+- 注册 System
+- 监听或发出事件
+- 使用其他世界 Service
 
-- Component 状态
-- System Registry
-- Schedule
-- World Step
-- Change Set 的应用
-
-Gameplay Plugin 通过 Cordis 加载，再向 World Kernel 注册自己的 Component、System 和内容能力。Cordis 的模块生命周期不会替代 World Scheduler 的计算顺序。
+System 的计算顺序只表达游戏规则本身，不应为了排序而滥用 Cordis 插件依赖。
