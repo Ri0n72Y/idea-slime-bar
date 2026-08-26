@@ -2,69 +2,119 @@
 
 ## Overview
 
-World Protocol 是客户端与 World Server 之间的共享世界边界。
+World Protocol 是 Client 与 World Server 之间的边界。
 
-协议不承载 Godot 的逐帧输入、物理和动画。它只用于读取世界状态、提交会修改持久或共享状态的操作，以及接收其他客户端或服务器长期计算产生的变化。
+Godot、Web 和其他客户端通过同一套协议连接世界、获取内容信息、读取权威状态并提交操作。单机和在线模式使用相同协议，只改变 Server 地址。
 
-## Data types
+协议不要求复制 Godot 的全部内部状态，只传递 Server World Model 和客户端操作所需要的信息。
 
-协议主要处理：
+## Connection
 
-- World Snapshot：客户端进入世界时需要的当前状态
-- World Action：客户端请求执行的世界操作
-- Action Result：操作是否成功及必要返回值
-- State Update：持久世界状态的变化
-- World Event：需要通知客户端的世界事件
-- Content Information：当前世界使用的 Content Package 信息
+客户端进入世界时需要先建立连接并确认当前世界使用的内容。
 
-具体消息 Schema 在进入实现阶段后定义。
-
-## Gameplay flow
-
-Godot 的普通游戏循环不经过 World Server。只有当行为跨越世界边界时才发起 World Action。
+基本流程为：
 
 ```mermaid
 sequenceDiagram
-    participant G as Godot Client
-    participant W as World Server
-    participant P as Gameplay Plugin
-    participant S as World State
+    participant C as Client
+    participant S as World Server
 
-    G->>G: Movement / physics / animation
-    G->>W: World Action
-    W->>P: Handle action
-    P->>S: Read / update persistent state
-    S-->>W: State changed
-    W-->>G: Action Result / State Update
+    C->>S: Connect / Handshake
+    S-->>C: World Info + Content Lock
+    C->>C: Resolve client resources
+    C->>S: Ready
+    S-->>C: World Snapshot
+    C->>C: Enter world
 ```
 
-例如玩家在 Godot 中走到农田不需要通知服务器；真正执行种植时才提交 `plant` 操作。之后植物的持久状态由 World Server 保存。
+如果客户端缺少当前世界需要的 Content Package，具体下载、安装或报错策略在后续实现规格中定义。
 
-## Server-driven changes
+## Message categories
 
-植物生长、加工完成或其他长期世界规则可以在没有 Godot 输入的情况下改变世界状态。
+协议至少需要覆盖以下几类信息。
 
-World Server 保存这些变化，并在客户端连接时通过 Snapshot 或 State Update 同步。
+### Connection and content
 
-## Transform sync
+用于建立世界连接和确认内容环境，例如：
 
-MVP 不同步 Avatar 的逐帧移动。
+- handshake
+- world metadata
+- Content Lock
+- client readiness
+- initial Snapshot
 
-Godot 可以在保存、切换场景、重要交互或其他必要时机提交需要持久化的位置。World Server 保存的是可恢复的 Persistent Transform，而不是每一帧物理结果。
+### Realtime state
 
-## Transport
+用于需要较及时同步的世界状态，例如：
 
-MVP 可以使用：
+- Character input 或 movement information
+- Transform update
+- nearby Entity state
 
-- HTTP：世界连接、Snapshot、普通查询和资源信息
-- WebSocket：持续的 State Update、World Event 和需要低延迟返回的操作
+具体同步频率、插值和预测策略由实现阶段确定，不要求复制 Godot 的逐帧内部物理状态。
 
-具体 Transport 可以在不改变世界语义的情况下替换。
+### Gameplay actions
 
-## Multiple clients
+用于客户端请求修改世界，例如：
 
-Godot、Web 和其他客户端共享同一个 World Server，因此看到的是同一份持久世界状态。
+- interact
+- plant
+- water
+- harvest
+- start processing
+- serve
+- clean
+- pickup
 
-轻量客户端可以执行其支持的 World Action。由这些操作造成的变化会被 World Server 保存，并在 Godot 下次同步时反映到游戏中。
+World Server 根据当前权威状态验证并执行这些操作。
 
-多人实时移动、预测和反作弊同步不属于当前 MVP 协议范围。
+### World updates
+
+用于 Server 向客户端同步已经确认的世界变化，例如：
+
+- Entity spawn / remove
+- Component state update
+- Inventory update
+- world time
+- processing / growth state
+- Guest state
+- Gameplay Event
+
+## Authority
+
+Client 可以立即进行本地表现，但不能通过本地状态直接覆盖 Server World Model。
+
+例如 Godot 可以先表现 Character 移动，再将输入或位置变化同步给 Server；Server 返回的世界状态仍然是其他客户端和持久化使用的权威状态。
+
+对于种植、收获、加工、服务等离散操作，Server 可以接受或拒绝客户端请求，并返回最终结果。
+
+## State synchronization
+
+客户端首次进入世界时获取 Snapshot，之后接收增量状态更新。
+
+不同 Component 可以使用不同同步策略：
+
+- 高频状态按较短间隔同步
+- 普通状态仅在变化时同步
+- Server 内部状态可以只同步客户端真正需要的投影结果
+
+具体 revision、ack、delta 格式和断线恢复策略在协议 Spec 中定义。
+
+## Events
+
+World Protocol 可以传递 Gameplay Event，用于表现或通知，例如加工完成、Guest 完成消费或新的世界提示。
+
+Event 是辅助同步机制，不代替持久 Component 状态。客户端不能只依赖事件流重建所有权威世界状态。
+
+## Local and remote worlds
+
+本地 World Server 和远程 World Server 对 Client 暴露相同的 World Protocol。
+
+因此 Godot Client 不需要维护两套 Gameplay 接口：
+
+```text
+Single-player: Godot -> localhost World Server
+Online:        Godot -> remote World Server
+```
+
+Web 和其他客户端也可以连接同一 Server，只实现各自需要的协议能力。
