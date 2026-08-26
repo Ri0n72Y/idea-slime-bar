@@ -2,165 +2,217 @@
 
 ## Overview
 
-植物、角色、物品和其他可扩展内容通过 Content Package 挂载到游戏中。
+Content System 负责扩展一个世界能够理解和表现的游戏内容。
 
-Content Package 是内容的交付单元，不等同于 Cordis Plugin。普通内容优先由数据定义和客户端资源组成；只有数据与现有 Gameplay System 无法表达的特殊规则，才附带服务端 Cordis 扩展。
+游戏内容以可挂载的 Content Package 组织。一个 Content Package 可以同时向 World Server 提供静态数据和可选 Cordis 扩展，并向 Godot Client 提供 texture、animation、sound 等表现资源。
 
-同一个 Package 同时为 World Server 和 Godot Client 提供各自需要的信息。
+这种结构类似于 Server Mod 与 Client Resource Pack 的组合，但普通内容优先使用数据定义和已有 Gameplay System，不要求每个植物、物品或 Character 都拥有独立代码插件。
 
 ```mermaid
-flowchart LR
+flowchart TB
     Package[Content Package]
 
-    subgraph Server[World Server]
-        ManifestS[Manifest]
-        Data[Shared Data]
-        Registry[Content Registry]
-        Extension[Optional Cordis Extension]
-    end
+    Package --> Manifest[Manifest]
+    Package --> Data[Shared / Server Data]
+    Package --> Extension[Optional Server Extension]
+    Package --> Resources[Client Resources]
 
-    subgraph Client[Godot Client]
-        ManifestC[Manifest]
-        Resources[Client Resources]
-        ClientRegistry[Client Content Registry]
-        Renderer[Generic Renderer / Controller]
-    end
+    Data --> Server[World Server]
+    Extension --> Cordis[Cordis Plugin]
+    Cordis --> Server
 
-    Package --> ManifestS
-    Package --> Data
-    Package -. optional .-> Extension
-    Data --> Registry
-
-    Package --> ManifestC
-    Package --> Resources
-    Resources --> ClientRegistry
-    ClientRegistry --> Renderer
+    Resources --> Godot[Godot Client]
+    Manifest --> Server
+    Manifest --> Godot
 ```
 
-## Package structure
+## Content Package
 
-概念上的 Package 可以包含：
+Content Package 是内容的交付和挂载单位。
+
+概念上一个 Package 可以包含：
 
 ```text
-content-package/
-├── manifest.json
+base.aquamelon/
+├── manifest
 ├── data/
-├── server/        # optional Cordis extension
-└── client/        # Godot resources
+│   └── content definitions
+├── server/
+│   └── optional Cordis extension
+└── client/
+    └── textures / animations / sounds / other resources
 ```
 
-`manifest.json` 至少标识稳定的 Package ID、版本和包含的内容。
+具体文件格式和目录结构在实现 Spec 中确定，Architecture 只规定这些职责必须可以分离。
 
-具体目录格式和 Schema 在进入实现阶段后定义。
+## Manifest
+
+Manifest 描述 Package 的稳定身份和加载信息，例如：
+
+- package id
+- version
+- 提供的 Content ID
+- Server Extension 是否存在
+- Client Resources 是否存在
+- 必要依赖
+
+MVP 不需要完整的通用 Mod dependency solver。世界可以先使用明确的 Package 版本集合。
 
 ## Content Definition
 
-Content Definition 保存静态游戏数据。
+Content Definition 描述 World Server 运行该内容需要知道的静态信息。
 
-以植物为例，可以包含：
+例如水瓜可以声明：
 
 - Content ID
+- 类型为 plant
 - 重量
 - 生长时长
 - 生长阶段
 - 阶段产物
-- 初始 Component 配置
-- 可使用的交互能力
-- 客户端表现资源标识
+- 可交互能力
+- 创建实例时需要的 Component 和默认值
+- 所依赖的通用 Gameplay 能力
 
-这些数据由 World Server 注册到 Content Registry。世界中的具体植物 Entity 只保存自身可变状态，并通过 Content ID 引用定义。
+这些数据由 Content Registry 加载，并被 Farming、Processing、Inventory 等 Gameplay System 使用。
 
-交互定义优先声明已有能力，例如 `water`、`harvest` 或 `process`，由对应 Gameplay Plugin 处理，而不是让每个 Content Definition 自带任意对象回调。
+Content Definition 不保存某一株水瓜当前的生长状态。具体实例状态属于 Server Entity / Component。
 
-## Server extension
+## Gameplay Plugins
 
-普通内容不要求拥有自己的 Cordis Plugin。
+Gameplay Plugin 提供一类内容共享的世界规则。
 
-如果某种内容具有通用数据和已有 Gameplay System 无法表达的规则，可以在 Package 中附带服务端扩展。该扩展可以通过 Cordis 注册额外 Service、System、事件处理或其他世界能力。
+例如 Farming Plugin 可以提供：
 
-因此：
+- Growth Component
+- Hydration Component
+- Planting / Watering / Harvest 规则
+- Growth System
+- 与植物相关的查询和 Service
 
-- 数据差异使用 Content Definition 表达
-- 通用玩法使用 Gameplay Plugin 表达
-- 真正特殊的服务器规则才使用 Package Server Extension
+新的植物通常只需要声明自己的 Content Definition，再复用 Farming 已有能力。
 
-## Client resources
+只有通用 Component + System 无法表达的特殊机制，才需要增加新的 Server System 或可选 Cordis Extension。
 
-Godot Client 从 Package 的客户端部分加载 texture、animation、sound 或其他表现资源，并通过 Client Content Registry 将稳定的 Content ID 映射为表现资源。
+## Server Extension
 
-World Server 不需要理解 texture 或动画；Godot 也不根据贴图决定游戏规则。
+Content Package 可以附带可选的 Server Extension。
 
-MVP 中客户端资源包只提供数据和资源，不开放任意客户端脚本插件。植物、角色、物品和客人由游戏内置的通用 Renderer / Controller 根据 Content ID 和资源描述进行表现。
+Server Extension 是普通 Cordis Plugin，用于增加数据定义无法表达的服务端能力，例如：
 
-## Plant example
+- 新的 Component
+- 新的 System
+- 特殊 Gameplay Rule
+- 新的 Service
+- 对已有系统的扩展
 
-水瓜可以作为一个独立 Content Package 挂载：
+World Server 加载 Package 时可以通过 Cordis 管理这些扩展的依赖和生命周期。
 
-```text
-base.aquamelon
-├── manifest
-├── plant definition
-└── client resources
-```
+Server Extension 是可选能力，不应该成为普通内容包的默认成本。
 
-World Server 从定义中得到水瓜的重量、生长参数、阶段产物和交互能力；Godot 从同一个 Package 的客户端资源中得到各阶段 texture 等表现内容。
+## Client Resources
 
-创建一株水瓜时，World Server 创建引用 `plant.aquamelon` 的 Entity，并保存该实例的 Growth 等 Component。Godot 收到 Content ID 与持久状态后，从 Client Content Registry 选择对应资源进行渲染。
+Content Package 可以向 Godot 提供该内容的表现资源，例如：
 
-如果水瓜全部规则都能由 Farming Plugin 表达，它不需要服务端扩展。
+- texture
+- animation
+- sound
+- model
+- scene fragment
+- presentation metadata
 
-## Character example
+Godot 自身提供基础客户端运行能力和通用表现逻辑。客户端通过稳定 Content ID 找到当前 Entity 对应的资源。
 
-Character 也使用同一机制。
-
-例如 `character.slime` 可以定义服务器需要保存的角色内容信息和初始世界 Component，同时提供 Godot 需要的角色 texture、animation set 和其他表现资源。
-
-Avatar 的移动、碰撞和动画仍由 Godot 实现；World Server 只保存需要持久化或共享的角色状态。
-
-## World content lock
-
-世界存档必须记录自己依赖的 Content Package。
-
-MVP 中使用精确版本或内容 hash 即可，不需要实现复杂依赖解析器。
+例如 Server 只需要知道：
 
 ```text
-World Save
-└── Content Lock
-    ├── base.core
-    ├── base.slime
-    └── base.aquamelon
+ContentRef = plant.aquamelon
+Growth.stage = mature
 ```
 
-World Server 在读取存档前加载并校验这些 Package；Godot 在进入主场景前加载对应客户端资源。这样服务端和客户端可以围绕同一个 Content ID 与版本解释世界。
+Godot 可以据此在当前 Package 中找到成熟水瓜对应的 texture 或 animation。
 
-## Wiki and runtime content
+MVP 不要求 Content Package 可以注入任意客户端脚本。是否开放 Client Extension API 可以在后续有明确需求时再设计。
 
-`docs/` 中的 Wiki 描述游戏设定和设计事实，不由运行时直接加载。
+## Characters
 
-从设定进入游戏实现时：
+Character 使用与植物和物品相同的内容机制。
+
+例如 `character.slime` 可以由 Package 提供：
+
+Server 侧：
+
+- Character Content Definition
+- 默认世界 Component
+- 移动或交互参数
+- 可选的特殊 Server Extension
+
+Godot 侧：
+
+- texture
+- animation set
+- sound
+- presentation metadata
+
+因此 Godot Client 不需要把“史莱姆”硬编码成唯一角色类型。新的 Character 可以通过新的 Content Package 挂载到游戏中。
+
+## Adding a plant
+
+新增一种普通植物的基本路径为：
+
+1. 在 `docs/` 中维护该植物的设定 Wiki。
+2. 在 Content Package 中提供对应 Content Definition。
+3. World Server 将定义注册到 Content Registry。
+4. Farming Plugin 根据该定义创建和处理植物 Entity / Component。
+5. Godot 加载 Package 的客户端资源，并根据 Content ID 表现植物。
+6. 如果植物存在通用 Farming 无法表达的特殊规则，再增加 Server Extension。
 
 ```mermaid
 flowchart LR
-    Wiki[docs / Wiki]
+    Wiki[Plant Wiki]
     Package[Content Package]
-    Server[World Content Registry]
-    Client[Client Content Registry]
-    World[World Entity]
+    Definition[Content Definition]
+    Registry[Server Content Registry]
+    Systems[Gameplay Systems]
+    Entity[Server Entity]
+    Resources[Client Resources]
+    Godot[Godot Client]
 
-    Wiki -. implementation reference .-> Package
-    Package --> Server
-    Package --> Client
-    Server --> World
+    Wiki -. design source .-> Package
+    Package --> Definition
+    Definition --> Registry
+    Registry --> Systems
+    Systems --> Entity
+
+    Package --> Resources
+    Resources --> Godot
+    Entity -. Content ID / State .-> Godot
 ```
 
-## MVP scope
+## World Content Lock
 
-MVP 需要验证：
+世界存档需要记录自己使用的 Content Package 集合。
 
-- Content Package 可以在不修改 World Server 核心代码的情况下注册新植物或角色
-- World Server 可以读取 Package 数据并创建对应世界状态
-- Godot 可以读取对应客户端资源并渲染相同 Content ID
-- Package 可以选择性附带 Cordis Server Extension
-- 世界存档可以记录并重新加载自己依赖的内容包
+Content Lock 至少需要保证 Server 和 Client 对世界中的 Content ID 使用兼容的内容版本。
 
-MVP 不包含运行中热装卸、在线 Mod 下载、复杂依赖求解、资源覆盖优先级或任意客户端脚本扩展。
+进入世界时：
+
+1. World Server 按 Content Lock 加载服务端内容和扩展。
+2. Client 连接 Server 并取得 Content Lock。
+3. Godot 确认并挂载对应客户端资源。
+4. Client 完成内容准备后再加载 World Snapshot。
+
+具体版本、hash、下载和缓存规则在实现 Spec 中定义。
+
+## Separation
+
+内容系统保持以下几类信息分离：
+
+- `docs/`：面向人阅读的设定 Wiki
+- Content Definition：Server 可读取的静态游戏数据
+- Server Entity / Component：某个世界中的实例状态
+- Gameplay System：对这些实例执行的通用世界规则
+- Server Extension：Content Package 可选的 Cordis 代码扩展
+- Client Resources：Godot 用于表现该内容的资源
+
+这种分离允许游戏通过 Package 增加新的内容，同时保持 World Server、Godot Client 和普通 Gameplay Plugin 的核心结构稳定。
