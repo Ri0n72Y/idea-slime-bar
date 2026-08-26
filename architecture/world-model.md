@@ -2,66 +2,98 @@
 
 ## Overview
 
-World Model 只描述需要由 World Server 保存或跨客户端共享的世界状态。
+World Model 定义 World Server 中的权威游戏世界如何表示。
 
-Godot 的完整 Scene Tree 和运行时状态不会复制到 World Server。进入 World Model 的对象采用轻量的 Entity + Component 组织方式，便于不同 Gameplay Plugin 查询、修改和扩展。
+世界采用轻量的 Entity + Component 模型。Entity 提供稳定标识，Component 保存具有世界语义的状态，System 读取和修改这些状态。
+
+Godot Scene Tree 是对当前世界的客户端投影，不是 Server World Model 的替代品，也不要求与 Server Entity 一一对应。
 
 ## Entity
 
-Entity 是世界状态中的稳定对象标识。
-
-植物、库存中的物品、加工任务、客人、餐具以及玩家的持久状态都可以由 Entity 表示。一个 Godot Node 不要求对应一个 Entity，反过来也不要求每个 Entity 在当前场景中拥有 Node。
-
-Entity 本身不承载对象行为。
-
-## Component
-
-Component 是附着在 Entity 上的持久或共享状态数据。
+Entity 表示世界中的一个可识别对象。
 
 例如：
 
-- ContentRef：引用稳定的 Content ID
-- PersistentTransform：需要保存的场景与位置
-- Inventory：库存状态
+- 玩家 Character
+- 一株水瓜
+- 一个掉落物
+- 一台加工设备
+- 一个 Guest
+- 一套餐具
+
+Entity 本身不承担完整游戏行为。不同 Entity 通过组合 Component 表达状态，并通过 Content ID 引用对应内容定义。
+
+同一种内容可以对应多个 Entity。例如多株水瓜都引用同一个 `plant.aquamelon` 内容定义，但拥有各自独立的位置、生长和水分状态。
+
+## Component
+
+Component 保存 Server 需要运行、持久化或同步的世界状态。
+
+例如：
+
+- Transform：具有世界意义的位置
+- Character：角色身份与内容引用
+- Inventory：库存
 - Growth：植物生长状态
-- ProcessingJob：加工任务状态
-- GuestState：客人的世界状态
-- Reward：可拾取报酬
+- Hydration：水分状态
+- Processing：加工状态
+- GuestState：客人当前状态
+- Item：物品状态
 
-Component 以数据为主，不实现逐对象 `update()`。
-
-不同 Entity 可以组合不同 Component，不要求继承统一对象层级，也不要求引入完整 ECS 框架。
+Component 以数据为主，不要求通过对象方法承担行为。跨 Entity 或跨 Component 的游戏计算由 System 聚合处理。
 
 ## Client-only state
 
-以下状态通常不进入 World Model：
+并不是 Godot 中的所有状态都需要成为 Server Component。
 
-- velocity
+以下内容通常只属于客户端表现：
+
 - animation frame
-- physics contact
-- navigation path
+- particle state
 - camera state
 - hover / selection
-- temporary UI state
+- 临时 UI 状态
+- 插值状态
+- 仅用于视觉效果的节点
 
-这些由 Godot Client 自行维护。
+Server World Model 只保存游戏世界真正需要知道的状态。
 
 ## Component Store
 
-Component Store 保存 Entity 与 Component，并提供查询和修改能力。
+Component Store 保存 Server Entity 与 Component，并向 Gameplay System 提供查询和修改能力。
 
-Gameplay Plugin 可以直接通过世界 Service 修改明确的状态，也可以由 System 查询一组 Component 后进行批量计算。Component + System 是组织服务器世界计算的主要思想，但不是要求所有交互都经过同一种调度方式。
+System 可以按照 Component 组合查询需要处理的一组 Entity。例如 Growth System 可以查询所有拥有 Growth Component 的植物，Movement / Transform 相关 System 可以处理需要同步的 Character。
+
+具体索引、存储布局和查询优化由实现阶段决定，不要求引入完整 ECS 框架。
 
 ## Content reference
 
-运行时状态与内容定义分离。
+Entity 的实例状态与内容定义分离。
 
-Entity 通过稳定的 Content ID 引用 Content Registry。例如两株水瓜都引用同一个 `plant.aquamelon` 定义，但拥有各自独立的 Growth、位置和库存关系。
+Entity 通过稳定 Content ID 引用 Content Registry，例如：
 
-Content Definition 保存静态配置和表现资源引用，Component 保存具体世界实例的可变状态。
+```text
+plant.aquamelon
+character.slime
+item.aquamelon
+```
+
+Content Definition 描述该内容的静态规则和默认数据；Component 保存当前世界中具体实例的动态状态。
+
+这种分离允许 Content Package 增加新的植物、Character、物品和其他内容，而不要求修改 World Server Core。
 
 ## Authority
 
-World Server 对进入 World Model 的状态负责，并以这些状态作为持久化和多客户端同步的依据。
+World Server 中的世界状态是权威状态。
 
-Godot 对其本地逐帧运行状态负责。客户端只在需要保存或改变共享世界时与 World Server 同步，不要求服务器成为 Godot 物理世界的逐帧权威副本。
+Godot 可以为操作响应进行本地预测、插值和即时表现，但需要根据 Server 同步结果更新客户端世界。
+
+对于移动等实时交互，Server 不需要逐帧复制 Godot 内部物理状态，但需要维护足以表示权威世界位置和交互结果的状态。
+
+## Replication
+
+并非所有 Component 都必须以相同方式同步。
+
+有些状态需要频繁同步，例如 Character Transform；有些状态只在变化时同步，例如 Inventory；有些主要用于 Server 内部计算，只需要向客户端投影结果。
+
+具体复制策略属于 World Protocol 和后续实现规格，不在本架构中固定。
