@@ -4,7 +4,7 @@
 
 目标平台是《原神·千星奇域》UGC。当前 MVP 不按照仓库根目录 `architecture/` 中的 Cordis + Godot 正式架构实现；这些架构文档属于独立的长期正式项目方向，不作为本轮千星奇域原型的开发约束。
 
-新上下文进入开发时，先读本文件，再按“必读顺序”读取其余四份文档即可开始实现，不需要从历史对话恢复设计。
+新上下文进入开发时，先读本文件，再按“必读顺序”读取其余五份文档即可开始实现，不需要从历史对话恢复设计。
 
 ## 当前状态
 
@@ -36,10 +36,13 @@
 2. [setting.md](setting.md)  
    千星奇域水瓜树的世界设定。解释为什么只有一棵长期培养的树、为什么会受七元素影响，以及多人长期方向。
 
-3. [elemental-cultivation.md](elemental-cultivation.md)  
+3. [development-conventions.md](development-conventions.md)  
+   当前实现层开发约定。固定七元素数组顺序、`CFG` 结构体、植物运行时七元素数据结构，以及后续七元素向量的统一表示方式。
+
+4. [elemental-cultivation.md](elemental-cultivation.md)  
    当前最主要的实现设计稿。包含七元素数据模型、配置参数、服务器时间衰减、器官快照、显色、口味、绽放和水瓜汁混合。
 
-4. [interaction.md](interaction.md)  
+5. [interaction.md](interaction.md)  
    MVP 的输入与劳动方式：玩家不直接控制史莱姆移动，而是点击可交互对象下达行动。
 
 ## 当前核心闭环
