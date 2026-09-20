@@ -1,6 +1,8 @@
 # 水瓜厨房 MVP：七元素培养与水瓜汁混合
 
-本设计稿定义“水瓜厨房”第一版 MVP 中已经确定的元素培养、器官性状、果实口味和水瓜汁混合规则。
+本设计稿定义“水瓜厨房”第一版 MVP 中七元素的表现、果实口味、绽放与水瓜汁混合规则。
+
+**植物如何从土壤获取元素、如何形成 Growth Vector、如何经历 Stage、叶片 / 花 / 果如何持续学习亲和与分流养分，已经迁移到 [七元素养分与生长系统](growth-system.md)。本文件不再作为这些生长规则的 source of truth。**
 
 第一版的培养链已经更新为“土壤储备 → 树体储备 → Growth Tick → 器官生长”。
 
@@ -32,203 +34,106 @@ Growth / Affinity 决定颜色与形态
 
 相关背景见 [千星奇域水瓜树](setting.md) 和 [水瓜厨房 MVP 需求](requirements.md)。
 
-## 全局配置
+## 生长与七元素数据来源
 
-所有可调数值必须集中到全局配置中，不直接写死在具体水瓜树、器官或料理逻辑里。
+旧版曾在本文件中定义“浇灌直接写入树体、树体元素连续衰减、器官生成时做一次静态元素快照”。
 
-第一版至少需要覆盖以下配置类别：
+这些规则已经被新的养分—生长模型替代。
 
-```text
-ElementMvpConfig
-├── Soil
-│   ├── MaxElementLoad
-│   └── EvaporationRatePerTick
-├── GrowthTickInterval
-├── Tree
-│   ├── BaseAffinity[7]
-│   ├── GrowthConsumeRatePerTick
-│   ├── StageMaxAbsorbPerTick
-│   └── StageGrowthThreshold
-├── OrganAffinity
-├── OrganRetentionRate
-├── OrganChildAllocation
-├── AffinityLearningConfig
-├── ElementColor[7]
-├── VariantThreshold
-├── ColorStrength
-├── BaseFruitTaste[6]
-├── ElementTasteModifier[7][6]
-└── BloomConfig
-```
+当前应按以下文档理解：
 
-具体字段布局以对应 Spec 为准，不要求现在一次性建立完整结构。
+- [七元素养分与生长系统](growth-system.md)：千星奇域水瓜树的土壤、树体 Reserve、Growth Vector、Stage、叶片、花果与体验目标。
+- [开发约定](development-conventions.md)：七元素向量、Reserve / Growth / Affinity 的实现层语义。
+- [通用植物养分—生长系统](../../docs/plants/nutrient-growth-system.md)：跨项目的抽象模型。
+- [Growth Tick](../../docs/plants/growth-tick.md)：每次生长 Tick 的统一执行顺序。
 
-以下数值均为第一版调试参数，可以在开发过程中直接调整全局配置。
+### 当前基础亲和
 
-## 元素培养与生长
+以下数值继续保留，作为基础亲和参考：
 
-旧版“浇灌直接写入 TREE_Elems → TREE_Elems 连续衰减 → 器官生成时一次性快照”的模型已经被新版养分流替代。
+| 元素 | Tree | Stem | Leaf | Flower / Fruit |
+| --- | ---: | ---: | ---: | ---: |
+| 火 | 0.85 | 0.85 | 0.75 | 1.00 |
+| 水 | 1.15 | 0.75 | 1.10 | 1.00 |
+| 风 | 0.90 | 0.80 | 1.00 | 1.00 |
+| 雷 | 0.75 | 0.75 | 0.85 | 1.00 |
+| 草 | 1.20 | 1.15 | 1.30 | 1.00 |
+| 冰 | 0.70 | 0.80 | 0.90 | 1.00 |
+| 岩 | 0.95 | 1.30 | 0.80 | 1.00 |
 
-当前正式模型：
+这些亲和值现在用于：
 
 ```text
-SOIL_Elems
-→ Tree Absorption
-→ TREE_Elems (Reserve)
-→ Growth Tick
-→ TREE_Growth
-→ Child Organ Allocation
-→ Organ Growth / Affinity Learning
+从来源提取：
+min(Affinity, 1)
+
+转换为 Growth：
+使用完整 Affinity
+
+未定型 Stage：
+在 Base Affinity 上持续学习
+
+Stage 变化：
+固定当前 Effective Affinity
+→ 作为下一 Stage 的 Base Affinity
 ```
 
-完整规则见 [七元素养分与生长系统](growth-system.md)。
+### 浇灌与容量竞争
 
-### 土壤
+玩家浇灌的是土壤，不直接修改树体 Reserve。
 
-玩家浇灌的是土壤。
-
-```text
-SOIL_Elems : float[7]
-MaxSoilElementLoad = 100
-```
-
-输入导致超载时，超出部分按照浇灌前土壤已有元素的比例从整个旧储备中挤出，包括旧的同种元素。
+土壤总容量当前仍以 100 为第一版基线。加入元素导致超出容量时，超出部分按浇灌前旧土壤的元素比例整体挤出，再加入新元素。
 
 例如：
 
 ```text
-雷50 火30 水20
-+ 雷10
+旧土：
+雷 50 / 火 30 / 水 20
 
-先按 50/30/20 挤出 10
-→ 雷45 火27 水18
+加入雷 10
 
-再加入雷10
-→ 雷55 火27 水18
+先挤出：
+雷 5 / 火 3 / 水 2
+
+再加入雷 10
+
+结果：
+雷 55 / 火 27 / 水 18
 ```
 
-因此单一元素培养存在自然边际递减。
+这使单一元素培养天然存在边际递减。
 
-土壤每个 Growth Tick 以当前调试基线 `1%` 蒸发。
+### 旧“元素锁定”规则
 
-### 树体 Reserve
+旧版定义的“树体元素锁定后不衰减、不被挤出”建立在旧模型上。
 
-树体内部七元素储备：
+新的土壤—Reserve—Growth Tick 模型下，锁定究竟作用于土壤、树体 Reserve、Affinity 还是其他培养机制尚未重新设计。
 
-```text
-TREE_Elems : float[7]
-```
+因此：
 
-它不是浇灌输入本身，而是树按当前 Stage 的吸收上限与 Affinity 从土壤中逐步得到的内部储备。
+> **元素锁定能力暂时退出当前实现 source of truth，等待后续单独设计，不要把旧锁定语义直接迁移到新系统。**
 
-树体当前颜色可以读取 Reserve 组成。
+### 旧连续衰减公式
 
-### Growth Vector
-
-树和器官的生长进度改为七元素向量：
+以下旧公式：
 
 ```text
-TREE_Growth : float[7]
-ORGAN_Growth : float[7]
-```
-
-生长代谢先消耗 Reserve，再向子器官分流，剩余元素按完整 Affinity 转换成 Growth。
-
-提取元素时：
-
-```text
-ExtractionAffinity = min(Affinity, 1)
-```
-
-转换 Growth 时：
-
-```text
-GrowthGain[i]
+TreeElementNew
 =
-GrowthNutrient[i] × Affinity[i]
+TreeElementOld × (1 - DecayRate)^ElapsedHours
 ```
 
-因此亲和高于 1 不会从来源中多拿元素，但可以把同样 1 单位元素转化成超过 1 的对应生长度。
+不再用于树体 Reserve。
 
-### Stage 与连续学习
-
-树、叶和花果都有 Stage。
-
-进入下一 Stage 时：
+当前基础节奏改为统一 Growth Tick：
 
 ```text
-Growth 清零
-当前 Effective Affinity
-→ 固定为下一 Stage 的 Base Affinity
+GrowthTickInterval ≈ 1 hour
+SoilEvaporationRatePerTick = 1%
+TreeGrowthConsumeRatePerTick = 1%
 ```
 
-只保留连续学习，不再使用阶段跃迁时的离散元素加成。
-
-器官的当前元素 / Growth 构成会持续影响 Effective Affinity；具体学习函数由对应 Spec 决定。
-
-### 树 Stage
-
-```text
-Seedling
-→ Sapling
-→ Mature
-```
-
-不同 Stage 拥有不同的 `MaxAbsorbPerTick`，表现根系成长。
-
-当前体验目标：
-
-- Seedling 普通玩家一周内进入 Sapling；
-- Sapling 最多有 2 个叶片位；
-- 两片叶存在时，树自身约保留 0.4 生长预算，每片叶约分得 0.3；
-- Sapling 普通玩家每周约成熟 2 片叶，勤劳玩家约 4 片，用对元素可以更高；
-- Sapling 正常约 2～3 周进入 Mature；
-- 玩家主动掰掉叶片、减少子器官分流并持续催长，可以探索出约 1 周进入 Mature 的路线。
-
-### 叶片 Stage
-
-```text
-Tender
-→ Thick
-→ Mature
-```
-
-叶片没有长期 Reserve，从树的本 Tick 生长预算中吸多少就当次使用。
-
-当前方向：
-
-- Tender 无环境损耗，成长快；
-- Thick 继续学习并过渡；
-- Mature 自身预算约 60% 用于 Growth、40% 逸散到环境；
-- Mature 仍可以向花 / 果继续供给养分。
-
-### 花与果
-
-花与果视为同一器官的两个 Stage：
-
-```text
-Flower
-→ Fruit
-```
-
-Flower：
-
-- 持续学习 Affinity；
-- 存在环境蒸发；
-- 花期 Growth / Affinity 决定未来果皮颜色、形态与 Fruit Stage 亲和。
-
-Fruit：
-
-- Affinity 固定；
-- 不再继续学习；
-- 不再按花期方式蒸发；
-- 后续养分主要累积为汁液 / 内容物直到成熟。
-
-### 元素锁定
-
-旧版 `TREE_Locks` 的语义不能直接套入新版“土壤 → 树 → 器官”养分流。
-
-在新的锁定 Spec 完成前，不把旧版锁定逻辑视为当前生长系统的一部分。
+树体内部元素的减少主要来自“用于生长的实际代谢和向子器官分流”，而不是额外再叠加统一的树体自然蒸发。
 
 ## 元素颜色
 
@@ -309,6 +214,28 @@ Fruit Stage 实际累积的汁液 / 果实元素组成
 ```
 
 在这一映射 Spec 完成前，不应直接把旧 `OrganElement` 公式接到新版 Growth Tick。
+
+## 下游果实与料理规则的迁移说明
+
+下面的口味、绽放和水瓜汁规则继续保留，作为已经确定的**下游结果设计**。
+
+但它们旧文中的输入曾被写成一次性的 `OrganElement` 快照。新的果实模型已经变为：
+
+```text
+Flower Stage
+→ 持续 Growth / Affinity 学习
+→ 进入 Fruit Stage 时固定 Affinity 与外层形态
+→ Fruit Stage 继续累积汁液 / 内容物
+→ 成熟果实
+```
+
+因此后续真正实现 F7 / F8 / F9 时，需要在对应 Spec 中明确：
+
+- 口味读取 Fruit Stage 的哪一组最终向量；
+- 绽放检测读取果皮、内容物还是两者组合；
+- 水瓜汁继承哪一层成熟数据。
+
+在这些输入尚未重新锁定前，下面的数值公式保留，但**不要直接按旧 `OrganElement` 数据源实现。**
 
 ## 果实基础口味
 
