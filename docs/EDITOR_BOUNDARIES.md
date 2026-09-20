@@ -13,7 +13,7 @@ Language note:
 
 ## What Must Be Done In The Editor
 - Scene and map setup: terrain, spawn points, revive points, navigation, placed entities, layout, decoration.
-- Node graph containers and injection targets: the target NodeGraph must already exist and be saved in the map.
+- Node graph containers and final binding: automatic injection requires the target NodeGraph to already exist and be saved in the map; manual `.gia` import does not require a pre-created empty graph with the same ID, while post-import resource attachment, variable/structure binding, and editor references still remain editor work.
 - Prefabs / prefab groups / assets: buildings, enemies, drops, effects, UI assets, audio assets, icons.
 - Component attachment and base configuration: components can be configured in the editor and used by code, but are not created dynamically at runtime.
 - Paths, patrols, and baked navigation-related content.
@@ -40,6 +40,63 @@ Language note:
 - `createPrefab` / `createPrefabGroup` create authored prefab resources at runtime; they do not create new editor assets.
 - Shop flow is not "open from nothing". It requires editor-authored currency, shop templates, backpack support, and a shop component.
 - If using standard attack flow, authored ability units are required. If those are missing, code may need a simpler fallback such as direct HP loss.
+
+## Generated Node Graph And Editor Boundary
+
+This project uses a mixed workflow: TypeScript generates node-graph logic, while the editor remains responsible for resource binding and editor-authored configuration. Generated graphs are optimized first for runtime semantics, not for matching the readability or layout of a hand-authored graph.
+
+### Prefer manual `.gia` import by default
+
+- Server node graphs have been verified to work through the flow `TypeScript -> compile -> .gia -> manual editor import`.
+- In this workflow, graph IDs mainly serve compilation, merge, or automatic injection concerns; manual import should not be assumed to require a one-to-one match with an existing editor graph ID.
+- This conclusion only applies to graph types that have actually been verified. Client graphs, filters, skill graphs, and other graph types must be validated independently.
+- Automatic injection remains optional rather than a default project requirement. Introduce map IDs, target graph IDs, and empty-graph safety checks only when automatic replacement, batch synchronization, or continuous injection is actually needed.
+
+Recommended default flow:
+
+```text
+Write TypeScript
+-> compile to .gia
+-> manually import in the editor
+-> complete resource / variable / structure bindings
+-> run validation
+```
+
+### TypeScript is the main source of truth for algorithmic logic
+
+- State machines, numeric logic, loops, branches, and runtime data reads/writes should normally live in TypeScript.
+- `.gia` files and final visual graphs are primarily build artifacts; developers are not expected to maintain a hand-arranged visual graph that mirrors source code exactly.
+- Review generated graphs for semantic equivalence: event entry, data sources, branch conditions, loop bounds, write-back targets, and final outputs matter more than node placement or visual similarity to a hand-authored graph.
+
+### Source-level functions are not editor subgraphs
+
+- Reusable source functions such as `gstsServer*` reduce TypeScript duplication but do not guarantee a separate reusable node-graph asset after compilation.
+- The compiler may inline or merge several source functions into one graph, producing long wires, repeated reads, and poor human readability.
+- If a piece of logic must remain a clear, reusable, independently debuggable editor-side subgraph, author it explicitly as an editor graph asset instead of relying only on a TypeScript function abstraction.
+
+### Manual editor binding is a first-class development step
+
+When the compiler cannot safely represent an editor structure, do not degrade the data model merely to make everything code-generated. The following are valid manual binding boundaries:
+
+- custom structures and dynamic fields;
+- nodes whose concrete pins depend on structure declarations in the map;
+- prefabs, attachment points, components, presentation resources, and presets;
+- entity/resource/configuration references that require editor context;
+- dynamic node parameters not yet represented reliably by the compiler type system.
+
+Code may temporarily use clearly marked placeholders or bridge values to validate algorithms, but the final workflow must document every editor-side replacement or binding so experimental constants are not mistaken for production configuration.
+
+### Generated-graph review order
+
+Review generated graphs in this order:
+
+1. Runtime semantics match the design.
+2. List indices, loop bounds, and type conversions are correct.
+3. Custom-variable, live-list-reference, and write-back semantics are correct.
+4. Manual editor bindings are explicit.
+5. Optimize visual layout or split modules only when humans must maintain the graph directly.
+
+Do not add local variables, repeated nodes, or extra abstractions solely to make generated graphs look more like hand-authored ones when they add no runtime value.
 
 ## AI Working Rules
 - For any feature request, separate the answer into:
