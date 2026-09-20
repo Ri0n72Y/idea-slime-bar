@@ -16,67 +16,61 @@
 ```mermaid
 flowchart TD
     A[开发基础<br/>数据约定 / 编辑器边界 / GIA流程]
-    DBG[Debug UI<br/>直接查看/修改土壤、树体、Growth]
 
-    S[土壤七元素储备<br/>SOIL_Elems / 蒸发 / 容量竞争]
-    T[树体储备与Stage<br/>TREE_Elems / Affinity / Absorb Cap]
-    GT[Growth Tick<br/>吸收 / 消耗 / 分流 / Growth Vector]
-    O[器官Stage<br/>叶 / 花果 / 连续学习]
-    V[元素表型<br/>颜色 / 变种]
-    H[采集]
-    I[点击式劳动]
-    EB[元素球浇灌<br/>进入土壤]
+    B[土壤与树体基础状态<br/>SOIL / TREE Reserve / Growth / Stage / Affinity]
+    C[土壤浇灌与容量竞争<br/>Soil Input / Overflow]
+    D[统一 Growth Tick<br/>蒸发 / 吸收 / 分流 / Growth / Stage]
 
-    F7[果实口味]
-    F8[水草绽放]
-    F9[取汁]
-    F10[水瓜汁混合]
-    M[完整MVP闭环]
+    E[元素球系统<br/>刷新 / 衰减 / 牵引 / 浇灌土壤]
+    F[器官生长系统<br/>Leaf / Flower / Fruit Stages]
+    G[元素表型与显色<br/>Growth / Affinity / Material]
 
-    A --> S
-    A --> T
-    A --> GT
+    H[果实口味]
+    I[水草绽放]
+    J[采集与取汁]
+    K[1~3份水瓜汁混合]
 
-    DBG -.-> S
-    DBG -.-> T
-    DBG -.-> GT
-    DBG -.-> O
+    L[点击式劳动基础<br/>选择行动 / 自动移动 / 中断 / 搬运]
+    M[完整可玩闭环]
 
-    S --> T
-    T --> GT
-    GT --> O
-    O --> V
-    V --> H
-    I --> H
+    A --> B
+    B --> C
+    B --> D
+    C --> D
+    E --> C
 
-    EB --> S
+    D --> F
+    F --> G
+    F --> H
+    F --> I
 
-    O --> F7
-    O --> F8
-    H --> F9
-    F7 --> F9
-    F8 --> F9
-    F9 --> F10
+    G --> J
+    H --> J
+    I --> J
 
-    S --> M
-    T --> M
-    GT --> M
-    O --> M
-    V --> M
+    J --> K
+
+    L --> E
+    L --> J
+
+    C --> M
+    D --> M
+    E --> M
+    F --> M
+    G --> M
     H --> M
     I --> M
-    EB --> M
-    F10 --> M
+    J --> M
+    K --> M
+    L --> M
 ```
 
 说明：
 
-- 箭头表示**实现依赖或集成依赖**，不是强制开发顺序。
-- 新版核心不再是“浇灌直接写 TREE_Elems”，而是“土壤储备 → 树体吸收 → Growth Tick → 器官生长”。
-- Growth 是七元素向量，不再是单一标量。
-- 一个 Feature 可以拆成多个简单 Flow Block；一个 Flow Block 也可以涉及多个源码、复合节点和编辑器绑定文件。
-- 生长系统 source of truth：[`growth-system.md`](growth-system.md)。
-- 通用 Tick 规则：[`docs/plants/growth-tick.md`](../../docs/plants/growth-tick.md)。
+- 箭头表示**实现依赖或集成依赖**，不是强制的开发顺序。
+- 旧的“浇灌直接写树体 / 树体连续衰减 / 器官一次性快照”已经被土壤—Reserve—Growth Tick 模型替代。
+- 一个功能点可以拆成多个简单 Flow Block；一个 Flow Block 也可以需要多份源码、复合节点、编辑器绑定和测试文件。
+- 通用养分规则见根目录 `docs/plants/nutrient-growth-system.md` 与 `docs/plants/growth-tick.md`；千星奇域映射见 `growth-system.md`。
 
 ---
 
@@ -97,21 +91,23 @@ flowchart TD
 
 ### F0-Debug — 开发调试 UI
 
-目标：为早期垂直切片提供一个非玩家玩法 UI，直接观察和修改新版养分—生长系统关键状态。
+目标：为早期垂直切片提供一个**非玩家玩法 UI**，能够直接观察和修改关键运行时状态，并手动推进 Growth Tick。
 
 需要至少覆盖：
 
 - [ ] 显示 / 修改 `SOIL_Elems[7]`。
-- [ ] 显示 / 修改 `TREE_Elems[7]` Reserve。
-- [ ] 显示树 Stage、休眠 / 生长状态。
+- [ ] 显示 / 修改 `TREE_Elems[7]`。
+- [ ] 显示 `TREE_Stage`。
 - [ ] 显示 / 修改 `TREE_Growth[7]`。
-- [ ] 显示当前 `LastGrowthTickAt`、当前 UTC 和错过 Tick 数。
-- [ ] 显示各叶片 Stage、Growth Vector、Base / Effective Affinity。
-- [ ] 可以直接修改 Growth Vector，使树或叶片快速越过 Stage / 生成阈值。
-- [ ] 可以直接修改测试亲和，用于验证吸收、Growth 转换与显色。
-- [ ] UI 明确标记为 Debug，正式玩家界面不可见。
+- [ ] 显示 Tree Base / Effective Affinity。
+- [ ] 显示最后 Growth Tick 时间、当前 UTC 时间和待补算 Tick 数。
+- [ ] 提供“执行一次 Growth Tick”的调试入口。
+- [ ] 对当前叶片显示 Stage、Growth Vector、Base / Effective Affinity。
+- [ ] 能够直接调整关键 Growth 值以跨越 Stage / 器官生成阈值。
+- [ ] Debug UI 修改的是测试运行状态，不包装成正式玩家能力。
+- [ ] 非调试场景可以隐藏或禁用。
 
-旧 `TREE_Locks` 可继续为实验图保留，但新版锁定语义尚未重新设计，不作为本 Debug UI 的正式验收项。
+花 / 果加入实现后，再把对应器官状态接入同一调试 UI，不在第一条叶片闭环中预先实现。
 
 **用途：开发验证工具，不属于正式玩法 Feature。**
 
@@ -119,81 +115,70 @@ flowchart TD
 
 ### F1 — 土壤与树体基础运行时状态
 
-目标：建立新版养分流最小状态，使后续 Growth Tick 有明确 source / reserve / growth。
+目标：建立 Growth Tick 所需的最小持久状态。
 
 需要至少覆盖：
 
 - [ ] `SOIL_Elems : float[7]`。
-- [ ] `TREE_Elems : float[7]`，表示树体内部 Reserve。
+- [ ] `TREE_Elems : float[7]`，语义为树体内部 Reserve。
 - [ ] `TREE_Growth : float[7]`。
-- [ ] Tree Stage：Seedling / Sapling / Mature。
-- [ ] Base / Effective Affinity。
+- [ ] `TREE_Stage`：Seedling / Sapling / Mature。
+- [ ] Tree Base Affinity / Effective Affinity。
 - [ ] `LastGrowthTickAt`。
-- [ ] 初始值、合法性与保存 / 读取边界。
-- [ ] 与关卡 `CFG` 的读取边界。
+- [ ] 状态初始化、读取、保存边界。
+- [ ] Debug UI 可直接观察和修改上述关键状态。
 
 **预期实体：Soil / Plot、Watermelon Tree、Level / Stage Config。**
 
 ---
 
-### F2 — Growth Tick 与离线补算
+### F2 — 统一 Growth Tick 与 UTC 离线补算
 
-目标：实现统一的一小时级生长 Tick，把土壤蒸发、树体吸收、生长消耗、子器官分流、Growth Vector 和 Stage 判定串成可补算流程。
+目标：建立土壤、树体和后续器官共用的离散生长结算节奏。
 
-当前调试基线：
+当前基线：
 
 ```text
-GrowthTickInterval = 1h
+GrowthTickInterval ≈ 1 hour
 SoilEvaporationRatePerTick = 1%
 TreeGrowthConsumeRatePerTick = 1%
 ```
 
-需要覆盖：
+候选流程块：
 
-- [ ] F2.1 根据 UTC 初始化 / 读取 `LastGrowthTickAt`。
-- [ ] F2.2 计算需要补算的 Tick 数。
-- [ ] F2.3 土壤每 Tick 蒸发。
-- [ ] F2.4 树按 Stage 的总吸收上限和 Affinity 从土壤吸取。
-- [ ] F2.5 Tree Reserve 低于休眠阈值时暂停 Growth Conversion。
-- [ ] F2.6 恢复阈值达到后继续生长。
-- [ ] F2.7 每 Tick 从 Tree Reserve 中取出生长养分预算。
-- [ ] F2.8 先分给子器官，再把剩余按完整 Affinity 转为 `TREE_Growth[7]`。
-- [ ] F2.9 执行连续学习。
-- [ ] F2.10 检查 Stage / 器官生成。
-- [ ] F2.11 离线补算与在线 Tick 结果一致或有明确等价近似。
+- [ ] F2.1 根据 UTC 时间确定应执行的 Tick 数。
+- [ ] F2.2 土壤元素自然蒸发。
+- [ ] F2.3 根据 Tree Stage、土壤组成和 Tree Affinity 计算吸收。
+- [ ] F2.4 写入 Tree Reserve。
+- [ ] F2.5 判断 Growing / Dormant。
+- [ ] F2.6 从 Tree Reserve 提取本 Tick 生长预算。
+- [ ] F2.7 先向子器官分流，再把剩余预算转换为 `TREE_Growth[7]`。
+- [ ] F2.8 连续学习 Effective Affinity。
+- [ ] F2.9 检查 Stage / 器官生成条件。
+- [ ] F2.10 更新 `LastGrowthTickAt`。
+- [ ] F2.11 离线进入时批量补算或使用经 Spec 验证的等价近似。
 
-复杂数学与向量计算按需要拆独立复合节点，不把完整 Tick 内联成单张巨图。
-
-根规则见 [Growth Tick](../../docs/plants/growth-tick.md)。
+复杂流程不得全部塞进单一节点图；实际开发时按上述职责继续拆 Flow Block / Spec。
 
 ---
 
 ### F3 — 土壤浇灌与容量竞争
 
-目标：玩家输入元素时修改的是土壤，而不是直接修改树体 Reserve。
+目标：所有外部元素输入先进入土壤，再由 F2 的 Growth Tick 吸收到树体。
 
 需要覆盖：
 
-- [ ] F3.1 输入元素索引与输入量。
-- [ ] F3.2 `MaxSoilElementLoad = 100`。
-- [ ] F3.3 输入导致超载时，按浇灌前旧土壤元素比例挤出。
-- [ ] F3.4 同种旧元素也参与挤出。
-- [ ] F3.5 挤出完成后再加入新输入。
-- [ ] F3.6 保证结果总量不超过容量。
-- [ ] F3.7 表格测试覆盖单元素、高混合、满容量、空土壤等边界。
+- [ ] F3.1 土壤总容量基线 100。
+- [ ] F3.2 输入一种元素到 `SOIL_Elems`。
+- [ ] F3.3 超出容量时，按**输入前旧土壤的元素比例**挤出整个旧储备。
+- [ ] F3.4 与本次输入同种的旧元素同样参与挤出。
+- [ ] F3.5 完成挤出后再加入新元素。
+- [ ] F3.6 单元素持续培养呈现自然边际递减。
+- [ ] F3.7 边界测试覆盖空土、未满、刚好满、超量输入和单元素极端。
 
-例如：
+旧版“新输入受保护，只挤出其他元素”的规则不再使用。
 
-```text
-雷50 火30 水20 + 雷10
-→ 先挤出 雷5 火3 水2
-→ 再 + 雷10
-→ 雷55 火27 水18
-```
-
-这使单一元素培养具有自然边际递减。
-
-旧版“新输入受保护，只挤出其他元素”的规则废止。
+旧“元素锁定”能力在新模型中的作用位置尚未重新设计，**不进入本 Feature**。
 
 ---
 
@@ -201,7 +186,7 @@ TreeGrowthConsumeRatePerTick = 1%
 
 设计入口：GitHub Issue #1。
 
-目标：把土壤浇灌资源变成世界中可观察、会自然蒸发、可由玩家选择并牵引的元素球。
+目标：把土壤元素输入变成世界中可观察、会自然蒸发、可由玩家选择并牵引的资源。
 
 需要覆盖：
 
@@ -211,82 +196,78 @@ TreeGrowthConsumeRatePerTick = 1%
 - [ ] F4.4 在线每 3～5 分钟自然生成一个 5～8 大小元素球。
 - [ ] F4.5 不设硬上限，由生成率与寿命形成约 10 个的自然存量。
 - [ ] F4.6 退出时保存场上仍存在的球。
-- [ ] F4.7 登录时先按 UTC 时间更新已保存球。
+- [ ] F4.7 登录时按 UTC 时间更新已保存球。
 - [ ] F4.8 只模拟登录前最后 45 分钟的离线生成事件。
 - [ ] F4.9 玩家与元素球交互后进入牵引状态。
-- [ ] F4.10 靠近树苗后自动吸附。
-- [ ] F4.11 以吸附时剩余元素量提交给 F3，进入土壤储备。
+- [ ] F4.10 靠近土壤 / 树苗浇灌区域后自动吸附。
+- [ ] F4.11 以吸附时剩余元素量提交给 F3，写入土壤。
 - [ ] F4.12 元素种类第一版随机。
 
-仍待后续 Spec 明确：
-
-- 刷新位置 / 刷新点；
-- 牵引移动方式与中断；
-- 吸附半径和表现；
-- 多人归属；
-- 元素种类未来的针对性和故事性。
+仍待后续 Spec 明确：刷新位置、牵引移动与中断、吸附范围、多人归属、元素种类未来的针对性与故事性。
 
 ---
 
-### F5 — 器官 Stage、生长与连续学习
+### F5 — 器官生长、Stage 与养分分流
 
-目标：实现器官作为下游消费者的生长链，而不是旧版“一次性元素快照”。
+目标：把树体 Growth 和子器官建立成可持续运行的生长链。
 
-需要覆盖：
-
-- [ ] F5.1 器官拥有 Growth Vector。
-- [ ] F5.2 器官拥有 Base / Effective Affinity。
-- [ ] F5.3 未定型 Stage 执行连续学习。
-- [ ] F5.4 Stage 升级时清空 Growth Vector。
-- [ ] F5.5 Stage 升级时将当前 Effective Affinity 固定为下一 Stage Base Affinity。
-- [ ] F5.6 提取时 `Affinity > 1` 按 1 封顶。
-- [ ] F5.7 Growth 转换时使用完整 Affinity。
-- [ ] F5.8 子器官优先从父器官本 Tick 生长预算中获得养分。
-- [ ] F5.9 明确各 Stage 的环境损耗。
-
-#### Tree Stage
+#### F5-Tree — 树体 Stage
 
 - [ ] Seedling → Sapling → Mature。
-- [ ] 每阶段 MaxAbsorbPerTick 不同。
-- [ ] Stage 升级后不回退。
+- [ ] 每个 Stage 有独立 Growth Vector。
+- [ ] 升级 Stage 时清空 Growth。
+- [ ] 升级时固定当前 Effective Affinity 为下一 Stage 的 Base Affinity。
+- [ ] 每个 Stage 使用不同 `MaxAbsorbPerTick`。
+- [ ] Mature 生成器官后只扣 Growth，不回退 Stage。
+
+体验目标：
+
+- Seedling：普通玩家一周内进入 Sapling。
+- Sapling：正常约 2～3 周进入 Mature。
+- 玩家主动摘叶减少分流并持续催长时，可以探索出约 1 周进入 Mature 的快速路线。
+
+#### F5-Leaf — 叶片
+
 - [ ] Sapling 最多 2 个叶片位。
-- [ ] Sapling 0/1/2 叶时树自身预算约为 1.0 / 0.7 / 0.4，每叶约 0.3。
-- [ ] Seedling 普通玩家一周内进入 Sapling。
-- [ ] Sapling 正常约 2～3 周进入 Mature；主动掰叶催长可以探索到约 1 周。
-
-#### Leaf Stage
-
+- [ ] 0 叶时树自身获得 1.0 生长预算。
+- [ ] 1 叶时约为 Tree 0.7 / Leaf 0.3。
+- [ ] 2 叶时约为 Tree 0.4 / Leaf A 0.3 / Leaf B 0.3。
 - [ ] Tender → Thick → Mature。
-- [ ] Tender 无环境损耗。
-- [ ] Mature 当前基线 60% 自身 Growth、40% 逸散环境。
-- [ ] 普通 Sapling 每周约成熟 2 叶；勤劳约 4 叶；元素匹配可更高。
-- [ ] Mature Leaf 可继续向 Flower 分流。
+- [ ] 叶片没有独立 Reserve，吸多少当 Tick 用多少。
+- [ ] Tender 当前无环境损耗。
+- [ ] Mature 当前自身保留率基线 0.6，约 0.4 逸散到环境。
+- [ ] 叶片继续把一部分预算供给下游花 / 果。
+- [ ] 每次 Stage 升级清空 Leaf Growth，并固定当前 Effective Affinity。
+- [ ] 普通 Sapling 每周约成熟 2 片叶；勤劳玩家约 4 片；正确元素可进一步提高。
 
-#### Flower / Fruit
+#### F5-FlowerFruit — 花 / 果
 
-- [ ] Flower 与 Fruit 是同一器官不同 Stage。
-- [ ] Flower 学习 Affinity、存在蒸发并决定未来果皮形态。
-- [ ] Fruit Stage 固定 Affinity，不再按花期方式蒸发。
-- [ ] Fruit 后续主要累积汁液 / 内容物。
+这部分已经有模型，但不要求进入第一条可见闭环。
 
-第一条可见闭环不要求一次实现完整 Flower / Fruit 链。
+- [ ] Flower 与 Fruit 是同一器官的两个 Stage。
+- [ ] Flower 持续学习 Affinity，并存在蒸发。
+- [ ] Flower 阶段决定未来果皮颜色 / 形态和 Fruit Stage 基准亲和。
+- [ ] 进入 Fruit 后固定 Affinity，不再继续学习。
+- [ ] Fruit 不再按花期规则蒸发，改为累积汁液 / 内容物。
+- [ ] 提前移除花 / 果会改变叶片后续养分去向，并为多汁叶分支留下机制接口。
 
 ---
 
-### F6 — 元素表型与显色
+### F6 — 元素表型、颜色与隐藏亲和
 
-目标：让 Reserve / Growth / Affinity 的差异在树与器官外观上可观察。
+目标：让 Growth Vector / 固定亲和产生玩家可观察的外观差异，同时保留未显性的隐藏培养信息。
 
 需要覆盖：
 
-- [ ] F6.1 树体可根据当前 `TREE_Elems` Reserve 表现主元素倾向。
-- [ ] F6.2 Tender / Thick / Flower 等未定型阶段允许随 Growth / Effective Affinity 改变表现。
-- [ ] F6.3 Stage 升级后使用固定 Base Affinity 判断当前形态。
-- [ ] F6.4 某元素亲和达到 `VariantThreshold` 才进入对应元素颜色 / 变种。
-- [ ] F6.5 未达到阈值保持普通器官形态，但隐藏 Affinity 继续保留。
-- [ ] F6.6 多元素同时超过阈值时的视觉优先级留到表现 Spec。
-- [ ] F6.7 编辑器材质继续使用基础素材 + 主题色 + 正片叠底。
-- [ ] F6.8 第一轮 `ColorStrength = 1`。
+- [ ] 未成熟器官可随着连续学习和 Growth 构成改变表现。
+- [ ] Stage 切换时，当前 Effective Affinity 固定为下一 Stage 的 Base Affinity。
+- [ ] 某元素 Affinity 达到表现阈值时，可以进入对应颜色 / 变种形态。
+- [ ] 未达到阈值时保持普通形态，但隐藏 Affinity 仍然保留。
+- [ ] 多元素同时超过阈值时的视觉选择规则由表现 Spec 决定。
+- [ ] 颜色资源仍使用既定七元素主题色和编辑器材质绑定。
+- [ ] Debug UI 能同时观察 Growth Vector、Base Affinity、Effective Affinity 与最终表型。
+
+旧版“一次性 OrganElement 快照 → argmax → 永久颜色”的规则不再作为所有器官的通用模型。
 
 ---
 
@@ -446,151 +427,156 @@ TreeGrowthConsumeRatePerTick = 1%
 ---
 
 
-## 四、最小可见闭环：土壤 → 生长 → 叶片 → 采集
+## 四、最小可见闭环：土壤 → 生长 → 显色 → 采集
 
-新版第一条垂直切片不再依赖“器官生成时快照”，而是直接验证新的养分流。
+第一条垂直切片不再使用测试 TREE_Elems 直接跳过培养链，而是尽量覆盖新的最小真实数据流。
 
 ### 4.1 闭环目标
 
 ```mermaid
 flowchart LR
-    D[Debug UI]
-    --> S[设置土壤元素]
+    X[Debug UI]
+    -.查看 / 修改.-> A
+    -.手动 Tick.-> C
 
-    S --> T[Growth Tick]
-    T --> R[树体 Reserve]
-    R --> G[Tree Growth Vector]
-    G --> L[生成嫩叶]
-    L --> LG[Leaf Growth Vector]
-    LG --> LS[叶片 Stage 变化]
-    LS --> V[颜色 / 变种表现]
-    V --> C[点击采集]
-    C --> N[空叶位重新进入生长]
-    N --> T
+    A[土壤元素<br/>SOIL_Elems]
+    --> B[树体 Reserve<br/>TREE_Elems]
+    --> C[Growth Tick]
+    --> D[Tree Growth Vector]
+    --> E[生成嫩叶]
+    --> F[Leaf Growth / Affinity]
+    --> G[颜色 / 形态]
+    --> H[玩家点击采集]
+    --> I[史莱姆移动并摘叶]
+    --> J[场景素材]
+    --> K[叶片位空出]
+    --> E
 ```
 
-第一条切片优先证明：
+这条切片优先验证：
 
-> **土壤元素能够被树吸收；树把内部储备转换成生长；嫩叶从树的生长预算中获得元素并继续成长；元素组成会影响颜色 / 形态；玩家可以采集叶片，然后树继续长出新的叶。**
+> **土壤能供给树；树按 Tick 生长；树会生成叶片；叶片会根据真实养分与亲和变化成长和变色；玩家可以摘下叶片；叶片位重新进入生长。**
 
-### 4.2 最小 Feature 子集
-
-#### F0-Debug-Min
-
-- [ ] 查看 / 修改 `SOIL_Elems[7]`。
-- [ ] 查看 / 修改 `TREE_Elems[7]`。
-- [ ] 查看 / 修改 `TREE_Growth[7]`。
-- [ ] 查看 Tree / Leaf Stage。
-- [ ] 查看 Leaf Growth、Base / Effective Affinity。
-- [ ] 手动推进一个 Growth Tick。
-- [ ] 快速把 Growth 设置到阈值附近。
-
-#### F1-Min
-
-- [ ] Soil Reserve。
-- [ ] Tree Reserve。
-- [ ] Tree Growth Vector。
-- [ ] Tree Stage。
-- [ ] 基础 Affinity。
-
-#### F2-Min
-
-- [ ] 1h Growth Tick。
-- [ ] 土壤 1% 蒸发。
-- [ ] 树按 Stage 吸收。
-- [ ] Tree Reserve 1% 生长预算。
-- [ ] 子器官分流。
-- [ ] Tree / Leaf Growth 转换。
-- [ ] Stage 检查。
-
-#### F3-Min
-
-- [ ] Debug 或测试入口向土壤加入元素。
-- [ ] 满容量时按比例挤出。
-- [ ] 结果可以被下一 Tick 吸收。
-
-#### F5-Min
-
-第一条切片只要求：
-
-- [ ] Seedling / Sapling 最小阶段链。
-- [ ] Sapling 至少一个叶片位。
-- [ ] Tender → Thick → Mature。
-- [ ] Stage 升级清空 Growth。
-- [ ] 连续学习与下一 Stage Base Affinity 固定。
-- [ ] Mature Leaf 的 40% 环境损耗。
-- [ ] 不要求花果链。
-
-#### F6-Min
-
-- [ ] 树体 Reserve 至少能产生一种可观察颜色反馈。
-- [ ] 叶片达到某种亲和阈值时出现对应元素颜色。
-- [ ] 未达到阈值保持普通叶片。
-- [ ] 至少用两组元素环境验证不同结果。
-
-#### F9-Harvest-Min + F11-Min
-
-- [ ] 点击 Mature Leaf。
-- [ ] 史莱姆自动移动到交互位置。
-- [ ] 完成采集。
-- [ ] 叶片从树上移除并生成场景素材。
-- [ ] 叶位重新空出，使树后续能够继续生成嫩叶。
-
-### 4.3 验收画面
+### 4.2 当前最小 Feature 组合
 
 ```text
-1. 进入世界
-2. 打开 Debug UI
-3. 设置土壤七元素组成
-4. 手动或等待 Growth Tick
-5. 观察树从土壤吸收并形成 TREE_Elems
-6. 观察 TREE_Growth 增加
-7. 树进入 Sapling / 获得叶位
-8. 生成 Tender Leaf
-9. 叶片从树获得元素并累积 LEAF_Growth
-10. 叶片 Stage 变化
-11. 叶片因亲和 / Growth 出现普通或元素颜色
-12. 玩家点击 Mature Leaf
-13. 史莱姆移动并采集
-14. 场景出现叶片素材
-15. 空叶位继续进入下一轮生长
+F0-Debug
++ F1
++ F2 的最小 Growth Tick
++ F3 的调试土壤输入
++ F5-Tree / F5-Leaf
++ F6
++ F9-Harvest 的叶片采集子集
++ F11-Min
 ```
 
-额外必须验证：
+F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通过 Debug UI 直接修改土壤元素，等基础生长闭环稳定后再接真实元素球浇灌。
+
+### 4.3 第一条闭环暂时只做叶片
+
+第一条端到端链优先选择叶片，而不是同时做茎、花、果。
+
+需要看到：
+
+- [ ] Seedling / Sapling 的树体 Stage 可运行。
+- [ ] 土壤元素被树按 Stage 上限与 Affinity 吸收。
+- [ ] Tree Reserve 以 1% / Tick 的基线产生生长预算。
+- [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
+- [ ] Sapling 最多出现 2 个叶片位。
+- [ ] 叶片获得约 0.3 的分流预算。
+- [ ] 叶片经历 Tender → Thick → Mature。
+- [ ] 叶片 Effective Affinity 持续学习。
+- [ ] Stage 升级固定亲和并清空 Growth。
+- [ ] 叶片表现可以随培养方向产生差异。
+- [ ] 玩家点击成熟可采叶片。
+- [ ] 史莱姆移动并完成摘叶。
+- [ ] 生成场景素材。
+- [ ] 叶片位空出后，树后续可以再次生成叶片。
+
+### 4.4 Debug UI 在本切片中的职责
+
+第一条切片必须能通过 Debug UI 快速完成：
 
 ```text
-同样 Tick 数
-+ 不同土壤元素组成
-→ 不同吸收 / Growth / 叶片成长速度或形态
+修改 SOIL_Elems
+查看 TREE_Elems
+查看 / 修改 TREE_Growth
+查看 TREE_Stage
+查看叶片 Stage / Growth / Affinity
+执行单次 Growth Tick
+跨越阈值
+观察颜色 / Stage / 器官生成变化
 ```
 
-以及：
+Debug UI 是测试入口，不属于玩家正式玩法。
+
+### 4.5 验收画面
+
+最小端到端验收：
 
 ```text
-保留叶片
-→ Tree Growth 被分流
-
-掰掉叶片
-→ Tree 自身 Growth 明显加快
+1. 进入世界，打开 Debug UI
+2. 给土壤设置一组明确的七元素组成
+3. 手动执行 / 等待 Growth Tick
+4. 观察土壤减少、树体 Reserve 增加
+5. 观察 Tree Growth Vector 累积
+6. Tree Stage 正确升级，升级时 Growth 清空
+7. Sapling 开始生成嫩叶
+8. 叶片从树体分得养分并累积自己的 Growth
+9. 叶片阶段变化，亲和和颜色产生可观察变化
+10. 玩家点击成熟可采叶片
+11. 史莱姆自动移动并完成采集
+12. 场景中出现叶片素材
+13. 叶片位空出
+14. 后续 Growth Tick 再次推进新叶生成
 ```
 
-这将直接证明“玩家可以通过是否保留子器官改变主树成长速度”。
+至少还要用两组明显不同的土壤元素组成，证明：
 
-### 4.4 本切片不要求
+```text
+SOIL_Elems
+→ TREE_Elems
+→ Growth / Affinity
+→ Leaf Growth / Affinity
+→ Visual
+```
 
-- 元素球自然刷新；
-- Flower / Fruit 完整链；
-- 口味；
+整条链成立。
+
+### 4.6 本切片不要求
+
+- 元素球真实刷新与牵引；
+- 花 / 果；
+- 果实口味；
 - 绽放；
 - 取汁；
 - 水瓜汁混合；
-- 遗传；
 - 气候反馈；
-- 完整多人系统。
+- 遗传；
+- Mature 阶段完整产量平衡；
+- 正式多器官生态。
 
-它只证明新版核心：
+### 4.7 后续扩展
 
-> **土壤养分 → 树体储备 → Growth Tick → 子器官分流 → 元素形态 → 采集 → 再生。**
+```mermaid
+flowchart TD
+    A[VS1 土壤-树-叶-采集]
+
+    A --> B[真实培养输入]
+    B --> B1[F4 元素球]
+    B1 --> B2[玩家实际浇灌土壤]
+
+    A --> C[花果链]
+    C --> C1[Flower]
+    C1 --> C2[Fruit]
+    C2 --> C3[口味 / 绽放]
+    C3 --> C4[取汁 / 混合]
+
+    A --> D[长期系统]
+    D --> D1[Mature 产量平衡]
+    D1 --> D2[气候]
+    D1 --> D3[未来遗传]
+```
 
 ---
 
@@ -791,46 +777,29 @@ MANUAL: connect compound node xxx_calc
 
 ## 八、当前推荐的可选择起点
 
-当前新版生长系统已经足够拆 Spec 的功能：
+为了尽快得到第一条可见闭环，当前优先顺序改为：
 
-- [ ] **F0-Debug 开发调试 UI**
 - [ ] **F1 土壤与树体基础运行时状态**
-- [ ] **F2 Growth Tick 与离线补算**
+- [ ] **F0-Debug 开发调试 UI**
+- [ ] **F2 统一 Growth Tick 的最小版本**
 - [ ] **F3 土壤浇灌与容量竞争**
-- [ ] **F5 器官 Stage、生长与连续学习**（先做 Tree + Leaf 子集）
+- [ ] **F5-Tree / F5-Leaf**
 - [ ] **F6 元素表型与显色**
-- [ ] **F11 点击式劳动基础**
-- [ ] **F12 植物活性 / 休眠**
+- [ ] **F11-Min 点击采集所需劳动**
+- [ ] **F9-Harvest 叶片采集子集**
 
-已有独立设计入口、但进入开发前仍需拆具体 Spec：
+已有设计入口、但不阻塞第一条垂直切片：
 
 - [ ] **F4 元素球刷新、衰减与牵引浇灌**
 
-依赖 Flower / Fruit 数据映射进一步明确后再进入开发：
+第一条闭环之后再进入：
 
+- [ ] **F5-FlowerFruit**
 - [ ] **F7 果实六维口味**
 - [ ] **F8 水 + 草绽放**
-- [ ] **F9 采集与果实取汁中的“取汁”部分**
+- [ ] **F9 取汁**
 - [ ] **F10 水瓜汁混合**
-
-适合后期集成：
-
+- [ ] **F12 长期休眠 / 生长平衡深化**
 - [ ] **F13 完整 MVP 集成**
 
-当前最小可见闭环优先围绕：
-
-```text
-F0-Debug
-+ F1
-+ F2
-+ F3
-+ F5(Tree + Leaf)
-+ F6
-+ F9-Harvest-Min
-+ F11-Min
-+ F12
-```
-
-建立。
-
-后续由开发者从该组合中选择一个具体功能点，再按照本文件的 SDD 流程建立对应 Issue / Spec。
+后续仍由开发者选择具体 Feature，再按“实体 → Flow Blocks → Files → Issue / Spec → 开发 → 验收”的流程推进。
