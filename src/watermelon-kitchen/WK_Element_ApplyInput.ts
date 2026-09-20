@@ -49,11 +49,14 @@ g.server({
     const elapsedHoursRaw = (now - lastUpdateAt) / 3600
 
     if (elapsedHoursRaw > 0) {
-      // let intentionally materializes the handwritten graph's local
-      // variable so the value can be reused inside the finite loop.
-      let elapsedHours = elapsedHoursRaw
+      // Keep this as a direct value connection. genshin-ts 0.2.2 lowers a
+      // forced `let` LocalVariable incorrectly when it is passed into a
+      // gstsServer* function, causing generic matching to receive the
+      // LocalVariable handle instead of its float value.
+      const elapsedHours = elapsedHoursRaw
 
-      f.finiteLoop(0n, 7n, (index) => {
+      // finiteLoop end is inclusive: seven elements are indices 0..6.
+      f.finiteLoop(0n, 6n, (index) => {
         const locks = self.get('TREE_Locks').asType('bool_list')
 
         if (!locks[idx(index)]) {
