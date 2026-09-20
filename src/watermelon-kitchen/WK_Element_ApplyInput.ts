@@ -1,60 +1,69 @@
 import { g } from 'genshin-ts/runtime/core'
 
-const BASE_ELEMENT_INPUT = 20
-const MAX_ELEMENT_LOAD = 100
+const CFG_ENTITY_GUID = 1094713345n
+
+/**
+ * Mirrors the editor subgraph: element_decay_calc(index, hours) -> result.
+ *
+ * Editor/manual patch required after compilation:
+ * genshin-ts currently cannot split a custom Structure value into typed fields.
+ * Replace the fallback affinity list below with:
+ * CFG entity -> get custom variable CFG -> split structure -> Affinity -> list[index].
+ */
+function gstsServerElementDecayCalc(index: bigint, hours: number) {
+  const elems = self.get('TREE_Elems').asType('float_list')
+
+  const cfgEntity = gsts.f.queryEntityByGuid(guid(CFG_ENTITY_GUID))
+  const baseDecayPerHour = cfgEntity.get('CFG_BaseDecayPerHour').asType('float')
+
+  // Temporary compiler bridge for the editor-authored CFG.Affinity field.
+  // Fixed order: Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo.
+  const affinity = list('float', [0.85, 1.15, 0.9, 0.75, 1.2, 0.7, 0.95])
+  const affinityAtIndex = affinity[idx(index)]
+
+  const decayRate = baseDecayPerHour / affinityAtIndex
+  const decayBase = 1 - decayRate
+  const decayFactor = decayBase ** hours
+  const result = elems[idx(index)] * decayFactor
+
+  return result
+}
 
 g.server({
   name: 'WK_Element_ApplyInput'
-}).onSignal('WK_Element_ApplyInput', (_evt, _f) => {
-  const elems = self.get('Elems').asType('float_list')
-  const locks = self.get('Locks').asType('bool_list')
-  const inputElem = self.get('InputElem').asType('int')
+}).on('whenEntityIsCreated', (evt, f) => {
+  // Match the handwritten graph: resolve the event source by GUID for the
+  // persisted timestamp, while TREE_Elems / TREE_Locks are read from self.
+  const tree = f.queryEntityByGuid(evt.eventSourceGuid)
 
-  // EXPERIMENT ONLY:
-  // Final version should read this from the stage CFG.Affinity binding.
-  const affinity = list('float', [0.85, 1.15, 0.9, 0.75, 1.2, 0.7, 0.95])
-  const indices = list('int', [0n, 1n, 2n, 3n, 4n, 5n, 6n])
+  const lastUpdateAt = tree.get('TREE_LastElementUpdateAt').asType('float')
 
-  const gain = BASE_ELEMENT_INPUT * affinity[idx(inputElem)]
+  // queryTimestampUtc0() is an integer timestamp in genshin-ts.
+  // TREE_LastElementUpdateAt is currently authored as float in the editor,
+  // so make the conversion explicit before arithmetic/write-back.
+  const now = float(f.queryTimestampUtc0())
 
-  // The newly input element is protected from the current eviction.
-  // Locked elements are protected as well.
-  let protectedTotal = elems[idx(inputElem)]
-  let evictableTotal = 0
+  if (lastUpdateAt === 0) {
+    tree.set('TREE_LastElementUpdateAt', now)
+  } else {
+    const elapsedHoursRaw = (now - lastUpdateAt) / 3600
 
-  indices.forEach((i) => {
-    if (i !== inputElem) {
-      const current = elems[idx(i)]
-      if (locks[idx(i)]) {
-        protectedTotal = protectedTotal + current
-      } else {
-        evictableTotal = evictableTotal + current
-      }
+    if (elapsedHoursRaw > 0) {
+      // let intentionally materializes the handwritten graph's local
+      // variable so the value can be reused inside the finite loop.
+      let elapsedHours = elapsedHoursRaw
+
+      f.finiteLoop(0n, 7n, (index) => {
+        const locks = self.get('TREE_Locks').asType('bool_list')
+
+        if (!locks[idx(index)]) {
+          const result = gstsServerElementDecayCalc(index, elapsedHours)
+          const elems = self.get('TREE_Elems').asType('float_list')
+          elems[idx(index)] = result
+        }
+      })
     }
-  })
 
-  // If the protected portion already consumes most of the capacity,
-  // the new input is reduced before eviction.
-  const maxGain = Math.max(0, MAX_ELEMENT_LOAD - protectedTotal)
-  const appliedGain = Math.min(gain, maxGain)
-
-  // Evict only other unlocked elements, proportionally.
-  const totalBefore = protectedTotal + evictableTotal
-  const overflow = Math.min(
-    evictableTotal,
-    Math.max(0, totalBefore + appliedGain - MAX_ELEMENT_LOAD)
-  )
-
-  let remainingRatio = 1
-  if (evictableTotal > 0) {
-    remainingRatio = (evictableTotal - overflow) / evictableTotal
+    tree.set('TREE_LastElementUpdateAt', now)
   }
-
-  indices.forEach((i) => {
-    if (i !== inputElem && !locks[idx(i)]) {
-      elems[idx(i)] = elems[idx(i)] * remainingRatio
-    }
-  })
-
-  elems[idx(inputElem)] = elems[idx(inputElem)] + appliedGain
 })
