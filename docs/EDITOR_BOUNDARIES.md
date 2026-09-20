@@ -98,6 +98,130 @@ Review generated graphs in this order:
 
 Do not add local variables, repeated nodes, or extra abstractions solely to make generated graphs look more like hand-authored ones when they add no runtime value.
 
+## Feature Development Workflow
+
+For each feature, this project follows an entity-first, small-graph, explicit-reuse workflow.
+
+This matches common component- and scene-oriented game-editor engineering practice: define objects and responsibilities first, then split behavior into maintainable units; extract reusable, stateless, or high-complexity logic instead of continuously expanding one event graph.
+
+### 1. Decompose the feature into entities first
+
+Before implementing a feature, define the entities it needs. For each entity, record at least:
+
+- name and purpose;
+- its single responsibility in the feature;
+- runtime properties / custom variables it owns;
+- editor-authored assets, components, attachment points, presets, or entity dependencies;
+- events / signals it receives or emits;
+- which state it owns versus state owned by another entity or the level.
+
+Do not begin from "which nodes should be drawn". Node graphs should follow from entity responsibilities.
+
+### 2. Design node-graph scripts from those responsibilities
+
+Each node-graph script should stay as close as practical to:
+
+- one responsibility;
+- clear inputs and outputs;
+- one simple flow;
+- explicit state ownership;
+- no unrelated mixing of orchestration, calculation, and presentation concerns.
+
+A script should usually correspond to one event entry or one clear state transition, such as initialization, receiving input, applying one settlement step, spawning one object, or advancing one phase.
+
+### 3. Split complex flows into multiple scripts
+
+If a flow has several distinct stages, do not keep expanding one large graph. Split it into multiple node-graph scripts coordinated through events, signals, state variables, or entity relationships.
+
+Typical cases include:
+
+- initialization that combines persistent-state loading, offline settlement, repair, and later spawning;
+- an entity that otherwise handles input, spawning, and lifecycle management in one graph;
+- flows with multiple independently testable stages.
+
+The split criterion is not a fixed node-count limit. A script should still be describable accurately in one sentence.
+
+### 4. Put complex math in a dedicated node graph
+
+Complex formulas, reusable numeric transforms, or calculations whose wiring should be reviewed independently should not be inlined into the main generated flow.
+
+Use this process:
+
+1. create a dedicated node-graph source file for the calculation;
+2. generate its `.gia` with TypeScript / genshin-ts;
+3. manually import it into the editor;
+4. package it as a compound node;
+5. keep the compound-node name identical to the source graph filename.
+
+Example:
+
+```text
+element_decay_calc
+```
+
+The source file, imported graph, and resulting compound node all use the same name.
+
+Complex math graphs should stay calculation-focused: explicit inputs, explicit outputs, and no unrelated external entity-state orchestration.
+
+### 5. Main flows use explicit manual compound-node call sites
+
+When a main flow needs one of these compound nodes, do not ask genshin-ts to inline the complex formula again.
+
+The generated script should leave a simple, recognizable placeholder at the call site and explicitly name the compound node that must be connected manually. The annotation must reference the graph filename directly, for example:
+
+```text
+MANUAL: connect compound node element_decay_calc
+```
+
+After import, replace or connect that location to the identically named compound node.
+
+The placeholder implementation must use a genshin-ts-supported node that is known not to alter final runtime semantics. Until that exact mechanism is standardized, do not assume a no-op or comment node exists.
+
+### 6. Standard feature delivery structure
+
+Use the following decomposition by default:
+
+```text
+Feature
+├── Entities
+│   ├── Entity A
+│   │   ├── Responsibility
+│   │   ├── Runtime Properties
+│   │   └── Editor Bindings
+│   └── Entity B
+│       ├── Responsibility
+│       ├── Runtime Properties
+│       └── Editor Bindings
+│
+├── NodeGraph Scripts
+│   ├── simple_flow_a.ts
+│   ├── simple_flow_b.ts
+│   └── simple_flow_c.ts
+│
+├── Reusable Compound Graphs
+│   └── complex_math_calc.ts / .gia
+│
+└── Manual Editor Work
+    ├── import .gia
+    ├── package compound nodes
+    ├── connect marked call sites
+    └── bind assets / structures / components
+```
+
+### 7. Review criteria
+
+Before implementation, a feature should answer:
+
+- What entities exist?
+- What single responsibility does each entity own?
+- Who owns each piece of state?
+- Can each script graph be described in one sentence?
+- Is there complex math that should become an independent compound node?
+- Which parts require manual editor binding?
+- Does every manual call site name the exact compound-node source file?
+
+If one generated graph handles several stages, contains many cross-region wires, or requires understanding the whole graph to reason about one local behavior, prefer decomposition over adding more nodes to the same graph.
+
 ## AI Working Rules
 - For any feature request, separate the answer into:
   - code changes
