@@ -1,8 +1,8 @@
 # 水瓜厨房 MVP：开发约定
 
-本文件记录千星奇域“水瓜厨房”MVP 的实现层约定。它不新增玩法规则，只约束七元素索引、向量表示、配置与运行时数据的组织方式。
+本文件记录千星奇域“水瓜厨房”MVP 的实现层约定。它不新增玩法规则，只约束数据结构、字段组织和七元素向量的索引方式。
 
-生长与养分语义以 [七元素养分与生长系统](growth-system.md) 和根目录 [Growth Tick](../../docs/plants/growth-tick.md) 为准。
+生长语义以 [七元素养分与生长系统](growth-system.md) 为准；通用养分模型与 Growth Tick 见根目录 `docs/plants/`。
 
 ## 七元素固定顺序
 
@@ -22,198 +22,72 @@
 
 凡表示完整七元素向量的数据，长度固定为 7。节点图中按索引读写，不再为七个元素分别创建一组独立变量。
 
----
-
-## CFG 结构体
-
-全局元素配置统一保存为结构体 `CFG`，挂载在关卡节点上。
-
-当前已经确定的基础亲和列表：
-
-```text
-CFG
-├── Affinity : float[7]   # 树基础亲和
-├── Stem     : float[7]
-├── Leaf     : float[7]
-└── Fruit    : float[7]
-```
-
-四个列表都严格遵循固定顺序：
-
-```text
-[Fire, Hydro, Anemo, Electro, Dendro, Cryo, Geo]
-```
-
-### 默认值
-
-`Affinity`：
-
-```text
-[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]
-```
-
-`Stem`：
-
-```text
-[0.85, 0.75, 0.80, 0.75, 1.15, 0.80, 1.30]
-```
-
-`Leaf`：
-
-```text
-[0.75, 1.10, 1.00, 0.85, 1.30, 0.90, 0.80]
-```
-
-`Fruit`：
-
-```text
-[1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]
-```
-
-因此同一元素索引可以直接跨配置读取，例如索引 `4` 始终代表 Dendro：
-
-```text
-CFG.Affinity[4]
-CFG.Stem[4]
-CFG.Leaf[4]
-CFG.Fruit[4]
-```
-
-随着 Growth Tick 落地，以下参数也应进入全局配置，而不是散落在节点图中：
-
-```text
-GrowthTickInterval
-SoilMaxElementLoad
-SoilEvaporationRatePerTick
-TreeGrowthConsumeRatePerTick
-StageMaxAbsorbPerTick
-StageGrowthThreshold
-OrganRetentionRate
-OrganChildAllocation
-AffinityLearningConfig
-VariantThreshold
-```
-
-具体字段名和结构体嵌套在对应 Spec 中确定。
-
----
-
 ## 七元素向量类型
 
-新版养分流中必须区分“储备”和“生长”两类向量。
+后续实现中，只要数据语义是“一组完整的七元素值”，默认都遵循：
 
-### 1. Reserve / Nutrient Vector
+- 长度固定为 7；
+- 顺序固定为 Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo；
+- 使用同一个元素索引访问不同配置和运行态数据；
+- 不为七种元素复制七套独立字段；
+- 不在局部节点图中自行改变元素顺序。
 
-表示真实存在、可以继续被吸收或消耗的七元素量：
-
-```text
-SOIL_Elems : float[7]
-TREE_Elems : float[7]
-```
-
-其中：
-
-- `SOIL_Elems` 是土壤七元素储备；
-- `TREE_Elems` 是树体内部七元素储备。
-
-树体颜色等当前状态表现读取的是 Reserve，而不是 Growth。
-
-### 2. Growth Vector
-
-表示某个 Stage 中已经被转化为组织生长的七元素组成：
+当前主要向量类型包括：
 
 ```text
-TREE_Growth : float[7]
-LEAF_Growth : float[7]
-FLOWER_Growth : float[7]
-...
+SOIL_Elems[7]              土壤元素储备
+
+TREE_Elems[7]              树体内部 Reserve
+TREE_Growth[7]             树体当前 Stage 的 Growth Vector
+TREE_BaseAffinity[7]       当前 Stage 的基础亲和
+TREE_EffectiveAffinity[7]  当前 Stage 连续学习后的有效亲和
+
+LEAF_Growth[7]
+LEAF_BaseAffinity[7]
+LEAF_EffectiveAffinity[7]
+
+FLOWER_Growth[7]
+FLOWER_BaseAffinity[7]
+FLOWER_EffectiveAffinity[7]
 ```
 
-Growth 不是可再次被上游吸收的营养库存。
+果实阶段后续还会拥有汁液 / 内容物相关向量，具体字段在对应 Spec 中确定。
 
-Stage 升级时：
+## Reserve 与 Growth 不得混用
+
+`Elems` / `Reserve` 表示实际仍存在、可以被继续输送和代谢的元素储备。
+
+`Growth` 表示已经被消耗并转化成器官形态的生长度。
+
+两者语义不同：
 
 ```text
-Growth = [0, 0, 0, 0, 0, 0, 0]
+Reserve
+→ Growth Tick 消耗
+→ Growth Vector
 ```
 
-然后从下一 Stage 重新累积。
+Growth 不得重新当作可输送养分使用。
 
-### 3. Affinity Vector
+Stage 升级时清空的是当前 Stage 的 Growth Vector，不是内部 Reserve。
 
-每个会吸收 / 成长的器官可以拥有：
+## Affinity 的统一语义
 
-```text
-BaseAffinity      : float[7]
-EffectiveAffinity : float[7]
-```
+Affinity 有两种使用方式。
 
-- BaseAffinity：当前 Stage 开始时固定下来的基准亲和；
-- EffectiveAffinity：当前 Stage 连续学习后的实时亲和。
+### 从来源提取元素
 
-进入下一 Stage：
-
-```text
-Next.BaseAffinity = Current.EffectiveAffinity
-```
-
-然后继续学习。
-
----
-
-## Stage
-
-Stage 使用离散状态，不通过 Growth 数值倒推。
-
-例如树：
-
-```text
-Seedling
-Sapling
-Mature
-```
-
-叶：
-
-```text
-Tender
-Thick
-Mature
-```
-
-花和果：
-
-```text
-Flower
-Fruit
-```
-
-进入下一 Stage 后，即使 Growth Vector 被清零，也不得回退到前一个 Stage。
-
-不同 Stage 可以拥有不同：
-
-- `MaxAbsorbPerTick`；
-- GrowthThreshold；
-- 环境损耗率；
-- 子器官槽位；
-- 子器官分流比例；
-- 表现规则。
-
----
-
-## 提取亲和与生长亲和
-
-同一 Affinity 在两个阶段使用不同规则。
-
-### 从来源提取
+提取时：
 
 ```text
 ExtractionAffinity[i] = min(Affinity[i], 1)
 ```
 
-亲和超过 1 时不允许突破来源真实拥有的元素。
+亲和超过 1 不允许从来源拿走超过实际供给的元素。
 
 ### 转换为 Growth
+
+转换时使用完整 Affinity：
 
 ```text
 GrowthGain[i]
@@ -221,101 +95,101 @@ GrowthGain[i]
 GrowthNutrient[i] × Affinity[i]
 ```
 
-这里使用完整 Affinity。
+因此 Affinity > 1 可以提高生长效率。
 
-因此：
+同一个亲和值在两个步骤中不要使用不同的临时解释。
 
-```text
-1 草 × 1.3
-→ 1.3 草生长度
-```
+## Base Affinity 与 Effective Affinity
 
-是允许的。
-
----
-
-## Continuous Learning
-
-只保留连续学习，不使用离散的“阶段元素奖励”。
-
-当前 Stage 中：
+未定型 Stage 使用连续学习：
 
 ```text
-内部元素 / Growth 组成变化
-→ EffectiveAffinity 连续变化
+BaseAffinity
+→ 当前环境 / 内部组成
+→ EffectiveAffinity
 ```
 
-具体函数由对应器官 Spec 确定。
+进入下一 Stage 时：
 
-Stage 变化时，把当前 EffectiveAffinity 固定为下一 Stage 的 BaseAffinity。
+```text
+BaseAffinity = 当前 EffectiveAffinity
+Growth = zero vector
+```
 
----
+下一 Stage 再从新的 BaseAffinity 开始连续学习。
+
+不实现离散“升级时额外 +100% / +200% 某元素亲和”的奖励。
+
+## 默认亲和配置
+
+当前已经有的七元素亲和数值继续作为各类器官的**基础亲和参考值**，不再解释为“生成瞬间直接乘一次后冻结的快照系数”。
+
+### Tree
+
+```text
+[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]
+```
+
+### Stem
+
+```text
+[0.85, 0.75, 0.80, 0.75, 1.15, 0.80, 1.30]
+```
+
+### Leaf
+
+```text
+[0.75, 1.10, 1.00, 0.85, 1.30, 0.90, 0.80]
+```
+
+### Flower / Fruit lineage
+
+当前旧配置：
+
+```text
+[1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]
+```
+
+先作为花 / 果器官的基础亲和起点。Flower → Fruit 的 Stage 固定与后续汁液累积方式以 `growth-system.md` 和后续 Spec 为准。
+
+## CFG 边界
+
+旧版 `CFG.Affinity / Stem / Leaf / Fruit` 结构仍可作为当前编辑器配置的基础数据来源，但新的生长系统还需要：
+
+- Growth Tick 间隔；
+- 土壤蒸发率；
+- 各 Tree Stage 的 `MaxAbsorbPerTick`；
+- 各 Stage 的 GrowthThreshold；
+- 子器官分流比例；
+- 各器官 Stage 的环境损耗；
+- 连续学习参数；
+- 表型阈值。
+
+这些字段的**最终编辑器结构和命名**不在本文件先行拍板，由对应 Feature Spec 确定，再回写本文件。
+
+不要为了提前补齐 CFG 而自行发明未确认字段。
 
 ## 时间字段
 
-离线结算统一使用服务器 UTC 时间。
+统一 Growth Tick 后，不再把旧的“树体元素连续衰减时间戳”作为核心模型。
 
-至少需要区分：
+至少需要语义上的：
 
 ```text
 LastGrowthTickAt
 ```
 
-用于计算错过的 Growth Tick。
+用于：
 
-元素球等独立实体可以拥有自己的时间戳。
+- 在线 Tick 调度；
+- 离线期间根据 UTC 时间计算漏掉的 Tick；
+- 批量补算或等价近似。
 
-旧版只依赖 `TREE_LastElementUpdateAt` 连续衰减的模型已经被 Growth Tick 养分流替代；如果为了迁移或实验继续保留该字段，不应再把它当作最终生长系统的唯一时间 source of truth。
-
----
-
-## 元素锁定
-
-旧版设计包含 `TREE_Locks : bool[7]`。
-
-新版引入土壤储备、树体储备和器官养分流后，“锁定”究竟作用于：
-
-- 土壤蒸发；
-- 树体代谢；
-- 亲和学习；
-- 容量竞争；
-- 或某一特定器官
-
-需要重新设计。
-
-在新的锁定 Spec 完成前：
-
-> 不把旧版 `TREE_Locks` 语义自动套入新版 Growth Tick。
-
-Debug UI 可以暂时保留该字段用于旧实验图，但正式实现不得据此扩展规则。
-
----
-
-## 七元素向量通用约定
-
-只要数据语义是一组完整七元素值，默认：
-
-- 长度固定为 7；
-- 顺序固定为 Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo；
-- 使用同一个元素索引访问不同配置和运行态数据；
-- 不为七元素复制七套独立字段；
-- 不在局部节点图中自行改变顺序。
-
-这包括：
-
-- Soil Reserve；
-- Tree Reserve；
-- Tree Growth；
-- Leaf / Flower / Fruit Growth；
-- Base / Effective Affinity；
-- 水瓜汁元素组成；
-- 后续需要完整七元素组成的其他数据。
-
----
+元素球仍拥有自己的出生 / 保存时间规则，不与 Growth Tick 时间戳混为一谈。
 
 ## 节点图实现原则
 
-涉及七元素的批量逻辑优先按固定索引处理：
+涉及七元素的批量逻辑优先使用固定索引：
 
 ```text
 i = 0..6
@@ -323,19 +197,24 @@ i = 0..6
 SOIL_Elems[i]
 TREE_Elems[i]
 TREE_Growth[i]
-OrganGrowth[i]
-BaseAffinity[i]
-EffectiveAffinity[i]
+TREE_EffectiveAffinity[i]
+LEAF_Growth[i]
+...
 ```
 
-复杂向量公式优先单独生成节点图并打包为复合节点。
+复杂数学或重复向量变换应优先拆为独立计算图，再由编辑器打包复合节点。
 
-主流程只负责：
+主流程图保持小而单一，不把完整 Growth Tick、吸收、子器官分流、Stage 跳转和表现全部展开在一张图中。
 
-- Tick 编排；
-- Stage 编排；
-- 器官关系；
-- 状态读写；
-- 调用复合计算节点。
+## 旧字段迁移
 
-不要重新把完整养分计算、亲和学习和 Stage 编排堆到一张大型节点图中。
+以下旧语义不再作为新实现的 source of truth：
+
+```text
+TREE_LastElementUpdateAt
+器官生成时一次性 OrganElement 快照后永久冻结
+浇灌直接写入 TREE_Elems
+树体元素按旧连续公式直接自然衰减
+```
+
+已有实验节点图可以继续作为 genshin-ts 编译 / 导入验证材料，但正式功能实现应按新的土壤—Reserve—Growth Tick 模型重新拆 Spec。
