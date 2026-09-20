@@ -107,6 +107,9 @@ Growth Tick：土壤蒸发 / 树体按阶段与亲和吸收
 以下文档仍然有效，但不是本目录中的 MVP source of truth：
 
 - [普通水瓜 Aquamelon](../../docs/plants/aquamelon.md)：原世界水瓜的基础形态、部位和材料来源。
+- [植物养分—生长系统](../../docs/plants/nutrient-growth-system.md)：跨世界、跨植物复用的通用养分 / Growth / Affinity / Stage 模型。
+- [Growth Tick](../../docs/plants/growth-tick.md)：通用的单次生长结算顺序。
+- [气候系统占位](../../docs/plants/climate-system.md)：当前仅接收器官环境逸散接口，不实现气候反馈。
 - [游戏概念](../../docs/overview.md)：正式项目的总体世界与设计原则。
 
 ## 历史玩法文档
