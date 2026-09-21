@@ -196,6 +196,87 @@ SOIL_Elems[i]
 
 ---
 
+## 3.3 Growth 驱动的亲和学习
+
+水瓜树当前 Stage 的 Effective Affinity 只由本阶段已经形成的 `TREE_Growth[7]` 决定，不读取 `TREE_Elems[7]` 的当前储备比例。
+
+当前配置：
+
+```text
+ExtraAffinity = 1
+CFG_AffinityInherifanceRate = 0.5
+```
+
+计算：
+
+```text
+GrowthTotal = Σ TREE_Growth[i]
+
+GrowthShare[i]
+= TREE_Growth[i] / GrowthTotal
+
+AffinityOffset[i]
+= ExtraAffinity × GrowthShare[i]
+
+TREE_EffectiveAffinity[i]
+= TREE_BaseAffinity[i] + AffinityOffset[i]
+```
+
+当 `GrowthTotal = 0`：
+
+```text
+AffinityOffset[i] = 0
+TREE_EffectiveAffinity[i] = TREE_BaseAffinity[i]
+```
+
+因此：
+
+> Reserve 表示“当前体内还储存着什么”，Growth 表示“这些元素已经把植物长成了什么”。
+
+只有 Growth 会塑造当前亲和。
+
+### Stage 升级
+
+Tree 自身进入下一 Stage：
+
+```text
+TREE_EffectiveAffinity
+→ 下一 Stage TREE_BaseAffinity
+
+TREE_Growth
+→ 清零
+```
+
+### 未来生成叶片
+
+当 Tree 未来生成叶片时，Tree 自身 Affinity 不改变。
+
+父体当前偏移：
+
+```text
+ParentOffset[i]
+=
+TREE_EffectiveAffinity[i]
+-
+TREE_BaseAffinity[i]
+```
+
+叶片继承：
+
+```text
+LEAF_BaseAffinity[i]
+=
+CFG_LeafAffinity[i]
++
+ParentOffset[i] × CFG_AffinityInherifanceRate
+```
+
+当前继承率为 0.5。
+
+Sapling 阶段“Tree 自身长大”与“生成 / 培养叶片”如何竞争同一份 Growth，当前暂不设计，不阻塞本轮 Tree 三阶段基础流程。
+
+---
+
 ## 4. 树从土壤吸收
 
 水瓜树拥有内部储备：
