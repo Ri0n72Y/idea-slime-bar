@@ -13,8 +13,9 @@
 ~~~text
 Debug 生成元素球
 → 元素球落入 Soil 感应范围
-→ Soil 接收元素并进行容量竞争
+→ Soil 捕获并累加到 SOIL_PendingElems
 → Level 发起 Growth Tick
+→ Soil 在 Tick 开始时批量合并 Pending 并进行一次容量竞争
 → Soil 完成本 Tick
 → AquamelonTree 从 Soil 吸收
 → TREE_Elems / Reserve
@@ -62,7 +63,7 @@ Debug 生成元素球
 
 ### 已选方向，但实现细节未确认
 
-- [~] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → 容量竞争 → `SOIL_Elems`。
+- [x] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → `SOIL_PendingElems` → 下一 Growth Tick 批量容量竞争 → `SOIL_Elems`。
 - [~] Debug UI 作为开发期 Crop Inspector，处理 Soil / Tree Reserve / Tree Growth / Stage / Affinity / 手动 Tick 等状态。
 - [~] Level 作为 Growth Tick 的调度起点；更具体的信号与顺序尚未确认。
 - [~] 正常在线结算读取真实经过时间 dt；Debug 的“推进下一 Tick”属于额外的开发期时间推进能力。
@@ -70,7 +71,7 @@ Debug 生成元素球
 ### 仍待讨论
 
 - [x] 父子器官亲和度：由当前 Stage 的 Growth Vector 计算亲和偏移；Stage 升级时固化为自身下一阶段 Base；生成子器官时按继承率传递偏移，自身亲和不变。
-- [ ] 元素球字段、Prefab、生成位置和 Soil 感应方式。
+- [x] 元素球使用 `BALL_Elems[7]`；当前版本只生成纯净单元素球；在以 Tree 为中心的可配置圆环范围随机生成，并避免出生即进入 Soil 捕获区；靠近玩家时缓慢飘向玩家；颜色由所含元素决定；元素量随 Growth Tick 衰减。
 - [ ] Soil 容量竞争的边界条件。
 - [ ] Growth Tick 的信号 / 流水线顺序。
 - [ ] Soil Growth Tick 的具体行为。
@@ -338,58 +339,149 @@ Growth 达标
 
 ---
 
-## 3. Debug 元素球与浇水 —— 方向已确认，细节待讨论
+## 3. Debug 元素球与浇水 —— 当前规则已确认
 
-当前方向：
+Debug UI 不直接修改 `SOIL_Elems`。
 
-Debug UI 不直接修改 SOIL_Elems 来模拟浇水。
-
-而是：
+正式测试路径：
 
 ~~~text
 Debug UI
-→ 选择元素 / 数量
+→ 选择纯净元素与元素量
 → generate_elem_ball
-→ 生成一个元素球
-→ 元素球落入 Soil 感应范围
-→ Soil 接收元素球
-→ 浇水结算
+→ 在 Tree 周围圆环随机生成元素球
+→ 玩家靠近时元素球缓慢向玩家飘动
+→ 元素球进入 Soil 感应区
+→ Soil 捕获
+→ BALL_Elems 累加到 SOIL_PendingElems
+→ 元素球实体被消费
+→ 下一次 Growth Tick
+→ Pending 批量合并进 Soil
 ~~~
 
-这样 Debug 测试和未来正式玩法共用同一条“元素球 → Soil”接口。
+这样 Debug 测试与未来正式玩法共用同一条“元素球 → Soil”输入链。
 
-候选节点图：
+### 3.1 元素球数据
+
+元素球核心状态：
 
 ~~~text
-generate_elem_ball
-WK_Soil_ReceiveElementBall
+BALL_Elems : float[7]
+Tag        : ElementBall
 ~~~
 
-其中：
+虽然数据结构保留完整七元素向量，但当前版本只允许纯净元素球：
 
-### generate_elem_ball
+~~~text
+同一颗球只有一个 BALL_Elems[i] > 0
+~~~
 
-只负责：
+这样未来允许混合元素球时不需要修改接口。
 
-- 根据元素类型；
-- 元素量；
-- 生成位置；
+元素球视觉根据 `BALL_Elems` 决定。当前纯净球直接使用唯一非零元素对应的颜色。
 
-创建并初始化一个元素球。
+### 3.2 generate_elem_ball
 
-应设计成未来可复用入口。
+`generate_elem_ball` 接收：
 
-### WK_Soil_ReceiveElementBall
+~~~text
+InputElems : float[7]
+~~~
 
-只负责：
+当前调用方保证它是纯净单元素向量。
 
-- Soil 感应到元素球；
-- 读取元素类型和元素量；
-- 调用土壤容量竞争；
-- 写回 SOIL_Elems；
-- 消费 / 销毁该元素球。
+生成位置：
 
-具体元素球实体字段、Prefab、感应方式和落点尚未确认。
+~~~text
+以当前 Tree / 种植区中心为圆心
+→ 在 [SpawnRadiusMin, SpawnRadiusMax] 圆环内
+→ 随机角度生成
+~~~
+
+圆环内径必须大于 Soil 的直接捕获范围，基本保证元素球不会在生成瞬间就被 Soil 捕获。
+
+具体半径数值、Prefab 和编辑器资源在实现 Spec 中确定。
+
+### 3.3 元素球在线行为
+
+元素球未被捕获时：
+
+- 玩家进入一定吸引范围后，元素球缓慢向该玩家飘动；
+- 颜色根据 `BALL_Elems` 表现；
+- 元素量随时间衰减。
+
+衰减沿用统一 Growth Tick 时间模型：
+
+~~~text
+BALL_Elems[i]
+*= CFG_ElemBallRetentionPerHour ^ dtHours
+~~~
+
+不使用“每 Tick 固定减 X”的写法。
+
+元素球被 Soil 捕获并销毁后，不再继续执行元素球衰减。
+
+### 3.4 Soil 捕获与 Pending 池
+
+Soil 拥有感应区。
+
+当带有 `ElementBall` 标签的实体进入感应区：
+
+~~~text
+SOIL_PendingElems[i]
++= BALL_Elems[i]
+~~~
+
+随后消费 / 销毁该元素球。
+
+捕获事件**不立即修改 `SOIL_Elems`，也不立即执行容量竞争**。
+
+因此短时间内多个元素球：
+
+~~~text
+Ball A
+Ball B
+Ball C
+...
+~~~
+
+会先合并成一个七元素输入向量：
+
+~~~text
+SOIL_PendingElems[7]
+~~~
+
+这样容量竞争的最终结果不会依赖多个碰撞事件的先后顺序。
+
+### 3.5 方案 A：下一 Growth Tick 批量结算
+
+当前确认采用方案 A。
+
+在下一次 Soil Growth Tick 开始时：
+
+~~~text
+1. 读取 SOIL_PendingElems
+2. 将整个 Pending Vector 作为一次输入
+3. 与当前 SOIL_Elems 做一次容量竞争
+4. 写回新的 SOIL_Elems
+5. 清空 SOIL_PendingElems
+6. 再继续本 Tick 的 Soil 衰减
+7. 再进入 Tree 吸收
+~~~
+
+因此“捕获”与“真正进入土壤储备”是两个不同步骤：
+
+~~~text
+Capture
+→ Pending
+
+Next Growth Tick
+→ Commit Pending
+→ Soil Reservoir
+~~~
+
+Debug UI 可以使用 `Advance One Growth Tick` 立即推进这一步，因此开发测试不需要等待正常的一分钟调度。
+
 
 ---
 
@@ -443,8 +535,7 @@ soil_element_mix_calc
 
 ~~~text
 CurrentSoil[7]
-InputElementIndex
-InputAmount
+InputElems[7]
 Capacity
 ~~~
 
@@ -594,9 +685,9 @@ Debug UI 状态归 Player 所有。
 后续按以下顺序逐条确认，不一次展开多个主题：
 
 - [x] 1. 亲和度与父子器官遗传
-- [>] 2. Debug 元素球的数据结构与生成接口
-- [ ] 3. Soil 感应元素球与浇水流程
-- [ ] 4. 土壤容量竞争公式与边界
+- [x] 2. Debug 元素球的数据结构与生成接口
+- [x] 3. Soil 感应元素球与浇水流程
+- [>] 4. 土壤容量竞争公式与边界
 - [ ] 5. Growth Tick 的信号 / 流水线顺序
 - [ ] 6. Soil Growth Tick
 - [ ] 7. Tree Growth Tick：吸收
