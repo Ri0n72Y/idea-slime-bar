@@ -183,7 +183,8 @@ Destroy ElementBall
 
 ```text
 Pending
-→ 一次容量竞争
+→ 与 SOIL_Elems 全量相加
+→ 超容量时对全部元素统一等比例压缩
 → SOIL_Elems
 → Clear Pending
 → Soil evaporation
@@ -192,9 +193,11 @@ Pending
 
 这样同一批浇灌的结果不依赖多个碰撞事件的先后顺序。
 
-### 3.1 浇灌时的容量竞争
+### 3.1 浇灌时的容量约束
 
-下一次 Growth Tick 提交整个 `SOIL_PendingElems[7]` 时，将其作为**同一批输入**一次处理。
+旧版“Pending 优先进入、按比例淘汰旧 Soil”的方案废弃。
+
+最终规则是在下一次 Growth Tick 开头，将当前 Soil 与全部 Pending 直接相加，然后对**合并后的整体向量**应用容量上限。
 
 定义：
 
@@ -202,140 +205,123 @@ Pending
 S[i] = SOIL_Elems[i]
 I[i] = SOIL_PendingElems[i]
 
-S_total = Σ S[i]
-I_total = Σ I[i]
+Combined[i]
+=
+S[i] + I[i]
+
+CombinedTotal
+=
+Σ Combined[i]
 
 C = MaxSoilElementLoad
 ```
 
-核心原则：
-
-> Pending 整体优先进入；如果空间不足，先按比例淘汰旧 Soil。只有当 Pending 自己已经超过整个容量时，Pending 内部才按自身组成比例竞争。
-
-#### Pending 为空
+如果：
 
 ```text
-I_total = 0
-→ SOIL_Elems 不变
+CombinedTotal <= C
 ```
 
-#### 总量未超过容量
+则：
 
 ```text
-S_total + I_total <= C
+Result[i]
+=
+Combined[i]
+```
+
+如果：
+
+```text
+CombinedTotal > C
+```
+
+则统一按：
+
+```text
+KeepRatio
+=
+C / CombinedTotal
 
 Result[i]
 =
-S[i] + I[i]
+Combined[i] × KeepRatio
 ```
 
-#### Pending 本身能装下，但加入后超容量
-
-```text
-I_total < C
-S_total + I_total > C
-```
-
-先计算旧 Soil 可保留的容量：
-
-```text
-OldCapacity
-=
-C - I_total
-```
-
-旧 Soil 按原组成比例缩放：
-
-```text
-OldKeepRatio
-=
-OldCapacity / S_total
-
-Result[i]
-=
-S[i] × OldKeepRatio
-+
-I[i]
-```
+所以所有旧 Soil 与新 Pending 在容量结算时地位相同，不存在新输入保护。
 
 例如：
 
 ```text
 旧 Soil：
 雷 50
-火 30
-水 20
-总量 100
+水 30
+草 20
 
 Pending：
-雷 10
-
-C = 100
-OldCapacity = 90
-OldKeepRatio = 0.9
-
-结果：
-雷 = 50 × 0.9 + 10 = 55
-火 = 30 × 0.9      = 27
-水 = 20 × 0.9      = 18
+雷 50
 ```
 
-#### Pending 自身达到或超过容量
-
-如果：
+合并后：
 
 ```text
-I_total >= C
+雷 100
+水 30
+草 20
+总量 150
 ```
 
-则旧 Soil 全部挤出，Pending 自身按组成比例缩放到容量：
+容量 100：
 
 ```text
-InputKeepRatio
+KeepRatio = 100 / 150
+```
+
+最终：
+
+```text
+雷 ≈ 66.67
+水 = 20
+草 ≈ 13.33
+```
+
+如果下一次 Tick 前再进入 50 雷，则再次经历“先累加、再整体压缩”，最终约为：
+
+```text
+雷 ≈ 77.78
+水 ≈ 13.33
+草 ≈ 8.89
+```
+
+因此连续加入单一元素会形成逐步替换，而不会因为 Pending 一次累计较大就瞬间清空旧 Soil。
+
+超出容量的部分：
+
+```text
+Overflow
 =
-C / I_total
-
-Result[i]
-=
-I[i] × InputKeepRatio
+CombinedTotal - C
 ```
 
-例如：
+当前直接丢弃。未来可以把 Overflow 接入气候系统，作为向环境逸散的元素。
 
-```text
-C = 100
+容量归一化每次 Soil Growth Tick 都执行，因此即使 Pending 为 0，但 Debug 把 Soil 改到了超容量状态，也会在下一 Tick 自动压缩回容量。
 
-Pending：
-火 80
-水 60
-总量 140
+正常玩法元素量必须 `>= 0`；Debug 写入负值时在 Debug 输入边界 clamp 到 0。
 
-结果约：
-火 57.14
-水 42.86
-旧 Soil 0
-```
-
-#### 边界规则
-
-所有正常元素量必须：
-
-```text
->= 0
-```
-
-Debug 写入负数时在 Debug 输入边界 clamp 到 0。
-
-如果 Debug 人工把 `SOIL_Elems` 改到超过容量，暂时允许该非法状态存在；下一次存在非零 Pending 并执行容量竞争时，公式会自然恢复容量约束。
-
-容量竞争完成后：
+容量结算完成后：
 
 ```text
 SOIL_Elems = Result
 SOIL_PendingElems = zero vector
 ```
 
-然后才继续本 Growth Tick 的 Soil evaporation 与 Tree absorption。
+然后继续：
+
+```text
+Soil evaporation
+→ Tree absorption
+```
 
 
 ### 3.2 土壤蒸发
