@@ -153,20 +153,84 @@ GrowthNutrient[i] × Affinity[i]
 
 ## Continuous Learning
 
-未定型器官会根据自身当前的养分组成持续调整 Effective Affinity。
+未定型器官根据当前 Stage 已经形成的 Growth Vector 持续计算 Effective Affinity。
 
-原则：
+**Reserve 不参与这个学习过程。**
 
-```text
-当前体内某种养分占比越高
-→ 对该养分的 Effective Affinity 越容易提高
-```
+这一区分很重要：
 
-这种变化是连续的，不在每个 Tick 产生离散“天赋点”。
+~~~text
+Reserve
+= 当前仍储存在器官内部、尚可继续输送和代谢的养分
 
-进入下一 Stage 时，当前 Effective Affinity 被固定为新 Stage 的 Base Affinity，然后在新 Stage 中继续学习。
+Growth
+= 已经被器官消耗，并真正形成组织 / 形态的成长历史
+~~~
 
-第一版先固定这一行为关系，具体学习函数和最大偏移量由具体植物 / Spec 决定。
+因此亲和学习描述的是“已经长成了什么”，而不是“当前肚子里装着什么”。
+
+通用形式：
+
+~~~text
+GrowthTotal = Σ Growth[i]
+
+GrowthShare[i]
+= Growth[i] / GrowthTotal
+
+AffinityOffset[i]
+= ExtraAffinity × GrowthShare[i]
+
+EffectiveAffinity[i]
+= BaseAffinity[i] + AffinityOffset[i]
+~~~
+
+当 `GrowthTotal = 0` 时，`AffinityOffset = 0`，Effective Affinity 等于 Base Affinity。
+
+其中：
+
+- `ExtraAffinity` 控制一个 Stage 最多可由 Growth Composition 分配出的总额外亲和；
+- Growth 总量决定成长进度与事件阈值；
+- Growth 的组成决定这份额外亲和在各养分维度之间如何分配。
+
+进入下一 Stage 时：
+
+~~~text
+Current EffectiveAffinity
+→ Next Stage BaseAffinity
+
+Growth
+→ zero vector
+~~~
+
+也就是把上一阶段已经形成的表观亲和固化为下一阶段的基础亲和。
+
+### 子器官的亲和初始化
+
+生成新的子器官时，不直接复制父器官完整亲和，而是只传递父器官当前相对于自身 Base 的偏移：
+
+~~~text
+ParentOffset[i]
+=
+ParentEffectiveAffinity[i]
+-
+ParentBaseAffinity[i]
+
+ChildBaseAffinity[i]
+=
+ChildTemplateAffinity[i]
++
+ParentOffset[i] × AffinityInheritanceRate
+~~~
+
+因此：
+
+- Child Template 保留器官自身的生理特征；
+- Parent Offset 传递父器官已经形成的环境适应；
+- 子器官出生后再根据自己的 Growth Vector 继续学习；
+- 生成子器官不会反过来修改父器官自己的 Base / Effective Affinity。
+
+具体植物可以覆盖 `ExtraAffinity` 与 `AffinityInheritanceRate`。
+
 
 ## 设计类比：植物作为在线学习系统
 
@@ -190,7 +254,7 @@ Growth Vector
 颜色、形态、成熟速度等表型
 ≈ output / phenotype
 
-当前养分 / Growth 组成反过来改变 Effective Affinity
+当前 Growth 组成反过来改变 Effective Affinity
 ≈ online parameter update
 
 Stage 切换时 Effective → Base
@@ -208,8 +272,8 @@ Stage 切换时 Effective → Base
 ~~~text
 Affinity
 → 决定更容易吸收什么
-→ 决定体内更容易积累什么
-→ 当前积累反过来改变 Effective Affinity
+→ 决定哪些养分更容易被转化为 Growth
+→ 已形成的 Growth 组成反过来改变 Effective Affinity
 → 下一次吸收倾向继续发生变化
 ~~~
 
