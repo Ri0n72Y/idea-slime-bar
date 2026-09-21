@@ -13,9 +13,9 @@
 ~~~text
 Debug 生成元素球
 → 元素球落入 Soil 感应范围
-→ Soil 捕获并累加到 SOIL_PendingElems
+→ Soil 捕获后直接累加到 SOIL_Elems
 → Level 发起 Growth Tick
-→ Soil 在 Tick 开始时批量合并 Pending，并在超容量时对全部元素统一等比例压缩
+→ Soil 在 Tick 开始时检查总量；若超容量则对当前 SOIL_Elems 整体等比例压缩
 → Soil 完成本 Tick
 → AquamelonTree 从 Soil 吸收
 → TREE_Elems / Reserve
@@ -51,7 +51,7 @@ Debug 生成元素球
 - [x] Stage 升级后清空当前 Growth，并在新 Stage 重新累计；Stage 本身不回退。
 - [x] 提取养分时 Affinity > 1 按 1 处理；转换 Growth 时使用完整 Affinity。
 - [x] 只保留连续学习，不使用阶段跃迁时的离散元素奖励。
-- [x] Soil 容量约束在本轮实现：先把 `SOIL_Elems` 与 `SOIL_PendingElems` 全部累加；若总量超过容量，则对合并后的七元素向量整体等比例压缩到容量，多余部分丢弃。
+- [x] Soil 捕获元素球时直接把 `BALL_Elems` 累加到 `SOIL_Elems`，不设 Pending 层、不在捕获时做容量计算。下一 Growth Tick 开始时若 Soil 总量超过容量，再对当前 `SOIL_Elems` 整体等比例压缩到容量，多余部分丢弃。
 - [x] Debug UI 需要在游戏中查看 / 修改当前作物的自定义变量。
 - [x] Debug UI 通过生成指定元素 / 数量的测试元素球来模拟浇水，而不是直接给 Soil 加数值。
 - [x] 元素球进入 Soil 感应范围后才完成实际浇水。
@@ -63,7 +63,7 @@ Debug 生成元素球
 
 ### 已选方向，但实现细节未确认
 
-- [x] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → `SOIL_PendingElems` → 下一 Growth Tick 批量容量竞争 → `SOIL_Elems`。
+- [x] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → 直接累加 `SOIL_Elems`；下一 Growth Tick 再统一执行容量归一化。
 - [~] Debug UI 作为开发期 Crop Inspector，处理 Soil / Tree Reserve / Tree Growth / Stage / Affinity / 手动 Tick 等状态。
 - [~] Level 作为 Growth Tick 的调度起点；更具体的信号与顺序尚未确认。
 - [~] 正常在线结算读取真实经过时间 dt；Debug 的“推进下一 Tick”属于额外的开发期时间推进能力。
@@ -72,7 +72,7 @@ Debug 生成元素球
 
 - [x] 父子器官亲和度：由当前 Stage 的 Growth Vector 计算亲和偏移；Stage 升级时固化为自身下一阶段 Base；生成子器官时按继承率传递偏移，自身亲和不变。
 - [x] 元素球使用 `BALL_Elems[7]`；当前版本只生成纯净单元素球；在以 Tree 为中心的可配置圆环范围随机生成，并避免出生即进入 Soil 捕获区；靠近玩家时缓慢飘向玩家；颜色由所含元素决定；元素量随 Growth Tick 衰减。
-- [x] Soil 容量约束：Pending 不再享有优先级。下一 Growth Tick 先执行 `SOIL_Elems + SOIL_PendingElems`，再把合并后的总向量按容量统一归一化；超出容量的部分作为损失丢弃。
+- [x] Soil 容量约束：不存在 Pending。元素球捕获时只做 `SOIL_Elems += BALL_Elems`；下一 Growth Tick 若 `ΣSOIL_Elems > Capacity`，则整体等比例压缩到容量。
 - [ ] Growth Tick 的信号 / 流水线顺序。
 - [ ] Soil Growth Tick 的具体行为。
 - [ ] Tree 从 Soil 吸收的具体公式。
@@ -119,7 +119,7 @@ CFG_FruitAffinity[7]
 
 - 保存土壤七元素储备；
 - 感应进入范围的元素球；
-- 执行土壤容量竞争；
+- 在 Growth Tick 开头执行土壤容量归一化；
 - 参与 Growth Tick 中的蒸发 / 供给。
 
 基础状态：
@@ -341,7 +341,7 @@ Growth 达标
 
 ## 3. Debug 元素球与浇水 —— 当前规则已确认
 
-Debug UI 不直接修改 `SOIL_Elems`。
+Debug UI 不直接修改 `SOIL_Elems`，而是仍然通过真实元素球路径测试。
 
 正式测试路径：
 
@@ -353,13 +353,11 @@ Debug UI
 → 玩家靠近时元素球缓慢向玩家飘动
 → 元素球进入 Soil 感应区
 → Soil 捕获
-→ BALL_Elems 累加到 SOIL_PendingElems
+→ BALL_Elems 直接累加到 SOIL_Elems
 → 元素球实体被消费
-→ 下一次 Growth Tick
-→ Pending 批量合并进 Soil
 ~~~
 
-这样 Debug 测试与未来正式玩法共用同一条“元素球 → Soil”输入链。
+这里不再设置 `SOIL_PendingElems`。
 
 ### 3.1 元素球数据
 
@@ -375,8 +373,6 @@ Tag        : ElementBall
 ~~~text
 同一颗球只有一个 BALL_Elems[i] > 0
 ~~~
-
-这样未来允许混合元素球时不需要修改接口。
 
 元素球视觉根据 `BALL_Elems` 决定。当前纯净球直接使用唯一非零元素对应的颜色。
 
@@ -417,122 +413,63 @@ BALL_Elems[i]
 *= CFG_ElemBallRetentionPerHour ^ dtHours
 ~~~
 
-不使用“每 Tick 固定减 X”的写法。
-
 元素球被 Soil 捕获并销毁后，不再继续执行元素球衰减。
 
-### 3.4 Soil 捕获与 Pending 池
+### 3.4 Soil 捕获
 
 Soil 拥有感应区。
 
-当带有 `ElementBall` 标签的实体进入感应区：
+当带有 `ElementBall` 标签的实体进入感应区时，只执行最简单的累加：
 
 ~~~text
-SOIL_PendingElems[i]
+SOIL_Elems[i]
 += BALL_Elems[i]
 ~~~
 
 随后消费 / 销毁该元素球。
 
-捕获事件**不立即修改 `SOIL_Elems`，也不立即执行容量竞争**。
+捕获阶段：
 
-因此短时间内多个元素球：
+- 不执行容量比例计算；
+- 不裁剪到 100；
+- 不维护 Pending；
+- 允许 `SOIL_Elems` 暂时超过容量。
+
+容量约束统一留到下一次 Soil Growth Tick 开始时处理。
+
+因此多个元素球连续进入时，本质上只是：
 
 ~~~text
-Ball A
-Ball B
-Ball C
+SOIL_Elems
++= BallA
++= BallB
++= BallC
 ...
 ~~~
 
-会先合并成一个七元素输入向量：
-
-~~~text
-SOIL_PendingElems[7]
-~~~
-
-这样容量竞争的最终结果不会依赖多个碰撞事件的先后顺序。
-
-### 3.5 方案 A：下一 Growth Tick 批量结算
-
-当前确认采用方案 A。
-
-在下一次 Soil Growth Tick 开始时：
-
-~~~text
-1. 读取 SOIL_PendingElems
-2. 将整个 Pending Vector 作为一次输入
-3. 与当前 SOIL_Elems 全量相加
-4. 若总量超过容量，则对合并后的七元素向量整体等比例压缩至容量
-5. 写回新的 SOIL_Elems
-6. 清空 SOIL_PendingElems
-7. 再继续本 Tick 的 Soil 衰减
-8. 再进入 Tree 吸收
-~~~
-
-因此“捕获”与“真正进入土壤储备”是两个不同步骤：
-
-~~~text
-Capture
-→ Pending
-
-Next Growth Tick
-→ Commit Pending
-→ Soil Reservoir
-~~~
-
-Debug UI 可以使用 `Advance One Growth Tick` 立即推进这一步，因此开发测试不需要等待正常的一分钟调度。
+不需要额外的批处理状态。
 
 
 ---
 
 ## 4. 土壤容量约束 —— 最终方案已确认
 
-旧版“新输入优先、按旧 Soil 比例挤出”的方案废弃。
+Soil 不再区分“旧元素”和“新输入”，也不维护 Pending。
 
-原因是引入 `SOIL_PendingElems[7]` 后，同一个 Growth Tick 前可能累计多个元素球。若继续把整批 Pending 视为一个受保护输入，就会让“短时间连续浇入多个球”和“这些球逐次进入土壤”产生明显不同的结果。
-
-最终采用更简单的统一容量规则：
-
-> 下一次 Growth Tick 开始时，先把当前 Soil 与全部 Pending 直接相加；如果合并后的总元素量超过 Soil Capacity，就对**合并后的全部七元素**统一等比例压缩到容量。
-
-因此 Pending 不再拥有任何容量优先级。
-
-定义：
+元素球被捕获时已经直接累加进：
 
 ~~~text
-S[i] = CurrentSoil[i]
-I[i] = PendingElems[i]
+SOIL_Elems[7]
+~~~
 
-Combined[i]
-=
-S[i] + I[i]
+下一次 Soil Growth Tick 开始时，只检查当前 Soil 总量：
 
-CombinedTotal
+~~~text
+SoilTotal
 =
-Σ Combined[i]
+Σ SOIL_Elems[i]
 
 C = Capacity
-~~~
-
-倾向拆成独立纯计算节点图：
-
-~~~text
-soil_element_mix_calc
-~~~
-
-输入：
-
-~~~text
-CurrentSoil[7]
-InputElems[7]
-Capacity
-~~~
-
-输出：
-
-~~~text
-ResultSoil[7]
 ~~~
 
 ### 4.1 未超过容量
@@ -540,47 +477,38 @@ ResultSoil[7]
 如果：
 
 ~~~text
-CombinedTotal <= C
+SoilTotal <= C
 ~~~
 
-则：
-
-~~~text
-ResultSoil[i]
-=
-Combined[i]
-~~~
-
-不发生损失。
+则 Soil 不变。
 
 ### 4.2 超过容量
 
 如果：
 
 ~~~text
-CombinedTotal > C
+SoilTotal > C
 ~~~
 
-统一计算压缩比例：
+计算：
 
 ~~~text
 KeepRatio
 =
-C / CombinedTotal
+C / SoilTotal
 ~~~
 
-七元素全部按同一个比例压缩：
+然后所有元素统一等比例压缩：
 
 ~~~text
-ResultSoil[i]
-=
-Combined[i] × KeepRatio
+SOIL_Elems[i]
+*= KeepRatio
 ~~~
 
-因此：
+于是：
 
 ~~~text
-Σ ResultSoil[i]
+Σ SOIL_Elems[i]
 =
 C
 ~~~
@@ -590,16 +518,16 @@ C
 ~~~text
 Overflow
 =
-CombinedTotal - C
+SoilTotal - C
 ~~~
 
 当前版本直接丢弃。
 
-未来气候系统可以把这部分 `Overflow` 解释为向环境逸散的元素，但本轮不处理。
+未来气候系统可以把 `Overflow` 接入环境元素逸散，但本轮不处理。
 
 ### 4.3 示例
 
-原 Soil：
+初始：
 
 ~~~text
 雷 50
@@ -608,13 +536,7 @@ CombinedTotal - C
 总量 100
 ~~~
 
-本 Tick Pending：
-
-~~~text
-雷 50
-~~~
-
-先直接合并：
+捕获一个 50 雷元素球后，立即累加：
 
 ~~~text
 雷 100
@@ -623,13 +545,9 @@ CombinedTotal - C
 总量 150
 ~~~
 
-容量：
+此时可以暂时超过容量。
 
-~~~text
-C = 100
-~~~
-
-因此：
+下一 Growth Tick：
 
 ~~~text
 KeepRatio
@@ -639,7 +557,7 @@ KeepRatio
 2 / 3
 ~~~
 
-结果：
+归一化后：
 
 ~~~text
 雷 ≈ 66.67
@@ -648,13 +566,7 @@ KeepRatio
 总量 = 100
 ~~~
 
-如果下一次 Growth Tick 前又进入：
-
-~~~text
-雷 50
-~~~
-
-则再次先合并：
+之后如果又捕获 50 雷：
 
 ~~~text
 雷 ≈ 116.67
@@ -663,7 +575,7 @@ KeepRatio
 总量 = 150
 ~~~
 
-再统一压缩：
+下一 Growth Tick 再压缩：
 
 ~~~text
 雷 ≈ 77.78
@@ -672,11 +584,11 @@ KeepRatio
 总量 = 100
 ~~~
 
-因此连续加入单一元素会逐步提高该元素比例，但不会因为把多个输入合并成 Pending，就瞬间把旧 Soil 全部挤掉。
+这形成的是逐次残留、逐步替换的递推过程。
 
-### 4.4 Pending 与 Debug 边界
+### 4.4 数值边界
 
-正常玩法中的元素量必须：
+正常玩法元素量必须：
 
 ~~~text
 >= 0
@@ -684,56 +596,28 @@ KeepRatio
 
 Debug UI 写入负数时，在 Debug 输入边界 clamp 到 0。
 
-容量归一化在每次 Soil Growth Tick 开头执行，因此即使：
-
-- `SOIL_PendingElems = 0`；
-- 或 Debug 人工把 `SOIL_Elems` 改到超过容量；
-
-只要当前合并后的：
-
-~~~text
-CombinedTotal > Capacity
-~~~
-
-都会统一压缩回容量。
-
-因此容量约束不再依赖“是否存在 Pending”。
+容量归一化每次 Soil Growth Tick 开头执行，因此 Debug 即使直接把 Soil 改到超容量，也会在下一 Tick 自动恢复。
 
 ### 4.5 算法摘要
 
 ~~~text
-Combined = max(S, 0) + max(I, 0)
-CombinedTotal = Σ Combined
+SoilTotal = Σ max(SOIL_Elems[i], 0)
 
-if CombinedTotal <= C:
-    Result = Combined
-    Overflow = 0
-else:
-    KeepRatio = C / CombinedTotal
-    Result = Combined × KeepRatio
-    Overflow = CombinedTotal - C
+if SoilTotal > Capacity:
+    KeepRatio = Capacity / SoilTotal
+
+    for each i:
+        SOIL_Elems[i] *= KeepRatio
 ~~~
 
-随后：
-
-~~~text
-SOIL_Elems = Result
-SOIL_PendingElems = zero vector
-~~~
-
-再继续：
+这一步完成后再继续：
 
 ~~~text
 Soil evaporation
 → Tree absorption
 ~~~
 
-该规则保证：
-
-- 所有已进入 Soil / Pending 的元素在容量结算时地位完全相同；
-- 不存在“新输入保护”或“旧元素优先淘汰”；
-- 同一批 Pending 中多个元素球的捕获顺序不影响结果；
-- 超容量损失天然可以在未来接入气候系统。
+不再需要独立的 `soil_element_mix_calc` 或 Pending 合并流程。
 
 
 ---
