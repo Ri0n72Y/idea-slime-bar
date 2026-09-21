@@ -69,7 +69,7 @@ Debug 生成元素球
 
 ### 仍待讨论
 
-- [ ] 父子器官亲和度如何继承。
+- [x] 父子器官亲和度：由当前 Stage 的 Growth Vector 计算亲和偏移；Stage 升级时固化为自身下一阶段 Base；生成子器官时按继承率传递偏移，自身亲和不变。
 - [ ] 元素球字段、Prefab、生成位置和 Soil 感应方式。
 - [ ] Soil 容量竞争的边界条件。
 - [ ] Growth Tick 的信号 / 流水线顺序。
@@ -181,38 +181,160 @@ Debug 状态不应写入 Soil / Tree 本身。
 
 ---
 
-## 2. 亲和度与遗传 —— 当前讨论项
+## 2. 亲和度与遗传 —— 当前规则已确认
 
-当前确定：
+当前规则：
 
-- CFG 中保存各器官的基础亲和模板；
-- Tree / Leaf / Fruit 各自拥有自己的亲和度遗传；
-- 个体实际亲和不应只依赖全局 CFG；
-- 只保留连续学习，不使用离散阶段奖励。
-
-当前待确认的核心问题：
-
-> 一个已经改变亲和度的树长出叶片时，叶片应该从纯 CFG_LeafAffinity 开始，还是继承这棵树当前的“表观亲和”？
-
-当前候选方向：
+- CFG 中保存 Tree / Leaf / Fruit 等器官的基础亲和模板；
+- 个体拥有自己的 Base Affinity 与 Effective Affinity；
+- 亲和学习只读取当前 Stage 已经形成的 Growth Vector；
+- Reserve / 当前储存元素不参与亲和学习，也不参与遗传；
+- 只保留连续学习，不使用离散阶段奖励；
+- 子器官只在“生成”这一瞬间继承一次父器官当前偏移；
+- 当前继承率固定为：
 
 ~~~text
-Leaf Base Affinity
-=
-CFG_LeafAffinity
-×
-Parent Affinity Modifier
+CFG_AffinityInherifanceRate = 0.5
 ~~~
 
-即：
+### 2.1 Growth Vector → 当前亲和偏移
 
-- CFG_LeafAffinity 保留“叶片这种器官天生是什么”；
-- Parent Modifier 传递“这棵树已经被培养成什么样”；
-- 不直接把 TREE_EffectiveAffinity 原样复制成 Leaf Affinity。
+先计算当前 Stage 的总 Growth：
 
-具体遗传公式、遗传强度和 Stage 固定方式尚未确认。
+~~~text
+GrowthTotal
+=
+Σ Growth[i]
+~~~
 
-**当前正在讨论本节。**
+当 `GrowthTotal > 0`：
+
+~~~text
+GrowthShare[i]
+=
+Growth[i] / GrowthTotal
+~~~
+
+当前总额外亲和：
+
+~~~text
+ExtraAffinity = 1
+~~~
+
+将这 1.0 的额外亲和按七元素 Growth 占比分配：
+
+~~~text
+AffinityOffset[i]
+=
+ExtraAffinity × GrowthShare[i]
+~~~
+
+当前实际亲和：
+
+~~~text
+EffectiveAffinity[i]
+=
+BaseAffinity[i] + AffinityOffset[i]
+~~~
+
+因此：
+
+- Growth 总量决定“是否达到成长事件 / Stage 阈值”；
+- Growth 的七元素构成决定完整 `ExtraAffinity = 1` 如何分配；
+- Reserve 中当前还存着什么元素不直接影响 Effective Affinity；
+- 只有已经真正转化成 Growth 的元素才会塑造亲和。
+
+当 `GrowthTotal = 0` 时：
+
+~~~text
+AffinityOffset[i] = 0
+EffectiveAffinity[i] = BaseAffinity[i]
+~~~
+
+### 2.2 自身长大：固化为下一 Stage Base
+
+如果本次成长结果是该器官自身进入下一 Stage：
+
+~~~text
+Current EffectiveAffinity
+→ Next Stage BaseAffinity
+~~~
+
+随后：
+
+~~~text
+Growth = zero vector
+~~~
+
+下一 Stage 从新的 BaseAffinity 和空 Growth Vector 重新累计。
+
+因此同一个器官会把上一 Stage 已经形成的“表观亲和”固化成下一 Stage 的基础亲和。
+
+### 2.3 生成子器官：只传递偏移
+
+如果本次成长结果不是自身长大，而是生成一个子器官，则父器官自身的 Base / Effective Affinity 都不因此改变。
+
+先取父器官当前偏移：
+
+~~~text
+ParentAffinityOffset[i]
+=
+ParentEffectiveAffinity[i]
+-
+ParentBaseAffinity[i]
+~~~
+
+按当前继承率：
+
+~~~text
+InheritedOffset[i]
+=
+ParentAffinityOffset[i]
+× CFG_AffinityInherifanceRate
+~~~
+
+子器官以自己的器官 CFG 模板为起点：
+
+~~~text
+ChildBaseAffinity[i]
+=
+CFG_ChildAffinity[i]
++
+InheritedOffset[i]
+~~~
+
+当前：
+
+~~~text
+CFG_AffinityInherifanceRate = 0.5
+~~~
+
+因此子器官保留“它是什么器官”的基础模板，同时继承父器官当前已经长出来的一半亲和偏移。
+
+子器官出生后，再根据自己的 Growth Vector 独立计算 Effective Affinity。
+
+### 2.4 当前暂不处理的分叉
+
+在 Sapling 阶段，之后会同时存在：
+
+~~~text
+Growth 达标
+├── 自身继续长大
+└── 生成 / 培养叶片
+~~~
+
+这意味着同一份 Growth 未来可能面对多个成长目标。
+
+当前还不决定：
+
+- 两个目标的触发优先级；
+- 是否使用同一个 GrowthThreshold；
+- 长叶是否消耗 Tree Growth；
+- Tree Growth 在生成叶片后是否部分保留；
+- “长大”和“长叶”能否同时发生。
+
+这一问题先挂起，不阻塞当前只实现 Tree 自身 Seedling → Sapling → Mature 的基础流程。
+
 
 ---
 
@@ -471,8 +593,8 @@ Debug UI 状态归 Player 所有。
 
 后续按以下顺序逐条确认，不一次展开多个主题：
 
-- [>] 1. 亲和度与父子器官遗传
-- [ ] 2. Debug 元素球的数据结构与生成接口
+- [x] 1. 亲和度与父子器官遗传
+- [>] 2. Debug 元素球的数据结构与生成接口
 - [ ] 3. Soil 感应元素球与浇水流程
 - [ ] 4. 土壤容量竞争公式与边界
 - [ ] 5. Growth Tick 的信号 / 流水线顺序
