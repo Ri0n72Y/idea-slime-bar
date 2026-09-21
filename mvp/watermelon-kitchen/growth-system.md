@@ -124,14 +124,8 @@ dt = CFG_GrowthUpdateIntervalSeconds
 土壤保存：
 
 ```text
-SOIL_Elems        : float[7]
-SOIL_PendingElems : float[7]
+SOIL_Elems : float[7]
 ```
-
-其中：
-
-- `SOIL_Elems` 是已经进入土壤、可被蒸发和植物吸收的正式储备；
-- `SOIL_PendingElems` 是已经被 Soil 捕获、等待下一次 Growth Tick 批量提交的浇灌输入。
 
 七元素顺序继续遵循：
 
@@ -145,7 +139,7 @@ Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo
 MaxSoilElementLoad = 100
 ```
 
-### 3.0 元素球输入与 Pending
+### 3.0 元素球输入
 
 元素球自身保存：
 
@@ -168,124 +162,76 @@ BALL_Elems[i]
 *= CFG_ElemBallRetentionPerHour ^ dtHours
 ```
 
-Soil 的感应区捕获带有 `ElementBall` 标签的实体时，不立即修改 `SOIL_Elems`：
+Soil 的感应区捕获带有 `ElementBall` 标签的实体时，直接执行：
 
 ```text
-SOIL_PendingElems[i]
+SOIL_Elems[i]
 += BALL_Elems[i]
 
 Destroy ElementBall
 ```
 
-多个球可以在同一个 Growth Tick 前累积进 Pending。
+不设置 Pending，不在捕获阶段做容量计算；`SOIL_Elems` 可以暂时超过容量。
 
-下一次 Soil Growth Tick 的开头统一执行：
+### 3.1 Growth Tick 开头的容量归一化
 
-```text
-Pending
-→ 与 SOIL_Elems 全量相加
-→ 超容量时对全部元素统一等比例压缩
-→ SOIL_Elems
-→ Clear Pending
-→ Soil evaporation
-→ Tree absorption
-```
-
-这样同一批浇灌的结果不依赖多个碰撞事件的先后顺序。
-
-### 3.1 浇灌时的容量约束
-
-旧版“Pending 优先进入、按比例淘汰旧 Soil”的方案废弃。
-
-最终规则是在下一次 Growth Tick 开头，将当前 Soil 与全部 Pending 直接相加，然后对**合并后的整体向量**应用容量上限。
-
-定义：
+每次 Soil Growth Tick 开始时：
 
 ```text
-S[i] = SOIL_Elems[i]
-I[i] = SOIL_PendingElems[i]
-
-Combined[i]
+SoilTotal
 =
-S[i] + I[i]
-
-CombinedTotal
-=
-Σ Combined[i]
-
-C = MaxSoilElementLoad
+Σ SOIL_Elems[i]
 ```
 
 如果：
 
 ```text
-CombinedTotal <= C
+SoilTotal <= MaxSoilElementLoad
 ```
 
-则：
-
-```text
-Result[i]
-=
-Combined[i]
-```
+则不处理。
 
 如果：
 
 ```text
-CombinedTotal > C
+SoilTotal > MaxSoilElementLoad
 ```
 
-则统一按：
+计算：
 
 ```text
 KeepRatio
 =
-C / CombinedTotal
+MaxSoilElementLoad / SoilTotal
 
-Result[i]
-=
-Combined[i] × KeepRatio
+SOIL_Elems[i]
+*= KeepRatio
 ```
-
-所以所有旧 Soil 与新 Pending 在容量结算时地位相同，不存在新输入保护。
 
 例如：
 
 ```text
-旧 Soil：
+初始：
 雷 50
 水 30
 草 20
 
-Pending：
-雷 50
-```
-
-合并后：
-
-```text
+捕获 +50 雷后：
 雷 100
 水 30
 草 20
 总量 150
-```
 
-容量 100：
-
-```text
+下一 Tick：
 KeepRatio = 100 / 150
-```
 
-最终：
-
-```text
+结果：
 雷 ≈ 66.67
 水 = 20
 草 ≈ 13.33
 ```
 
-如果下一次 Tick 前再进入 50 雷，则再次经历“先累加、再整体压缩”，最终约为：
+下一次再捕获 50 雷并经过下一 Tick，结果约为：
 
 ```text
 雷 ≈ 77.78
@@ -293,30 +239,19 @@ KeepRatio = 100 / 150
 草 ≈ 8.89
 ```
 
-因此连续加入单一元素会形成逐步替换，而不会因为 Pending 一次累计较大就瞬间清空旧 Soil。
+因此单一元素连续浇入会逐步替换原有组成，并保留递推残留。
 
-超出容量的部分：
+超出容量的：
 
 ```text
 Overflow
 =
-CombinedTotal - C
+SoilTotal - MaxSoilElementLoad
 ```
 
-当前直接丢弃。未来可以把 Overflow 接入气候系统，作为向环境逸散的元素。
+当前直接丢弃；未来可接入气候系统。
 
-容量归一化每次 Soil Growth Tick 都执行，因此即使 Pending 为 0，但 Debug 把 Soil 改到了超容量状态，也会在下一 Tick 自动压缩回容量。
-
-正常玩法元素量必须 `>= 0`；Debug 写入负值时在 Debug 输入边界 clamp 到 0。
-
-容量结算完成后：
-
-```text
-SOIL_Elems = Result
-SOIL_PendingElems = zero vector
-```
-
-然后继续：
+容量归一化完成后再继续：
 
 ```text
 Soil evaporation
