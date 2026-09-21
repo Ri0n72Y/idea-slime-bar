@@ -194,37 +194,149 @@ Pending
 
 ### 3.1 浇灌时的容量竞争
 
-当下一次 Growth Tick 把整个 `SOIL_PendingElems[7]` 批量加入土壤、并导致总量超过容量时，超出部分按照**提交前已有 `SOIL_Elems` 的当前比例**从整个旧储备中挤出，包括与 Pending 中同种的旧元素。
+下一次 Growth Tick 提交整个 `SOIL_PendingElems[7]` 时，将其作为**同一批输入**一次处理。
+
+定义：
+
+```text
+S[i] = SOIL_Elems[i]
+I[i] = SOIL_PendingElems[i]
+
+S_total = Σ S[i]
+I_total = Σ I[i]
+
+C = MaxSoilElementLoad
+```
+
+核心原则：
+
+> Pending 整体优先进入；如果空间不足，先按比例淘汰旧 Soil。只有当 Pending 自己已经超过整个容量时，Pending 内部才按自身组成比例竞争。
+
+#### Pending 为空
+
+```text
+I_total = 0
+→ SOIL_Elems 不变
+```
+
+#### 总量未超过容量
+
+```text
+S_total + I_total <= C
+
+Result[i]
+=
+S[i] + I[i]
+```
+
+#### Pending 本身能装下，但加入后超容量
+
+```text
+I_total < C
+S_total + I_total > C
+```
+
+先计算旧 Soil 可保留的容量：
+
+```text
+OldCapacity
+=
+C - I_total
+```
+
+旧 Soil 按原组成比例缩放：
+
+```text
+OldKeepRatio
+=
+OldCapacity / S_total
+
+Result[i]
+=
+S[i] × OldKeepRatio
++
+I[i]
+```
 
 例如：
 
 ```text
-浇灌前：
+旧 Soil：
 雷 50
 火 30
 水 20
 总量 100
 
-输入：
-雷 +10
+Pending：
+雷 10
 
-需要挤出 10：
-雷 -5
-火 -3
-水 -2
-
-再加入新雷 10：
+C = 100
+OldCapacity = 90
+OldKeepRatio = 0.9
 
 结果：
-雷 55
-火 27
-水 18
-总量 100
+雷 = 50 × 0.9 + 10 = 55
+火 = 30 × 0.9      = 27
+水 = 20 × 0.9      = 18
 ```
 
-因此反复追求单一元素会产生自然的边际递减。
+#### Pending 自身达到或超过容量
 
-这一规则替代旧版“新输入元素完全受保护、只挤出其他元素”的设计。
+如果：
+
+```text
+I_total >= C
+```
+
+则旧 Soil 全部挤出，Pending 自身按组成比例缩放到容量：
+
+```text
+InputKeepRatio
+=
+C / I_total
+
+Result[i]
+=
+I[i] × InputKeepRatio
+```
+
+例如：
+
+```text
+C = 100
+
+Pending：
+火 80
+水 60
+总量 140
+
+结果约：
+火 57.14
+水 42.86
+旧 Soil 0
+```
+
+#### 边界规则
+
+所有正常元素量必须：
+
+```text
+>= 0
+```
+
+Debug 写入负数时在 Debug 输入边界 clamp 到 0。
+
+如果 Debug 人工把 `SOIL_Elems` 改到超过容量，暂时允许该非法状态存在；下一次存在非零 Pending 并执行容量竞争时，公式会自然恢复容量约束。
+
+容量竞争完成后：
+
+```text
+SOIL_Elems = Result
+SOIL_PendingElems = zero vector
+```
+
+然后才继续本 Growth Tick 的 Soil evaporation 与 Tree absorption。
+
 
 ### 3.2 土壤蒸发
 
