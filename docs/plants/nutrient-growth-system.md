@@ -168,6 +168,148 @@ GrowthNutrient[i] × Affinity[i]
 
 第一版先固定这一行为关系，具体学习函数和最大偏移量由具体植物 / Spec 决定。
 
+## 设计类比：植物作为在线学习系统
+
+这套“养分 → Growth → Affinity 变化 → 下一轮选择性吸收”的机制，可以用机器学习作为一种内部设计类比来理解。
+
+它不是严格意义上的神经网络，也不是数学上的反向传播；系统当前没有显式目标值、Loss 或梯度下降。但它具有几个非常接近机器学习的结构：
+
+~~~text
+环境中的养分输入
+≈ training data / input
+
+Affinity
+≈ weights
+
+按 Affinity 选择性吸收
+≈ weighted forward pass
+
+Growth Vector
+≈ accumulated representation / learned features
+
+颜色、形态、成熟速度等表型
+≈ output / phenotype
+
+当前养分 / Growth 组成反过来改变 Effective Affinity
+≈ online parameter update
+
+Stage 切换时 Effective → Base
+≈ checkpoint / parameter freezing
+
+父器官对新子器官亲和的影响
+≈ transfer learning / parameter initialization
+
+成熟果实或种子向下一代传递亲和
+≈ inter-generational initialization
+~~~
+
+其中最关键的反馈环是：
+
+~~~text
+Affinity
+→ 决定更容易吸收什么
+→ 决定体内更容易积累什么
+→ 当前积累反过来改变 Effective Affinity
+→ 下一次吸收倾向继续发生变化
+~~~
+
+因此系统更接近“在线自适应学习”而不是传统一次性属性计算。
+
+### 与反向传播的区别
+
+严格的 backpropagation 通常包含：
+
+~~~text
+目标
+→ 计算 Loss
+→ 求梯度
+→ 反向更新权重
+~~~
+
+本系统当前没有预设“正确答案”。
+
+植物不会因为“没有长成玩家想要的样子”而计算误差；它只是根据自己真实经历过的养分环境持续塑形。
+
+因此更接近：
+
+- online learning：生命周期内持续更新；
+- Hebbian-like reinforcement：经常出现的养分环境会强化相应倾向；
+- developmental plasticity：发育环境持续改变个体性状；
+- transfer learning：父器官已经形成的适应性可以影响子器官的初始状态；
+- evolutionary inheritance：成熟结果可以成为下一代的初始参数。
+
+### 用于平衡设计的参数视角
+
+这个类比可以帮助设计者理解系统中的参数：
+
+~~~text
+BaseAffinity
+≈ initial weights
+
+LearningRate
+≈ 学习速度
+
+AffinityCap / AffinityFloor
+≈ 参数边界
+
+StageDuration / GrowthThreshold
+≈ 单阶段训练时长
+
+Stage Transition
+≈ checkpoint
+
+InheritanceRate
+≈ 参数迁移强度
+
+Environment Composition
+≈ training distribution
+~~~
+
+例如，如果 LearningRate 和 InheritanceRate 都很高，同一种环境可能形成很强的正反馈：
+
+~~~text
+偏冰环境
+→ 个体更偏冰
+→ 下一阶段 / 子器官从更偏冰的状态开始
+→ 更容易吸收 / 转化冰
+→ 进一步偏冰
+~~~
+
+这可能是有意的定向培育，也可能导致系统过早塌缩到单一亲和。因此这些参数应被视为控制“可塑性、稳定性和培养难度”的主要旋钮。
+
+### 器官之间更像迁移学习，而不是直接复制
+
+不同器官具有不同的生理模板，因此父器官的当前 Effective Affinity 不应被简单原样复制给子器官。
+
+更合理的设计方向是：
+
+~~~text
+Child Organ Template
++
+Inherited Parent Modifier
+→ Child Initial Base Affinity
+~~~
+
+也就是：
+
+- 器官模板决定“它天生是什么”；
+- 父体的培养结果决定“它从什么样的个体上长出来”；
+- 子器官出生后再根据自己的环境继续学习。
+
+这类似于：
+
+~~~text
+预训练基础模型
++
+迁移得到的参数偏移
+→ 新任务的初始化
+→ 继续训练
+~~~
+
+具体父子器官亲和传递公式、偏移表示方法和 InheritanceRate 应由独立育种 / 器官发育设计确定，不在本通用文档中提前锁死。
+
+这个机器学习类比只作为**设计和调参框架**使用；对玩家呈现时仍使用“养分亲和、环境塑形、发育和遗传”等世界内语言。
+
 ## 子器官分流
 
 一个器官进入生长代谢时，先确定本 Tick 准备用于生长的养分预算。
