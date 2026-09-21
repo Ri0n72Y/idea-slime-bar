@@ -36,6 +36,48 @@ Debug 生成元素球
 
 ---
 
+## 0.1 当前确认状态
+
+### 已明确确认
+
+- [x] 本轮只围绕基础生长链：浇水 → 土壤元素 → 树体吸收 / 累积 → Growth → Seedling / Sapling / Mature → Debug 查看修改。
+- [x] 本轮实体固定为 4 类：Soil、AquamelonTree、Level、Player。
+- [x] CFG 不再使用结构体，恢复为普通变量和 `float[7]` 列表，命名继续采用 `CFG_xxx`。
+- [x] Level 保存 Tree / Leaf / Fruit 等器官的基础亲和模板。
+- [x] Tree / Leaf / Fruit 将来各自拥有个体亲和，不只永久读取全局 CFG。
+- [x] Tree Stage 固定为 Seedling → Sapling → Mature。
+- [x] Tree Reserve 与 Growth 分离；`TREE_Growth` 是七元素向量。
+- [x] Stage 升级后清空当前 Growth，并在新 Stage 重新累计；Stage 本身不回退。
+- [x] 提取养分时 Affinity > 1 按 1 处理；转换 Growth 时使用完整 Affinity。
+- [x] 只保留连续学习，不使用阶段跃迁时的离散元素奖励。
+- [x] Soil 容量竞争在本轮实现：超容量时按旧土壤全部元素当前比例挤出，再加入新输入。
+- [x] Debug UI 需要在游戏中查看 / 修改当前作物的自定义变量。
+- [x] Debug UI 通过生成指定元素 / 数量的测试元素球来模拟浇水，而不是直接给 Soil 加数值。
+- [x] 元素球进入 Soil 感应范围后才完成实际浇水。
+- [x] `generate_elem_ball` 作为独立、未来可复用的节点图能力。
+- [x] Growth Tick 当前采用约 1h / tick、土壤蒸发 1% / tick、树体 Growth 消耗 1% / tick 作为测试基线；这些不是最终平衡常量。
+
+### 已选方向，但实现细节未确认
+
+- [~] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → 容量竞争 → `SOIL_Elems`。
+- [~] Debug UI 作为开发期 Crop Inspector，处理 Soil / Tree Reserve / Tree Growth / Stage / Affinity / 手动 Tick 等状态。
+- [~] Level 作为 Growth Tick 的调度起点；更具体的信号与顺序尚未确认。
+
+### 仍待讨论
+
+- [ ] 父子器官亲和度如何继承。
+- [ ] 元素球字段、Prefab、生成位置和 Soil 感应方式。
+- [ ] Soil 容量竞争的边界条件。
+- [ ] Growth Tick 的信号 / 流水线顺序。
+- [ ] Soil Growth Tick 的具体行为。
+- [ ] Tree 从 Soil 吸收的具体公式。
+- [ ] Reserve → Growth 的完整公式与边界。
+- [ ] 各 Stage 的 GrowthThreshold / MaxAbsorbPerTick。
+- [ ] Debug UI 的具体控件和交互。
+- [ ] 最终文件拆分与 Spec / Issue。
+
+---
+
 ## 1. 实体边界
 
 当前先固定 4 个实体 / 状态所有者：
@@ -122,7 +164,7 @@ Debug 状态不应写入 Soil / Tree 本身。
 
 ---
 
-## 2. 亲和度与遗传 —— 待讨论
+## 2. 亲和度与遗传 —— 当前讨论项
 
 当前确定：
 
@@ -153,11 +195,11 @@ Parent Affinity Modifier
 
 具体遗传公式、遗传强度和 Stage 固定方式尚未确认。
 
-**下一步优先讨论本节。**
+**当前正在讨论本节。**
 
 ---
 
-## 3. Debug 元素球与浇水 —— 待讨论
+## 3. Debug 元素球与浇水 —— 方向已确认，细节待讨论
 
 当前方向：
 
@@ -212,7 +254,7 @@ WK_Soil_ReceiveElementBall
 
 ---
 
-## 4. 土壤容量竞争 —— 待讨论
+## 4. 土壤容量竞争 —— 规则已确认，边界待讨论
 
 本轮确定要实现。
 
@@ -322,7 +364,7 @@ Level GrowthTick
 
 ---
 
-## 6. Debug UI —— 待讨论
+## 6. Debug UI —— 目标已确认，交互细节待讨论
 
 当前目标不是做通用 GM 工具，而是做第一版 Crop Inspector。
 
@@ -362,7 +404,7 @@ Debug UI 状态归 Player 所有。
 
 后续按以下顺序逐条确认，不一次展开多个主题：
 
-- [ ] 1. 亲和度与父子器官遗传
+- [>] 1. 亲和度与父子器官遗传
 - [ ] 2. Debug 元素球的数据结构与生成接口
 - [ ] 3. Soil 感应元素球与浇水流程
 - [ ] 4. 土壤容量竞争公式与边界
