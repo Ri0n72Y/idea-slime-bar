@@ -124,8 +124,14 @@ dt = CFG_GrowthUpdateIntervalSeconds
 土壤保存：
 
 ```text
-SOIL_Elems : float[7]
+SOIL_Elems        : float[7]
+SOIL_PendingElems : float[7]
 ```
+
+其中：
+
+- `SOIL_Elems` 是已经进入土壤、可被蒸发和植物吸收的正式储备；
+- `SOIL_PendingElems` 是已经被 Soil 捕获、等待下一次 Growth Tick 批量提交的浇灌输入。
 
 七元素顺序继续遵循：
 
@@ -139,9 +145,56 @@ Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo
 MaxSoilElementLoad = 100
 ```
 
+### 3.0 元素球输入与 Pending
+
+元素球自身保存：
+
+```text
+BALL_Elems : float[7]
+```
+
+当前 MVP 只生成纯净元素球，即每个球只有一个元素维度大于 0，但接口仍保持完整七元素向量。
+
+`generate_elem_ball(InputElems)` 在以当前 Tree / 种植区为中心的圆环范围内随机生成元素球。圆环内径应避开 Soil 捕获区，避免出生即被土壤接收。
+
+未被捕获的元素球：
+
+- 玩家进入吸引范围后缓慢向玩家飘动；
+- 根据所含元素显示颜色；
+- 按 Growth Tick 的真实 `dt` 衰减：
+
+```text
+BALL_Elems[i]
+*= CFG_ElemBallRetentionPerHour ^ dtHours
+```
+
+Soil 的感应区捕获带有 `ElementBall` 标签的实体时，不立即修改 `SOIL_Elems`：
+
+```text
+SOIL_PendingElems[i]
++= BALL_Elems[i]
+
+Destroy ElementBall
+```
+
+多个球可以在同一个 Growth Tick 前累积进 Pending。
+
+下一次 Soil Growth Tick 的开头统一执行：
+
+```text
+Pending
+→ 一次容量竞争
+→ SOIL_Elems
+→ Clear Pending
+→ Soil evaporation
+→ Tree absorption
+```
+
+这样同一批浇灌的结果不依赖多个碰撞事件的先后顺序。
+
 ### 3.1 浇灌时的容量竞争
 
-当加入新元素导致总量超过容量时，超出部分按照**浇灌前已有土壤元素的当前比例**从整个旧储备中挤出，包括与本次输入同种的旧元素。
+当下一次 Growth Tick 把整个 `SOIL_PendingElems[7]` 批量加入土壤、并导致总量超过容量时，超出部分按照**提交前已有 `SOIL_Elems` 的当前比例**从整个旧储备中挤出，包括与 Pending 中同种的旧元素。
 
 例如：
 
