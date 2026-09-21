@@ -72,7 +72,7 @@ Debug 生成元素球
 
 - [x] 父子器官亲和度：由当前 Stage 的 Growth Vector 计算亲和偏移；Stage 升级时固化为自身下一阶段 Base；生成子器官时按继承率传递偏移，自身亲和不变。
 - [x] 元素球使用 `BALL_Elems[7]`；当前版本只生成纯净单元素球；在以 Tree 为中心的可配置圆环范围随机生成，并避免出生即进入 Soil 捕获区；靠近玩家时缓慢飘向玩家；颜色由所含元素决定；元素量随 Growth Tick 衰减。
-- [ ] Soil 容量竞争的边界条件。
+- [x] Soil 容量竞争：Pending 整体优先进入；若 Pending 本身不超过容量，则旧 Soil 按比例缩放为剩余容量；若 Pending 本身超过容量，则旧 Soil 全部挤出，Pending 自身按组成比例缩放到容量。
 - [ ] Growth Tick 的信号 / 流水线顺序。
 - [ ] Soil Growth Tick 的具体行为。
 - [ ] Tree 从 Soil 吸收的具体公式。
@@ -485,51 +485,31 @@ Debug UI 可以使用 `Advance One Growth Tick` 立即推进这一步，因此�
 
 ---
 
-## 4. 土壤容量竞争 —— 规则已确认，边界待讨论
+## 4. 土壤容量竞争 —— 公式与边界已确认
 
-本轮确定要实现。
+本轮容量竞争直接接收整个 `SOIL_PendingElems[7]`，而不是逐个元素球处理。
 
-目标：
-
-~~~text
-旧土壤元素
-+ 新输入元素
-→ 总量超过容量
-→ 按旧土壤当前比例整体挤出
-→ 再加入完整新输入
-~~~
-
-示例：
+定义：
 
 ~~~text
-旧：
-雷 50
-火 30
-水 20
-总量 100
+S[i] = CurrentSoil[i]
+I[i] = InputElems[i]
 
-输入：
-雷 +10
+S_total = Σ S[i]
+I_total = Σ I[i]
 
-旧土按比例挤出 10：
-雷 -5
-火 -3
-水 -2
-
-再 +10 雷：
-
-雷 55
-火 27
-水 18
+C = Capacity
 ~~~
 
-倾向拆成一个独立小计算节点图：
+核心规则：
+
+> 同一批 Pending 作为一个整体优先进入土壤；只有空间不足时才挤出旧 Soil。容量竞争与元素球碰撞先后顺序无关。
+
+倾向拆成独立纯计算节点图：
 
 ~~~text
 soil_element_mix_calc
 ~~~
-
-目标是保持纯计算：
 
 输入：
 
@@ -545,7 +525,182 @@ Capacity
 ResultSoil[7]
 ~~~
 
-边界情况尚需逐条确认。
+### 4.1 Pending 为 0
+
+如果：
+
+~~~text
+I_total = 0
+~~~
+
+则本次不发生容量竞争：
+
+~~~text
+ResultSoil = CurrentSoil
+~~~
+
+### 4.2 Soil + Pending 没有超过容量
+
+如果：
+
+~~~text
+S_total + I_total <= C
+~~~
+
+直接相加：
+
+~~~text
+ResultSoil[i]
+=
+S[i] + I[i]
+~~~
+
+### 4.3 Pending 能装下，但 Soil + Pending 超容量
+
+如果：
+
+~~~text
+I_total < C
+
+且
+
+S_total + I_total > C
+~~~
+
+Pending 全部保留。
+
+旧 Soil 能占用的剩余容量：
+
+~~~text
+OldCapacity
+=
+C - I_total
+~~~
+
+旧 Soil 按原组成比例整体缩放：
+
+~~~text
+OldKeepRatio
+=
+OldCapacity / S_total
+~~~
+
+最终：
+
+~~~text
+ResultSoil[i]
+=
+S[i] × OldKeepRatio
++
+I[i]
+~~~
+
+例如：
+
+~~~text
+C = 100
+S_total = 80
+I_total = 40
+
+OldCapacity = 60
+OldKeepRatio = 60 / 80 = 0.75
+~~~
+
+即旧 Soil 整体保留 75%，然后完整加入 Pending。
+
+### 4.4 Pending 本身达到或超过整个容量
+
+如果：
+
+~~~text
+I_total >= C
+~~~
+
+则旧 Soil 被全部挤出。
+
+Pending 自身按照组成比例缩放到容量：
+
+~~~text
+InputKeepRatio
+=
+C / I_total
+
+ResultSoil[i]
+=
+I[i] × InputKeepRatio
+~~~
+
+例如：
+
+~~~text
+C = 100
+
+Pending:
+Fire = 80
+Hydro = 60
+
+I_total = 140
+~~~
+
+最终约为：
+
+~~~text
+Fire  = 57.14
+Hydro = 42.86
+Old Soil = 0
+~~~
+
+因此即使一批 Pending 自己超过容量，也不会因为捕获顺序不同而得到不同结果。
+
+### 4.5 数值边界
+
+正常玩法中的 Soil / Pending 元素量都必须：
+
+~~~text
+>= 0
+~~~
+
+负数没有玩法语义。
+
+如果 Debug UI 试图写入负值，则在 Debug 写入边界直接 clamp 到 0，不让容量竞争函数承担负值语义。
+
+如果 Debug 人工把 `SOIL_Elems` 改到超过 Capacity：
+
+- 暂时允许这个非法调试状态存在；
+- 当下一次存在非零 Pending、真正执行容量竞争时，公式会自然把 Soil 恢复到容量约束；
+- 不额外为 Debug 非法状态设计正式玩法规则。
+
+### 4.6 算法摘要
+
+~~~text
+if I_total == 0:
+    Result = S
+
+else if I_total >= C:
+    Result = I × C / I_total
+
+else:
+    OldCapacity = C - I_total
+
+    if S_total <= OldCapacity:
+        Result = S + I
+    else:
+        Result = S × OldCapacity / S_total + I
+~~~
+
+保证：
+
+~~~text
+ResultTotal <= Capacity
+~~~
+
+并且在合法输入下：
+
+- Pending 内各元素地位平等；
+- 新输入在自身能装下时不会被旧 Soil 反向挤出；
+- 旧 Soil 的淘汰始终保持原有组成比例；
+- 批量结算结果不依赖多个元素球的碰撞先后顺序。
+
 
 ---
 
@@ -687,8 +842,8 @@ Debug UI 状态归 Player 所有。
 - [x] 1. 亲和度与父子器官遗传
 - [x] 2. Debug 元素球的数据结构与生成接口
 - [x] 3. Soil 感应元素球与浇水流程
-- [>] 4. 土壤容量竞争公式与边界
-- [ ] 5. Growth Tick 的信号 / 流水线顺序
+- [x] 4. 土壤容量竞争公式与边界
+- [>] 5. Growth Tick 的信号 / 流水线顺序
 - [ ] 6. Soil Growth Tick
 - [ ] 7. Tree Growth Tick：吸收
 - [ ] 8. Tree Growth Tick：Reserve → Growth
