@@ -1,20 +1,115 @@
 # Growth Tick
 
-Growth Tick 是植物养分—生长系统的统一离散结算周期。
+Growth Tick 是植物养分—生长系统的一次**离散结算事件**，不是植物世界中的固定自然时间单位。
 
-它用于把“吸收养分、内部储备、向子器官输送、环境损耗、Growth Vector 累积和 Stage 变化”放进一个可重复、可离线补算的过程。
+植物真正的生长规律尽量使用“单位时间速率 + 实际经过时间 `dt`”描述；在线 Growth Tick 只是定期采样并结算这段时间内应该发生的变化。
 
-本文件只定义 Tick 内发生什么；具体植物的 Tick 间隔、Stage 阈值、吸收量和器官参数由对应植物设计决定。
+因此：
+
+```text
+自然规律：
+RatePerHour + dt
+
+在线：
+按 GrowthUpdateInterval 周期调用一次 Growth Tick
+
+离线：
+直接根据真实离线 dt 结算，或按离散事件边界分段结算
+```
+
+这样可以在不重新平衡数值的情况下，把在线更新频率从 15 分钟调整为 1 分钟、30 秒或其他值。
+
+## 时间模型
+
+一次 Growth Tick 至少接收：
+
+```text
+dtSeconds
+```
+
+并统一转换：
+
+```text
+dtHours = dtSeconds / 3600
+```
+
+所有“每小时”参数根据 `dtHours` 计算本次变化。
+
+### 线性速率
+
+适合吸收上限、固定生成速率等：
+
+```text
+AmountThisUpdate
+=
+RatePerHour × dtHours
+```
+
+例如：
+
+```text
+MaxAbsorbPerHour = 12
+dt = 5 min
+
+MaxAbsorbThisUpdate
+= 12 × 5 / 60
+= 1
+```
+
+### 比例衰减 / 比例消耗
+
+对“每小时损失当前量的 X%”这类规则，不应简单把 `X%` 乘以 Tick 次数，而应使用连续时间等价形式。
+
+例如每小时保留 99%：
+
+```text
+RetentionPerHour = 0.99
+
+New
+=
+Old × RetentionPerHour ^ dtHours
+```
+
+对应本次消耗：
+
+```text
+Consumed
+=
+Old × (1 - RetentionPerHour ^ dtHours)
+```
+
+这样无论在线每 60 秒、30 秒还是 15 分钟更新，跑满一小时后的理论结果一致。
+
+## 在线更新频率
+
+具体植物可以配置：
+
+```text
+GrowthUpdateIntervalSeconds
+```
+
+它只决定“在线多久结算一次”，不直接决定植物的实际生长速度。
+
+例如：
+
+| 更新间隔 | 每小时调用次数 | 相对 15 分钟一次 |
+| ---: | ---: | ---: |
+| 15 min | 4 | 1× |
+| 1 min | 60 | 15× |
+| 30 sec | 120 | 30× |
+| 1 sec | 3600 | 900× |
+
+对于慢节奏植物玩法，1 秒更新通常没有必要。较短的在线更新周期主要用于提高反馈连续性，而不是改变成长总量。
 
 ## 总览
 
 ```mermaid
 flowchart TD
-    A[Growth Tick]
+    A[Growth Tick(dt)]
     --> B[1. 从来源获取养分]
     --> C[2. 更新内部 Reserve]
     --> D[3. 判断是否允许生长代谢]
-    --> E[4. 决定本 Tick 生长养分预算]
+    --> E[4. 决定本次时间段的生长养分预算]
     --> F[5. 优先向子器官分配]
     --> G[6. 子器官吸收 / 损耗 / 生长]
     --> H[7. 父器官处理剩余预算]
@@ -35,10 +130,18 @@ flowchart TD
 - 叶；
 - 其他上级器官。
 
-根据当前 Stage 获取：
+根据当前 Stage 获取单位时间吸收能力：
 
 ```text
-MaxAbsorbPerTick(stage)
+MaxAbsorbPerHour(stage)
+```
+
+当前结算周期的最大吸收量：
+
+```text
+MaxAbsorbThisUpdate
+=
+MaxAbsorbPerHour(stage) × dtHours
 ```
 
 对每种养分，提取亲和限制为：
@@ -49,8 +152,6 @@ ExtractionAffinity[i] = min(Affinity[i], 1)
 
 因此高于 1 的 Affinity 不会让器官从来源中提取超过实际供给的养分。
 
-总吸收量还必须受当前 Stage 的 `MaxAbsorbPerTick` 限制。
-
 ## 2. 更新内部 Reserve
 
 如果器官拥有内部储备：
@@ -60,7 +161,7 @@ Reserve[i] += Absorbed[i]
 Source[i]  -= Absorbed[i]
 ```
 
-如果器官没有内部储备，则本 Tick 吸收到的养分直接成为本 Tick 可用养分，不跨 Tick 保存。
+如果器官没有内部储备，则本次结算吸收到的养分直接成为本次可用养分，不跨结算保存。
 
 例如：
 
@@ -84,25 +185,27 @@ Source[i]  -= Absorbed[i]
 
 的恢复阶段。
 
-## 4. 决定本 Tick 生长养分预算
+## 4. 决定本次时间段的生长养分预算
 
-拥有 Reserve 的器官，从 Reserve 中决定本 Tick 用于生长的养分。
+拥有 Reserve 的器官，从 Reserve 中决定本次时间段用于生长的养分。
 
-基线可以使用：
-
-```text
-GrowthConsumeRatePerTick
-```
-
-例如：
+如果规则是“每小时消耗当前 Reserve 的 1%”，则定义：
 
 ```text
-Consume[i] = Reserve[i] × 1%
+GrowthRetentionPerHour = 0.99
 ```
 
-具体植物可以根据 Stage、状态或其他机制覆盖这一比例。
+本次实际消耗：
 
-无 Reserve 器官则直接把本 Tick 获得的可用养分作为其生长预算。
+```text
+Consumed[i]
+=
+Reserve[i] × (1 - GrowthRetentionPerHour ^ dtHours)
+```
+
+这样不会因为在线 Tick 频率改变而改变总消耗速度。
+
+无 Reserve 器官则直接把本次获得的可用养分作为其生长预算。
 
 ## 5. 优先向子器官分配
 
@@ -138,26 +241,6 @@ ParentBudget
 5. 更新自己的连续学习状态；
 6. 检查自己的 Stage。
 
-### 示例：成叶 + 花
-
-父级本 Tick 向一片成叶提供 10 单位养分。
-
-如果花先获得 50%：
-
-```text
-花预算 = 5
-叶自身预算 = 5
-```
-
-叶片 Stage 的保留率为 0.6：
-
-```text
-叶片用于 Growth = 3
-叶片向环境逸散 = 2
-```
-
-之后这 3 单位再按叶片的 Growth Affinity 转换为 Growth Vector。
-
 ## 7. 父器官处理剩余预算
 
 子器官处理后：
@@ -170,7 +253,7 @@ ParentRemaining
 - 明确进入环境的损耗
 ```
 
-没有被子器官吸收的部分，如果规则没有指定损耗，则继续回到父器官本 Tick 的生长预算。
+没有被子器官吸收的部分，如果规则没有指定损耗，则继续回到父器官本次的生长预算。
 
 系统不设置统一的隐藏“转换损耗”。
 
@@ -208,11 +291,12 @@ Growth[i] += GrowthGain[i]
 - 学习是连续的；
 - 高占比养分会提高对应 Effective Affinity；
 - 不产生离散阶段奖励；
+- 学习速度同样应尽量使用单位时间参数，避免受在线更新频率影响；
 - 具体函数由植物 Spec 决定。
 
 ## 10. Stage 与器官生成
 
-Tick 末检查当前 Stage 的成长条件。
+结算末检查当前 Stage 的成长条件。
 
 若满足：
 
@@ -232,19 +316,70 @@ GrowthTotal >= OrganSpawnCost
 
 植物 Stage 本身不会因为扣除 Growth 而回退。
 
-## Tick 与离线结算
+## 在线调度与真实 dt
 
-Growth Tick 是离散逻辑，但不要求玩家在线时逐 Tick 永久运行。
-
-如果系统记录：
+在线调度器可以按固定间隔请求 Growth Tick，但 Tick 应尽量读取真实经过时间：
 
 ```text
-LastGrowthTickAt
+dt
+=
+Now - LastGrowthUpdateAt
 ```
 
-则重新进入世界时可以根据 UTC 时间计算错过了多少 Tick，并进行批量补算或等价近似。
+例如配置为每 60 秒更新一次，但服务器实际在 73 秒后才触发，则本次应按约 73 秒结算，而不是假装只过去 60 秒。
 
-具体离线补算策略由各玩法版本的 Spec 决定。
+这可以降低节点图 Timer 不精确导致的长期漂移。
+
+## Debug 强制下一 Tick
+
+调试界面可以提供：
+
+```text
+Advance One Growth Tick
+```
+
+用于**立即执行下一次 Growth Tick**，无需等待在线调度器。
+
+为了让该操作具备稳定的测试意义，Debug 强制 Tick 使用配置的标准在线间隔：
+
+```text
+dtSeconds = GrowthUpdateIntervalSeconds
+```
+
+而不是使用按钮点击时距上一次真实结算只过去的几秒钟。
+
+它属于开发期时间推进能力，会人为让植物向前模拟一个标准更新步长，不属于正式玩家玩法。
+
+## 离线结算
+
+离线结算不应简单模拟成成千上万个在线 Tick。
+
+重新进入世界时：
+
+```text
+OfflineDt
+=
+Now - LastGrowthUpdateAt
+```
+
+对于具有闭式解的连续过程，例如：
+
+- 比例蒸发；
+- 比例消耗；
+- 固定速率发芽 / Growth；
+
+直接使用真实 `OfflineDt` 计算。
+
+对于会跨越离散边界的过程，例如：
+
+- Stage 升级；
+- 生成子器官；
+- 花 → 果；
+- 成熟；
+
+可以按“计算到下一个事件边界 → 应用事件 → 继续处理剩余时间”的方式分段结算，而不是逐分钟重放。
+
+具体离线跨事件算法由对应玩法 Spec 决定。
 
 ## 与气候的接口
 
