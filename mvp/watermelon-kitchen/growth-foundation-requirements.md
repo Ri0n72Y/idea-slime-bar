@@ -55,13 +55,17 @@ Debug 生成元素球
 - [x] Debug UI 通过生成指定元素 / 数量的测试元素球来模拟浇水，而不是直接给 Soil 加数值。
 - [x] 元素球进入 Soil 感应范围后才完成实际浇水。
 - [x] `generate_elem_ball` 作为独立、未来可复用的节点图能力。
-- [x] Growth Tick 当前采用约 1h / tick、土壤蒸发 1% / tick、树体 Growth 消耗 1% / tick 作为测试基线；这些不是最终平衡常量。
+- [x] Growth Tick 改为“单位时间速率 + 实际 dt”的结算模型；在线更新周期只控制反馈频率，不控制最终生长总量。
+- [x] 在线第一版倾向约 60 秒结算一次；未来可改成 30 秒等，不需要重新平衡每小时速率。
+- [x] 土壤蒸发与树体 Growth 消耗当前都以“每小时保留约 99%”作为测试基线，并按 dt 使用连续时间公式。
+- [x] Debug UI 必须能够立即推进下一次 Growth Tick；调试推进使用一个标准在线更新步长，不需要真实等待下一次调度。
 
 ### 已选方向，但实现细节未确认
 
 - [~] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → 容量竞争 → `SOIL_Elems`。
 - [~] Debug UI 作为开发期 Crop Inspector，处理 Soil / Tree Reserve / Tree Growth / Stage / Affinity / 手动 Tick 等状态。
 - [~] Level 作为 Growth Tick 的调度起点；更具体的信号与顺序尚未确认。
+- [~] 正常在线结算读取真实经过时间 dt；Debug 的“推进下一 Tick”属于额外的开发期时间推进能力。
 
 ### 仍待讨论
 
@@ -143,13 +147,26 @@ TREE_EffectiveAffinity[7]
 TREE_Stage
 ~~~
 
-Stage：
+正式 Tree Stage 之前还有半埋在土里的 Seed 状态。Seed 在土壤满足激活条件后开始累计发芽进度，目标体验约 1～2 天，但具体时间作为参数可调。
+
+Seed 暂不计入三个 Tree Stage：
 
 ~~~text
-0 = Seedling
-1 = Sapling
-2 = Mature
+Seed
+→ Germination
+→ 0 = Seedling
+→ 1 = Sapling
+→ 2 = Mature
 ~~~
+
+发芽进度使用单位时间速率：
+
+~~~text
+GerminationProgress
++= GerminationRatePerHour × dtHours
+~~~
+
+“浇够水”的具体激活阈值仍待确认。
 
 ### Player
 
@@ -319,7 +336,57 @@ ResultSoil[7]
 
 ---
 
-## 5. Growth Tick 调度 —— 待重点讨论
+## 5. Growth Tick 时间模型与调度 —— 时间模型已确认，流水线待重点讨论
+
+### 已确认：时间模型
+
+Growth Tick 只表示一次结算事件，不再代表固定的自然时间单位。
+
+正式规则使用：
+
+~~~text
+RatePerHour + dt
+~~~
+
+在线第一版倾向：
+
+~~~text
+CFG_GrowthUpdateIntervalSeconds = 60
+~~~
+
+每次正常在线结算读取：
+
+~~~text
+dt = Now - LastGrowthUpdateAt
+~~~
+
+如果 Timer 延迟，例如 60 秒计划实际 73 秒触发，就按 73 秒结算。
+
+比例蒸发 / 消耗使用：
+
+~~~text
+New = Old × RetentionPerHour ^ dtHours
+~~~
+
+而不是“每 Tick 固定乘一次”。
+
+离线结算也使用同一套 dt 公式，不逐分钟模拟在线 Tick；离散 Stage / 器官事件以后再做事件边界分段。
+
+Debug UI 提供：
+
+~~~text
+Advance One Growth Tick
+~~~
+
+点击后立即推进一个标准在线步长：
+
+~~~text
+dt = CFG_GrowthUpdateIntervalSeconds
+~~~
+
+这是开发期时间推进，不属于正式玩家能力。
+
+### 待讨论：调度流水线
 
 当前方向：
 
@@ -386,7 +453,7 @@ Tree Growth Total
 
 操作：
 生成指定元素 / 数量的测试元素球
-手动触发一次 Growth Tick
+立即推进下一次 Growth Tick（标准在线 dt）
 ~~~
 
 Debug UI 状态归 Player 所有。
