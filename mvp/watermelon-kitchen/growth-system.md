@@ -43,19 +43,79 @@ flowchart TD
 
 ---
 
-## 2. Growth Tick
+## 2. Growth Tick 与时间尺度
 
-当前调试基线：
+Growth Tick 现在只表示“一次生长结算事件”，不再把 Tick 自身当作固定自然时间单位。
+
+自然规律统一使用：
 
 ```text
-GrowthTickInterval = 1 hour
-SoilEvaporationRatePerTick = 1%
-TreeGrowthConsumeRatePerTick = 1%
+RatePerHour + dt
 ```
 
-这三个值是第一轮平衡参数，不视为永久常量。
+在线更新周期只决定反馈频率：
 
-所有土壤蒸发、树体吸收、树体生长代谢、器官分流、连续学习和 Stage 判定尽量统一在同一个 Growth Tick 上结算，便于在线运行和离线补算保持一致。
+```text
+CFG_GrowthUpdateIntervalSeconds
+```
+
+当前第一版倾向：
+
+```text
+CFG_GrowthUpdateIntervalSeconds = 60
+```
+
+即在线约每分钟结算一次。以后可以改成 30 秒或其他值，而不需要重新调整植物每小时的成长速度。
+
+当前时间速率基线：
+
+```text
+SoilRetentionPerHour = 0.99
+TreeGrowthRetentionPerHour = 0.99
+```
+
+含义分别是：
+
+- 土壤在 1 小时后保留约 99% 当前元素；
+- 树体在 1 小时内约拿出当前 Reserve 的 1% 用于生长代谢。
+
+任意 dt 使用连续时间等价公式，例如：
+
+```text
+SOIL_Elems[i]
+*= SoilRetentionPerHour ^ dtHours
+
+Consumed[i]
+=
+TREE_Elems[i]
+× (1 - TreeGrowthRetentionPerHour ^ dtHours)
+```
+
+Stage 吸收能力也改用：
+
+```text
+MaxAbsorbPerHour(stage)
+```
+
+当前结算量：
+
+```text
+MaxAbsorbThisUpdate
+=
+MaxAbsorbPerHour(stage) × dtHours
+```
+
+在线与离线应尽量共享同一套公式。离线时直接按真实经过时间计算；只有遇到 Stage 升级、器官生成等离散事件时才分段处理。
+
+Debug UI 需要提供“立即推进下一次 Growth Tick”的能力。Debug 强制 Tick 使用一个标准在线更新步长：
+
+```text
+dt = CFG_GrowthUpdateIntervalSeconds
+```
+
+这样可以在游戏内连续测试生长，而不必真实等待一分钟。
+
+具体结算顺序见根目录 [Growth Tick](../../docs/plants/growth-tick.md)。
 
 ---
 
@@ -115,10 +175,19 @@ MaxSoilElementLoad = 100
 
 ### 3.2 土壤蒸发
 
-每个 Growth Tick，土壤未被锁定或特殊机制保护的元素按当前基线：
+土壤蒸发使用单位时间保留率，不再写成“每 Tick 固定减少 1%”。
+
+当前基线：
 
 ```text
-SOIL_Elems[i] *= 0.99
+SoilRetentionPerHour = 0.99
+```
+
+任意结算周期：
+
+```text
+SOIL_Elems[i]
+*= 0.99 ^ dtHours
 ```
 
 第一版先把蒸发视为直接损耗。
@@ -137,7 +206,7 @@ TREE_Elems : float[7]
 
 树从土壤吸收时：
 
-- 总吸收量由当前 Tree Stage 的 `MaxAbsorbPerTick` 限制；
+- 总吸收量由当前 Tree Stage 的 `MaxAbsorbPerHour` 限制；
 - 七元素之间的吸收构成由土壤组成和当前树体亲和共同决定；
 - 提取时 Affinity 超过 1 按 1 处理，不允许从土壤拿走超过实际供给的元素；
 - Growth 转换时则使用完整 Affinity，允许 `Affinity > 1` 产生更高的对应元素生长度。
@@ -158,7 +227,33 @@ Mature   : 大量
 
 ---
 
-## 5. 树体 Stage
+## 5. 种子激活与树体 Stage
+
+正式进入 Tree Stage 之前，水瓜以半埋在土中的 Seed 状态存在。
+
+Seed 本身暂不视为 Tree 的三个成长 Stage 之一，而是一个发芽前状态：
+
+```text
+Seed
+→ 满足土壤激活条件
+→ Germination Progress
+→ Seedling
+→ Sapling
+→ Mature
+```
+
+发芽所需时间作为可配置参数，例如第一版体验目标约 1～2 天，但不在当前文档锁死具体数值。
+
+发芽进度按实际经过时间累计，而不是依赖 Tick 次数：
+
+```text
+GerminationProgress
++= GerminationRatePerHour × dtHours
+```
+
+土壤达到怎样的“浇够水”条件才开始 / 继续发芽，仍留给基础生长链需求逐条确认。
+
+### 5.1 三个 Tree Stage
 
 树有三个主要阶段：
 
@@ -173,10 +268,10 @@ Seedling 水瓜幼苗
 - Base Affinity；
 - Effective Affinity；
 - Growth Vector；
-- MaxAbsorbPerTick；
+- MaxAbsorbPerHour；
 - GrowthThreshold。
 
-### 5.1 Stage 升级
+### 5.2 Stage 升级
 
 达到当前阶段 GrowthThreshold 后：
 
@@ -189,13 +284,13 @@ Seedling 水瓜幼苗
 
 Stage 永不因为 Growth 被清空、扣除或子器官分流而回退。
 
-### 5.2 幼苗体验目标
+### 5.3 幼苗体验目标
 
 普通玩家应当能够在**一周内**从 Seedling 长成 Sapling。
 
 幼苗吸收量较低，主要作用是建立“浇灌—吸收—颜色—成长”的第一层反馈。
 
-### 5.3 小树体验目标
+### 5.4 小树体验目标
 
 Sapling：
 
@@ -223,14 +318,14 @@ Sapling 的体验目标：
 
 这不是独立“加速按钮”，而是养分分流模型自然产生的策略。
 
-### 5.4 成树
+### 5.5 成树
 
 进入 Mature 后：
 
 - 不再升级回其他树 Stage；
 - 后续 Growth 用于持续生成嫩叶等器官；
 - 生成器官会扣除对应 Growth，但不会使树回退阶段；
-- 成树拥有明显更高的 `MaxAbsorbPerTick`。
+- 成树拥有明显更高的 `MaxAbsorbPerHour`。
 
 当前方向仍保留成树拥有更多叶片位；具体上限与单叶分流比例在 Mature Spec 中再平衡。
 
@@ -271,11 +366,21 @@ Dormant 状态：
 
 ### 6.2 树体生长消耗
 
+树体生长消耗使用单位时间比例，不再使用“每 Tick 固定消耗 1%”。
+
 当前基线：
 
 ```text
-每 Tick 从 TREE_Elems 各维度消耗 1%
-作为本 Tick 的生长养分预算
+TreeGrowthRetentionPerHour = 0.99
+```
+
+任意结算周期：
+
+```text
+Consumed[i]
+=
+TREE_Elems[i]
+× (1 - 0.99 ^ dtHours)
 ```
 
 这些养分先向子器官分流，剩余部分再按完整 Tree Affinity 转换成：
