@@ -8,7 +8,8 @@
 Nutrient        = 七元素力
 Soil Reservoir  = 土壤七元素储备
 Plant Reserve   = 树体内部七元素储备
-Affinity        = 七元素亲和
+RootPreference  = 根系对七元素的吸收偏好（0~1）
+Affinity        = 七元素成长亲和 / 转换效率
 Growth Vector   = 七元素生长度向量
 ```
 
@@ -24,7 +25,7 @@ flowchart TD
     --> B[土壤 SOIL_Elems]
 
     B -->|自然蒸发| X[环境损耗]
-    B -->|按树亲和吸收| C[树体 Reserve<br/>TREE_Elems]
+    B -->|按 RootPreference / Stage 吸收| C[树体 Reserve<br/>TREE_Elems]
 
     C -->|Growth Tick| D[树自身 Growth Vector]
 
@@ -371,16 +372,43 @@ Sapling 阶段“Tree 自身长大”与“生成 / 培养叶片”如何竞争�
 TREE_Elems : float[7]
 ```
 
-树从土壤吸收时：
+并新增独立的根系吸收偏好：
 
-- 总吸收量由当前 Tree Stage 的 `MaxAbsorbPerHour` 限制；
-- 七元素之间的吸收构成由土壤组成和当前树体亲和共同决定；
-- 提取时 Affinity 超过 1 按 1 处理，不允许从土壤拿走超过实际供给的元素；
-- Growth 转换时则使用完整 Affinity，允许 `Affinity > 1` 产生更高的对应元素生长度。
+```text
+TREE_RootPreference : float[7]
+```
 
-### 4.1 Stage-specific MaxAbsorb
+每个分量严格位于：
 
-不同树阶段使用不同单 Tick 总吸收上限：
+```text
+0 <= RootPreference[i] <= 1
+```
+
+RootPreference 的语义只有一个：
+
+> 决定根系在混合土壤中“更容易吃什么”。
+
+它与 Growth Affinity 分离。Growth Affinity 不再参与 Soil → Tree Reserve 的提取；它继续负责 Reserve → Growth 的转换效率、连续学习、Stage 固化与后续遗传。
+
+保留 Soil → Tree Reserve 这一层。它表示外部环境与植物内部储备之间的真实缓冲，也为离线生长、未来子器官分流、元素富集以及健康 / 疾病系统预留状态。
+
+### 4.1 Stage-specific 根系规模
+
+不同 Tree Stage 拥有不同的总体根系吸收能力：
+
+```text
+MaxAbsorbPerHour(stage)
+```
+
+当前结算仍按真实时间：
+
+```text
+MaxAbsorbThisUpdate
+=
+MaxAbsorbPerHour(stage) × dtHours
+```
+
+体验上：
 
 ```text
 Seedling : 少量
@@ -388,9 +416,64 @@ Sapling  : 中量
 Mature   : 大量
 ```
 
-数值暂不在本文件锁死，由实际平衡 Spec 确定。
+具体数值暂不锁死。
 
-这一增长用来表现根系和植株规模的扩大。
+### 4.2 RootPreference 只决定吸收倾向
+
+在土壤中同时存在多种元素时，RootPreference 参与决定各元素的吸收倾向。
+
+概念上：
+
+```text
+Available[i] = SOIL_Elems[i]
+Preference[i] = TREE_RootPreference[i]
+```
+
+但当前**不锁定最终数学公式**。尤其不再使用旧规则：
+
+```text
+ExtractionAffinity = min(GrowthAffinity, 1)
+```
+
+RootPreference 与 Growth Affinity 是两个独立参数，不能相互代替。
+
+### 4.3 单元素不能撑满完整吞吐量
+
+吸收系统必须满足：
+
+> 即使某一种元素在 Soil 中供应充足，它也不能单独占满 Tree 当前 Stage 的全部吸收能力。
+
+因此最终公式需要为每个元素提供独立的有效吸收上限 / 饱和区间。多种元素同时存在时，各维度的有效吸收可以叠加，整体才有机会接近当前 Stage 的完整根系吞吐量。
+
+这使培养形成明确取舍：
+
+```text
+混合 / 均衡供给
+→ 更容易维持高总吸收
+→ 生长速度高
+
+只供给单元素
+→ 目标元素仍能持续富集
+→ 但该元素较快达到自身吸收饱和
+→ 其他维度无法补足
+→ 总吸收 / 总生长明显下降
+```
+
+RootPreference 决定“偏向吃哪一种”，单元素饱和规则决定“不能只靠一种吃满”。
+
+具体 RootPreference 七元素基础值、饱和函数、每元素上限与 Stage 的组合方式，仍在基础生长链设计中继续收敛。
+
+### 4.4 当前维护节奏目标
+
+在忽略 / 简化其他损耗的平衡目标下，希望形成：
+
+- 每天维护 / 浇灌：长期接近满速成长；
+- 约 3 天维护一次：仍能保持高速成长；
+- 约 7 天不再补充：土壤应接近或达到完全耗尽；
+- Tree Reserve 再提供第二层营养缓冲，因此“土壤刚空”不等于植株立即停止全部成长。
+
+这些是体验目标，不是当前已经锁定的吸收数值。
+
 
 ---
 
@@ -726,7 +809,7 @@ Fruit 决定“果子最终装了多少内容物”
 Base Affinity
 → 连续学习
 → Stage 固定
-→ 决定吸收与 Growth 转换
+→ 决定 Growth 转换效率
 → 决定外观 / 生长速度
 ```
 
@@ -753,14 +836,15 @@ Base Affinity
 
 希望形成：
 
-- 土壤储备能支撑较长时间；
-- 树体 Reserve 再提供第二层缓冲；
-- 一周登录一次仍然能获得合理成长；
-- 每天维护可以让树长期处于高供给和高成长状态；
-- 普通低频玩家与勤劳玩家的周成长差距大致约 `1.5×`；
-- 元素使用正确、操作勤劳、减少错误分流时，极端情况下可以接近 `2×`。
+- 完全不了解系统的玩家，把随机刷出的元素球都投入土壤，通常得到元素组成较均衡、味道接近普通基线但带少量随机差异的普通水瓜；
+- 随机输入仍可能偶然形成较高的水 / 草等元素倾向，让新人偶尔获得特殊水瓜，但不容易稳定复现；
+- 每天维护可以让树长期接近高供给和满速成长；
+- 约 3 天维护一次仍然属于高速成长；
+- 约 7 天不补充时，土壤应接近 / 达到完全耗尽，Tree Reserve 继续提供第二层缓冲；
+- 主动只供给单元素可以定向培养，但总吸收与生长速度会因为单元素饱和而明显下降；
+- 有经验的玩家通过控制多元素比例，在“目标性状”和“生长速度”之间寻找更优解。
 
-具体产量与 Stage 阈值需要通过 Debug UI 和实际 Tick 模拟继续校准。
+具体产量、RootPreference、吸收饱和函数与 Stage 阈值需要通过 Debug UI 和实际 Tick 模拟继续校准。
 
 ---
 
