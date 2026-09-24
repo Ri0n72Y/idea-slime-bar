@@ -41,6 +41,7 @@ TREE_Elems[7]              树体内部 Reserve
 TREE_Growth[7]             树体当前 Stage 的 Growth Vector
 TREE_BaseAffinity[7]       当前 Stage 的基础亲和
 TREE_EffectiveAffinity[7]  当前 Stage 连续学习后的有效亲和
+TREE_RootPreference[7]     根系对七元素的吸收偏好，范围 0~1
 
 LEAF_Growth[7]
 LEAF_BaseAffinity[7]
@@ -71,23 +72,49 @@ Growth 不得重新当作可输送养分使用。
 
 Stage 升级时清空的是当前 Stage 的 Growth Vector，不是内部 Reserve。
 
-## Affinity 的统一语义
+## RootPreference 与 Affinity 的边界
 
-Affinity 有两种使用方式。
+`RootPreference` 与 `Affinity` 是两个不同参数，不再复用同一组数值。
 
-### 从来源提取元素
+### RootPreference：从 Soil 吃什么
 
-提取时：
+`TREE_RootPreference[7]` 只用于：
 
 ```text
-ExtractionAffinity[i] = min(Affinity[i], 1)
+SOIL_Elems
+→ TREE_Elems / Reserve
 ```
 
-亲和超过 1 不允许从来源拿走超过实际供给的元素。
+每个分量必须满足：
 
-### 转换为 Growth
+```text
+0 <= RootPreference[i] <= 1
+```
 
-转换时使用完整 Affinity：
+它表示根系对不同元素的吸收偏好，不表示生长效率，也不允许通过超过 1 来提高总吸收量。
+
+最终吸收公式还需要同时考虑：
+
+- 当前 Soil 可用元素；
+- Tree Stage 的总体吸收能力；
+- 单元素有效吸收上限 / 饱和；
+- 实际 dt。
+
+单一元素不能独自撑满当前 Stage 的完整根系吞吐量。
+
+### Affinity：吃进去以后长得多有效
+
+Affinity 不再参与 Soil → Tree 的提取。
+
+它用于：
+
+```text
+TREE_Elems / Reserve
+→ Growth Conversion
+→ Growth Vector
+```
+
+Growth 转换时使用完整 Affinity：
 
 ```text
 GrowthGain[i]
@@ -95,9 +122,19 @@ GrowthGain[i]
 GrowthNutrient[i] × Affinity[i]
 ```
 
-因此 Affinity > 1 可以提高生长效率。
+因此 Affinity 可以超过 1，并继续参与：
 
-同一个亲和值在两个步骤中不要使用不同的临时解释。
+- 连续学习；
+- Stage 固化；
+- 后续父子器官继承；
+- 表型 / 元素倾向。
+
+不要再实现旧规则：
+
+```text
+ExtractionAffinity = min(Affinity, 1)
+```
+
 
 ## Base Affinity 与 Effective Affinity
 
@@ -122,27 +159,21 @@ Growth = zero vector
 
 ## 默认亲和配置
 
-当前已经有的七元素亲和数值继续作为各类器官的**基础亲和参考值**，不再解释为“生成瞬间直接乘一次后冻结的快照系数”。
+当前已有数值继续作为**Growth Affinity 的基础参考值**。Stem 已退出当前器官模型，不再保留 Stem Affinity。
 
-### Tree
+### Tree Growth Affinity
 
 ```text
 [0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]
 ```
 
-### Stem
-
-```text
-[0.85, 0.75, 0.80, 0.75, 1.15, 0.80, 1.30]
-```
-
-### Leaf
+### Leaf Growth Affinity
 
 ```text
 [0.75, 1.10, 1.00, 0.85, 1.30, 0.90, 0.80]
 ```
 
-### Flower / Fruit lineage
+### Flower / Fruit lineage Growth Affinity
 
 当前旧配置：
 
@@ -152,13 +183,29 @@ Growth = zero vector
 
 先作为花 / 果器官的基础亲和起点。Flower → Fruit 的 Stage 固定与后续汁液累积方式以 `growth-system.md` 和后续 Spec 为准。
 
+### Tree RootPreference
+
+RootPreference 的七元素具体基础值**尚未确定**。
+
+约束已固定：
+
+```text
+length = 7
+order = Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo
+range = [0, 1]
+```
+
+不要直接复制 Tree Affinity，也不要在实现阶段自行补默认值。
+
+
 ## CFG 边界
 
 旧版 `CFG.Affinity / Stem / Leaf / Fruit` 结构仍可作为当前编辑器配置的基础数据来源，但新的生长系统还需要：
 
 - Growth Tick 间隔；
 - 土壤蒸发率；
-- 各 Tree Stage 的 `MaxAbsorbPerTick`；
+- Tree RootPreference 基础值；
+- 各 Tree Stage 的 `MaxAbsorbPerHour` 与单元素吸收饱和参数；
 - 各 Stage 的 GrowthThreshold；
 - 子器官分流比例；
 - 各器官 Stage 的环境损耗；
@@ -202,9 +249,13 @@ LEAF_Growth[i]
 ...
 ```
 
-复杂数学或重复向量变换应优先拆为独立计算图，再由编辑器打包复合节点。
+复杂数学或重复向量变换应优先封装为独立公式能力；当前服务端节点图实现可以由独立计算图手动打包为复合节点。
 
-主流程图保持小而单一，不把完整 Growth Tick、吸收、子器官分流、Stage 跳转和表现全部展开在一张图中。
+业务流程不要机械按函数拆成多个事件节点图。一次 Tree Growth Update 保持为一个完整流程，内部调用 Calculate_Absorption、Convert_Nutrient_To_Growth 等公式能力。
+
+短生命周期的 `AbsorbElems`、比例、临时转换结果等只通过节点连线 / 局部值传递，不落为跨节点图共享的实体变量。实体变量只保存真正需要持久化的世界状态。
+
+器官通信采用消费者主动获取：Tree 读取 / 修改自己的配对 Soil；Soil 不需要知道 Tree 的成长规则。事件 / 信号只承担流程触发和实例路由，不承担养分等业务数据传输。
 
 ## 旧字段迁移
 
