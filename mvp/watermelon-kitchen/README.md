@@ -4,11 +4,11 @@
 
 目标平台是《原神·千星奇域》UGC。当前 MVP 不按照仓库根目录 `architecture/` 中的 Cordis + Godot 正式架构实现；这些架构文档属于独立的长期正式项目方向，不作为本轮千星奇域原型的开发约束。
 
-新上下文进入开发时，先读本文件，再按“必读顺序”读取其余七份文档即可开始实现，不需要从历史对话恢复设计。
+新上下文进入开发时，先读本文件，再按“必读顺序”读取其余文档。当前基础生长链仍在逐项收敛，不能仅凭旧 roadmap 直接跳过未完成设计。
 
 ## 当前状态
 
-**设计状态：核心闭环已收敛，可以进入实现。**
+**设计状态：总体闭环与数据边界已收敛；基础生长链仍在逐项确认，当前重点是 Soil → Tree 的 RootPreference / 吸收饱和公式。**
 
 当前已经固定：
 
@@ -16,7 +16,7 @@
 - 千星奇域水瓜树的世界设定；
 - 点击对象、史莱姆自动移动、劳动与搬运的基础交互；
 - 土壤 → 树体 → 子器官的七元素养分流模型；
-- 统一 Growth Tick、按阶段吸收、内部储备与 Growth Vector；
+- 统一 Growth Tick、按阶段根系规模、RootPreference、内部储备与 Growth Vector；
 - Stage 升级时清空 Growth，并固定当前连续学习得到的亲和作为下一阶段基准；
 - 叶片的嫩叶 / 肥厚叶 / 成叶阶段与子器官分流；
 - 花与果作为同一器官的两个阶段；
@@ -28,7 +28,7 @@
 - 果实 → 水瓜汁；
 - 1～3 份等体积水瓜汁混合及结果重算。
 
-当前不需要继续扩展第二种元素反应、更多料理、顾客经营或多人系统，即可开始开发核心数据与玩法闭环。
+当前不扩展第二种元素反应、更多料理、顾客经营或多人系统。基础生长链以 [growth-foundation-requirements.md](growth-foundation-requirements.md) 的 checklist 为当前设计进度来源；未确认的吸收 / Growth / Stage 数值不得由实现阶段自行补全。
 
 ## 必读顺序
 
@@ -44,13 +44,16 @@
 4. [growth-system.md](growth-system.md)  
    当前植物生长的主要 source of truth。定义土壤储备、树体内部储备、Growth Tick、Stage、叶片、花果、连续学习与体验目标。
 
-5. [elemental-cultivation.md](elemental-cultivation.md)  
-   七元素的表现与后续料理规则。生长与元素转移部分以 `growth-system.md` 为准；口味、绽放、水瓜汁等下游规则继续保留在本文件。
+5. [growth-foundation-requirements.md](growth-foundation-requirements.md)  
+   当前正在逐条收敛的基础生长链 checklist。记录哪些规则已经确认、当前讨论到哪里，以及哪些内容还不能进入实现。
 
-6. [interaction.md](interaction.md)  
+6. [elemental-cultivation.md](elemental-cultivation.md)  
+   七元素培养结果、表现与后续料理规则。RootPreference 与 Growth Affinity 已分离；口味、绽放、水瓜汁等下游规则继续保留在本文件。
+
+7. [interaction.md](interaction.md)  
    MVP 的输入与劳动方式：玩家不直接控制史莱姆移动，而是点击可交互对象下达行动。
 
-7. [implementation-roadmap.md](implementation-roadmap.md)  
+8. [implementation-roadmap.md](implementation-roadmap.md)  
    当前实现地图与 SDD 工作流。用 Mermaid 和 Checklist 列出待实现功能、依赖关系、可选择起点，以及“Feature → Flow Blocks → Files → GitHub Issue/Spec → 开发 → 验收”的标准流程。
 
 ## 当前核心闭环
@@ -60,7 +63,7 @@
 ↓
 土壤七元素储备
 ↓
-Growth Tick：土壤蒸发 / 树体按阶段与亲和吸收
+Growth Tick：土壤蒸发 / 树体按 Stage、RootPreference 与单元素饱和规则吸收
 ↓
 树体内部 Reserve
 ↓
@@ -93,7 +96,7 @@ Growth Tick：土壤蒸发 / 树体按阶段与亲和吸收
 
 1. 建立土壤七元素储备、树体 Reserve / Growth / Stage / Affinity 基础状态。
 2. 建立统一 Growth Tick，并支持按 UTC 时间补算离线 Tick。
-3. 实现土壤浇灌与容量竞争、土壤蒸发、树体按 Stage 吸收。
+3. 实现土壤浇灌与容量归一化、土壤蒸发、树体按 Stage / RootPreference / 单元素饱和吸收。
 4. 实现树体 Growth 转换与 Seedling → Sapling → Mature。
 5. 实现叶片生成、叶片三个 Stage、子器官分流、连续学习与显色。
 6. 接入最小点击劳动和叶片采集，形成第一条可重复的可见闭环。
@@ -101,6 +104,12 @@ Growth Tick：土壤蒸发 / 树体按阶段与亲和吸收
 8. 最后把各独立功能串成完整“培养 → 采集 → 制作 → 发现 → 再培养”闭环。
 
 这里描述的是实现依赖顺序，不额外增加新的玩法设计。
+
+## 未来更新备忘
+
+[future-updates.md](future-updates.md) 记录当前已经出现、但明确不进入本轮 MVP 的设计方向。现阶段主要包括植物健康度：均衡培养最稳定、定向培养获得特色但增加生理压力、极端纯元素培养可能低产且更适合特殊加工。
+
+该文件不是当前实现 source of truth；未来真正开发这些能力时需要重新形成独立 Spec。
 
 ## 外部基础资料
 
@@ -131,11 +140,11 @@ Growth Tick：土壤蒸发 / 树体按阶段与亲和吸收
 
 进入开发时，以下内容仍应保持未定义状态，不应由实现者自行扩写：
 
-- 各 Stage 的最终 GrowthThreshold、MaxAbsorbPerTick、连续学习函数和成熟产量仍需通过 Spec / 调试平衡确定；
+- RootPreference 的七元素基础值、单元素吸收饱和公式、各 Stage 的最终 GrowthThreshold / MaxAbsorbPerHour、连续学习函数和成熟产量仍需通过当前设计 checklist、Spec 与调试平衡确定；
 - 元素球的刷新位置、牵引细节、多人归属与元素种类的进一步叙事规则；
 - 元素锁定能力的获取、解除和表现方式；
 - 第二种及之后的元素反应；
-- 茎秆、叶片进入料理后的口味和用途；
+- 叶片进入料理后的口味和用途；
 - 草种子性状体作为独立材料的玩法；
 - 更复杂的料理加工和配料；
 - 顾客评价生成；
