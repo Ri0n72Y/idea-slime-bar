@@ -49,7 +49,7 @@ Debug 生成元素球
 - [x] Tree Stage 固定为 Seedling → Sapling → Mature。
 - [x] Tree Reserve 与 Growth 分离；`TREE_Growth` 是七元素向量。
 - [x] Stage 升级后清空当前 Growth，并在新 Stage 重新累计；Stage 本身不回退。
-- [x] 提取养分时 Affinity > 1 按 1 处理；转换 Growth 时使用完整 Affinity。
+- [x] `RootPreference[7]` 与 Growth Affinity 正式分离：RootPreference 只负责 Soil → Tree Reserve 的“吃什么”，范围严格为 `0~1`；Affinity 不再参与吸收，继续负责 Reserve → Growth 的转换效率、连续学习与遗传，并允许超过 1。
 - [x] 只保留连续学习，不使用阶段跃迁时的离散元素奖励。
 - [x] Soil 捕获元素球时直接把 `BALL_Elems` 累加到 `SOIL_Elems`，不设 Pending 层、不在捕获时做容量计算。下一 Growth Tick 开始时若 Soil 总量超过容量，再对当前 `SOIL_Elems` 整体等比例压缩到容量，多余部分丢弃。
 - [x] Debug UI 需要在游戏中查看 / 修改当前作物的自定义变量。
@@ -65,7 +65,7 @@ Debug 生成元素球
 
 - [x] Debug UI → `generate_elem_ball` → 元素球 → Soil 感应 → 直接累加 `SOIL_Elems`；下一 Growth Tick 再统一执行容量归一化。
 - [~] Debug UI 作为开发期 Crop Inspector，处理 Soil / Tree Reserve / Tree Growth / Stage / Affinity / 手动 Tick 等状态。
-- [~] Level 作为 Growth Tick 的调度起点；更具体的信号与顺序尚未确认。
+- [x] Level 作为 Growth Tick 的调度起点；Soil 先完成容量归一化与蒸发，再进入 Tree 的一次完整 Growth Update。事件 / 信号只承担流程触发，不携带养分等业务数据。
 - [~] 正常在线结算读取真实经过时间 dt；Debug 的“推进下一 Tick”属于额外的开发期时间推进能力。
 
 ### 仍待讨论
@@ -73,11 +73,11 @@ Debug 生成元素球
 - [x] 父子器官亲和度：由当前 Stage 的 Growth Vector 计算亲和偏移；Stage 升级时固化为自身下一阶段 Base；生成子器官时按继承率传递偏移，自身亲和不变。
 - [x] 元素球使用 `BALL_Elems[7]`；当前版本只生成纯净单元素球；在以 Tree 为中心的可配置圆环范围随机生成，并避免出生即进入 Soil 捕获区；靠近玩家时缓慢飘向玩家；颜色由所含元素决定；元素量随 Growth Tick 衰减。
 - [x] Soil 容量约束：不存在 Pending。元素球捕获时只做 `SOIL_Elems += BALL_Elems`；下一 Growth Tick 若 `ΣSOIL_Elems > Capacity`，则整体等比例压缩到容量。
-- [ ] Growth Tick 的信号 / 流水线顺序。
-- [ ] Soil Growth Tick 的具体行为。
-- [ ] Tree 从 Soil 吸收的具体公式。
+- [x] Growth Tick 的信号 / 流水线顺序与状态边界。
+- [x] Soil Growth Tick：容量归一化 → 蒸发 → 进入 Tree Growth Update。
+- [>] Tree 从 Soil 吸收的具体公式：已确认 RootPreference、Stage / dt 与“单元素不能撑满总吞吐量”的体验目标，具体 RootPreference 数值、单元素吸收饱和公式与各 Stage 速率仍待确认。
 - [ ] Reserve → Growth 的完整公式与边界。
-- [ ] 各 Stage 的 GrowthThreshold / MaxAbsorbPerTick。
+- [ ] 各 Stage 的 GrowthThreshold / MaxAbsorbPerHour。
 - [ ] Debug UI 的具体控件和交互。
 - [ ] 最终文件拆分与 Spec / Issue。
 
@@ -109,7 +109,10 @@ CFG_xxx
 CFG_TreeAffinity[7]
 CFG_LeafAffinity[7]
 CFG_FruitAffinity[7]
+CFG_TreeRootPreference[7]
 ~~~
+
+`CFG_TreeRootPreference[7]` 的具体七元素数值尚未确定；它不能直接复制 Affinity。RootPreference 的每个分量必须位于 `0~1`。
 
 后续是否补充其他器官模板亲和，等对应器官进入范围再决定。
 
@@ -145,6 +148,7 @@ TREE_Elems[7]
 TREE_Growth[7]
 TREE_BaseAffinity[7]
 TREE_EffectiveAffinity[7]
+TREE_RootPreference[7]
 TREE_Stage
 ~~~
 
@@ -672,48 +676,114 @@ dt = CFG_GrowthUpdateIntervalSeconds
 
 这是开发期时间推进，不属于正式玩家能力。
 
-### 待讨论：调度流水线
+### 已确认：调度流水线与状态边界
 
-当前方向：
-
-Level 负责发起全局 Growth Tick。
-
-但不希望 Soil、Tree、Leaf、Flower 等全部无序同时监听同一个广播，然后各自读取彼此状态。
-
-更倾向于把 Growth Tick 作为**流水线起点**：
-
-~~~text
-Level: GrowthTick
-→ Soil 完成本 Tick
-→ Tree 开始本 Tick
-→ Tree 完成预算与自身结算
-→ 子器官开始本 Tick
-~~~
-
-原则候选：
-
-> 上游先完成本 Tick 并确定下游输入，再触发下游。
-
-当前本轮只有 Soil + Tree，因此最小顺序先讨论：
+Level 负责发起 Growth Tick。当前 Soil + Tree 的最小顺序固定为：
 
 ~~~text
 Level GrowthTick
-→ Soil Growth
-→ Soil 完成
-→ Tree Growth
-→ Tree 完成
+→ Soil：容量归一化
+→ Soil：蒸发
+→ Tree：一次完整 Growth Update
+    → 读取配对 Soil
+    → Calculate_Absorption
+    → 修改 SOIL_Elems / TREE_Elems
+    → Convert_Nutrient_To_Growth
+    → 更新 TREE_Growth / Stage / Affinity
 ~~~
 
-仍需重点确认：
+器官通信采用**消费者主动获取**：
 
-- 用全局信号还是关卡信号；
-- Soil 完成后如何通知 Tree；
-- 数据通过信号参数传递，还是先写实体状态再发“完成”信号；
-- 多棵树 / 多块土时如何对应；
-- 将来多个子器官是并行还是父级先分预算再分别触发；
-- Tick 的离线补算如何保持同样顺序。
+~~~text
+Tree
+→ 读取 / 修改自己的配对 Soil
+~~~
 
-**本节暂不定实现方案。**
+Soil 不需要知道 Tree 的类型、亲和、Stage 或成长规则。
+
+事件 / 信号只负责触发流程和必要的实例路由，不负责传递养分向量或一次 Tick 的中间计算结果。多株植物仍需要用植物 / 实例身份确保事件落到正确对象；具体信号 API 留到实现 Spec 验证。
+
+Tree 的一次 Growth Update 保持为一个完整业务流程，不机械拆成 TreeAbsorb.gia → TreeGrowth.gia → TreeStage.gia 再用公共变量通信。
+
+状态原则：
+
+~~~text
+长期世界状态
+→ 实体变量
+
+一次 Tick 的短期结果
+→ 节点连线 / 局部值
+
+复杂数学
+→ 独立公式能力（当前服务端实现可封装为复合节点）
+~~~
+
+例如 AbsorbElems、转换比例、临时 Growth 结果都不落为跨节点图共享的持久变量。
+
+当前计划的两个主要公式边界是：
+
+~~~text
+Calculate_Absorption
+Convert_Nutrient_To_Growth
+~~~
+
+这描述的是职责边界，不提前锁死 7.1 之后具体使用哪一种编辑器执行形式。
+
+
+### 5.1 Soil → Tree Reserve 的当前设计目标
+
+保留：
+
+~~~text
+SOIL_Elems
+→ TREE_Elems / Reserve
+→ TREE_Growth
+~~~
+
+这两层不是为了增加一次重复计算，而是用于表达外部环境与植物内部储备的不同状态。Tree Reserve 还承担离线缓冲、后续器官分流以及未来健康 / 富集 / 疾病系统的扩展接口。
+
+Soil → Tree 这一步不再使用 Growth Affinity，而使用独立的：
+
+~~~text
+TREE_RootPreference[7]
+~~~
+
+语义是“根系更容易吃什么”，每个分量严格限制在：
+
+~~~text
+0 <= RootPreference[i] <= 1
+~~~
+
+Growth Affinity 保持原有语义：元素进入 Reserve 后，决定它转换成 Growth 的效率，并继续参与连续学习与遗传。
+
+吸收公式还必须满足一个新的体验约束：
+
+> 单一元素即使供应充足，也不能独自填满植物全部吸收 / 生长吞吐量。
+
+因此不能把 MaxAbsorbPerHour(stage) 简单全部分配给当前唯一存在的元素。每个元素需要存在独立的有效吸收上限 / 饱和机制；多种元素共同存在时，各元素贡献可以叠加，使总吸收接近当前 Stage 的完整根系能力。
+
+期望体验：
+
+- 每天浇灌：可以长期保持接近满速成长；
+- 约 3 天维护一次：仍属于高速成长；
+- 约 7 天不补充：土壤应接近 / 达到完全耗尽；Tree Reserve 再提供一层缓冲；
+- 只浇一种元素：定向培养有效，但因为其他元素不能补足吸收配额，总成长速度明显下降；
+- 均衡 / 混合供给：更容易维持高吞吐量。
+
+具体 RootPreference 数值、单元素饱和公式和 Stage 吸收速率仍是当前第 7 项需要继续收敛的内容。
+
+### 5.2 培养结果的体验目标
+
+吸收与后续 Growth / 果实规则最终需要支持以下玩家层次：
+
+- 完全不了解系统的新人，把随机遇到的元素球都投入土壤，通常得到没有明显元素倾向、带少量随机差异的普通水瓜，整体味道接近普通水瓜基线；
+- 新人仍可能偶然得到一两个亲和较高的 Hydro / Dendro 等元素水瓜，但复现性低，作为“发现系统存在”的惊喜；
+- 有意识只投单元素能够稳定推动目标元素性状，但以显著降低生长速度为代价；
+- “单元素水瓜”要求某一元素达到显著水平，并与第二 / 第三元素拉开足够差距；其他元素仍然存在，因此同类元素水瓜之间仍会有风味差异；
+- 两种元素都处于较高水平、但第一元素没有形成明显单一主导时，可以形成元素反应型水瓜。水 + 草的草原核 / 绽放水瓜是当前第一个例子；其他反应暂不设计；
+- 接近完全纯净的元素水瓜应当难培养、产量低、风味可能过于极端，更可能成为加工 / 工业型原料，而不是天然的最高品质。
+
+上述分类阈值与“显著领先”的具体数字尚未锁定，后续在果实 / 元素培养设计中继续确认。
 
 ---
 
@@ -731,6 +801,7 @@ TREE_Growth[7]
 TREE_Stage
 TREE_BaseAffinity[7]
 TREE_EffectiveAffinity[7]
+TREE_RootPreference[7]
 
 查看：
 Soil Total
@@ -761,9 +832,9 @@ Debug UI 状态归 Player 所有。
 - [x] 2. Debug 元素球的数据结构与生成接口
 - [x] 3. Soil 感应元素球与浇水流程
 - [x] 4. 土壤容量竞争公式与边界
-- [>] 5. Growth Tick 的信号 / 流水线顺序
-- [ ] 6. Soil Growth Tick
-- [ ] 7. Tree Growth Tick：吸收
+- [x] 5. Growth Tick 的信号 / 流水线顺序
+- [x] 6. Soil Growth Tick
+- [>] 7. Tree Growth Tick：吸收 / RootPreference / 单元素饱和
 - [ ] 8. Tree Growth Tick：Reserve → Growth
 - [ ] 9. Seedling → Sapling → Mature
 - [ ] 10. Debug Crop Inspector
