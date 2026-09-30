@@ -120,9 +120,9 @@ flowchart TD
 需要至少覆盖：
 
 - [ ] `SOIL_Elems : float[7]`。
-- [ ] `TREE_Elems : float[7]`，语义为树体内部 Reserve。
+- [ ] `TREE_Elems : float[7]`，语义为 Sapling 起的树体内部 Reserve；Seed / Seedling 不使用 Reserve。
 - [ ] `TREE_Growth : float[7]`。
-- [ ] `TREE_Stage`：Seedling / Sapling / Mature。
+- [ ] Seed 前置状态 + `TREE_Stage`：Seedling / Sapling / Mature。
 - [ ] Tree Base Affinity / Effective Affinity。
 - [ ] `LastGrowthTickAt`。
 - [ ] 状态初始化、读取、保存边界。
@@ -139,19 +139,22 @@ flowchart TD
 当前基线：
 
 ```text
-GrowthTickInterval ≈ 1 hour
-SoilEvaporationRatePerTick = 1%
-TreeGrowthConsumeRatePerTick = 1%
+GrowthUpdateIntervalSeconds = 60
+SoilRetentionPerHour = 0.99
+TreeGrowthRetentionPerHour = 0.99   # Sapling 起
+MaxTotalAbsorbPerHour = 1.0
 ```
+
+Tick 只负责结算，实际变化全部使用真实 `dt`。
 
 候选流程块：
 
 - [ ] F2.1 根据 UTC 时间确定应执行的 Tick 数。
 - [ ] F2.2 土壤元素自然蒸发。
-- [ ] F2.3 根据 Tree Stage、土壤组成和 Tree Affinity 计算吸收。
-- [ ] F2.4 写入 Tree Reserve。
-- [ ] F2.5 判断 Growing / Dormant。
-- [ ] F2.6 从 Tree Reserve 提取本 Tick 生长预算。
+- [ ] F2.3 根据 Soil、RootPreference、1.0/h 总上限和单元素 Cap 计算吸收。
+- [ ] F2.4 Seed / Seedling：吸收结果直接转换为 Growth。
+- [ ] F2.5 Sapling 起：吸收结果写入 Tree Reserve。
+- [ ] F2.6 Sapling 起判断 Growing / Dormant，并从 Reserve 提取生长预算。
 - [ ] F2.7 先向子器官分流，再把剩余预算转换为 `TREE_Growth[7]`。
 - [ ] F2.8 连续学习 Effective Affinity。
 - [ ] F2.9 检查 Stage / 器官生成条件。
@@ -169,14 +172,14 @@ TreeGrowthConsumeRatePerTick = 1%
 需要覆盖：
 
 - [ ] F3.1 土壤总容量基线 100。
-- [ ] F3.2 输入一种元素到 `SOIL_Elems`。
-- [ ] F3.3 超出容量时，按**输入前旧土壤的元素比例**挤出整个旧储备。
-- [ ] F3.4 与本次输入同种的旧元素同样参与挤出。
-- [ ] F3.5 完成挤出后再加入新元素。
-- [ ] F3.6 单元素持续培养呈现自然边际递减。
+- [ ] F3.2 元素球捕获时直接累加到 `SOIL_Elems`，允许临时超过 100。
+- [ ] F3.3 下一 Soil Growth Tick 开头计算 `SoilTotal`。
+- [ ] F3.4 若 `SoilTotal > 100`，对当前全部七元素统一乘 `100 / SoilTotal`。
+- [ ] F3.5 新旧元素没有优先级；连续加入单元素形成递推残留和逐步替换。
+- [ ] F3.6 Overflow 当前直接丢弃，未来可接气候系统。
 - [ ] F3.7 边界测试覆盖空土、未满、刚好满、超量输入和单元素极端。
 
-旧版“新输入受保护，只挤出其他元素”的规则不再使用。
+旧版“新输入优先 / 挤出旧 Soil”规则已经废弃。
 
 旧“元素锁定”能力在新模型中的作用位置尚未重新设计，**不进入本 Feature**。
 
@@ -190,14 +193,14 @@ TreeGrowthConsumeRatePerTick = 1%
 
 需要覆盖：
 
-- [ ] F4.1 元素球实体数据。
-- [ ] F4.2 15 分钟半衰期衰减。
-- [ ] F4.3 小于 1 时消失。
-- [ ] F4.4 在线每 3～5 分钟自然生成一个 5～8 大小元素球。
-- [ ] F4.5 不设硬上限，由生成率与寿命形成约 10 个的自然存量。
-- [ ] F4.6 退出时保存场上仍存在的球。
-- [ ] F4.7 登录时按 UTC 时间更新已保存球。
-- [ ] F4.8 只模拟登录前最后 45 分钟的离线生成事件。
+- [ ] F4.1 元素球实体数据；当前纯元素球初始量随机 8～10。
+- [ ] F4.2 15 分钟半衰期连续衰减。
+- [ ] F4.3 总量小于 1 时消失。
+- [ ] F4.4 每 5 分钟最多尝试生成 1 个新球。
+- [ ] F4.5 生成概率：`1 / (1 + (FieldBallTotal / 28)^3)`。
+- [ ] F4.6 不设硬球数上限；目标是让场上总元素压力自然形成大概率约 8 球以内的软稳态。
+- [ ] F4.7 登录时最多回放最近 30 分钟的正常刷新历史，并按真实 SpawnTime / age 计算衰减。
+- [ ] F4.8 短时间重登只补算真实离线时间，不重复获得完整 30 分钟窗口。
 - [ ] F4.9 玩家与元素球交互后进入牵引状态。
 - [ ] F4.10 靠近土壤 / 树苗浇灌区域后自动吸附。
 - [ ] F4.11 以吸附时剩余元素量提交给 F3，写入土壤。
@@ -213,16 +216,21 @@ TreeGrowthConsumeRatePerTick = 1%
 
 #### F5-Tree — 树体 Stage
 
-- [ ] Seedling → Sapling → Mature。
+- [ ] Seed → Seedling → Sapling → Mature。
+- [ ] Seed / Seedling 没有 Reserve，直接 Soil → Absorb → Growth。
+- [ ] Sapling 起开始拥有 Tree Reserve。
 - [ ] 每个 Stage 有独立 Growth Vector。
 - [ ] 升级 Stage 时清空 Growth。
 - [ ] 升级时固定当前 Effective Affinity 为下一 Stage 的 Base Affinity。
-- [ ] 每个 Stage 使用不同 `MaxAbsorbPerTick`。
+- [ ] 所有阶段当前统一使用 `MaxTotalAbsorbPerHour = 1.0`。
+- [ ] Seed → Seedling 的 GrowthThreshold = 45。
+- [ ] Seedling → Sapling 的 GrowthThreshold = 90。
 - [ ] Mature 生成器官后只扣 Growth，不回退 Stage。
 
 体验目标：
 
-- Seedling：普通玩家一周内进入 Sapling。
+- 积极玩家约 47h 后看到 Seedling，第三个自然日上线时已有明确发芽反馈。
+- 再约 95h 进入 Sapling；真实体验约一周开始抽叶 / 开花。
 - Sapling：正常约 2～3 周进入 Mature。
 - 玩家主动摘叶减少分流并持续催长时，可以探索出约 1 周进入 Mature 的快速路线。
 
@@ -394,8 +402,8 @@ TreeGrowthConsumeRatePerTick = 1%
 
 - [ ] 元素资源出现并进入土壤。
 - [ ] 土壤执行容量竞争与蒸发。
-- [ ] 树按 Stage / Affinity 从土壤吸收形成 Reserve。
-- [ ] Growth Tick 把 Reserve 转换成 Growth，并向子器官分流。
+- [ ] 树按 RootPreference、总吸收上限和单元素 Cap 从 Soil 吸收。
+- [ ] Seed / Seedling 直接把吸收结果转换为 Growth；Sapling 起才进入 Reserve → Growth / 子器官分流。
 - [ ] 叶 / 花 / 果按各自 Stage 生长并形成不同形态。
 - [ ] 玩家能够观察元素带来的颜色 / 生长速度 / 形态差异。
 - [ ] 玩家采集器官和果实。
@@ -440,7 +448,7 @@ flowchart LR
     -.手动 Tick.-> C
 
     A[土壤元素<br/>SOIL_Elems]
-    --> B[树体 Reserve<br/>TREE_Elems]
+    --> B[Seed / Seedling 直接 Growth<br/>Sapling 起进入 Reserve]
     --> C[Growth Tick]
     --> D[Tree Growth Vector]
     --> E[生成嫩叶]
@@ -478,9 +486,9 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 
 需要看到：
 
-- [ ] Seedling / Sapling 的树体 Stage 可运行。
-- [ ] 土壤元素被树按 Stage 上限与 Affinity 吸收。
-- [ ] Tree Reserve 以 1% / Tick 的基线产生生长预算。
+- [ ] Seed / Seedling / Sapling 的阶段链可运行。
+- [ ] 土壤元素按 RootPreference、1.0/h 总上限和单元素 Cap 被吸收。
+- [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 按 0.99/h retention 产生生长预算。
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
 - [ ] Sapling 最多出现 2 个叶片位。
 - [ ] 叶片获得约 0.3 的分流预算。
@@ -518,9 +526,9 @@ Debug UI 是测试入口，不属于玩家正式玩法。
 1. 进入世界，打开 Debug UI
 2. 给土壤设置一组明确的七元素组成
 3. 手动执行 / 等待 Growth Tick
-4. 观察土壤减少、树体 Reserve 增加
+4. 在 Seed / Seedling 阶段观察土壤减少、Tree Growth 直接增加；进入 Sapling 后观察 Tree Reserve
 5. 观察 Tree Growth Vector 累积
-6. Tree Stage 正确升级，升级时 Growth 清空
+6. Seed / Tree Stage 正确升级，升级时 Growth 清空
 7. Sapling 开始生成嫩叶
 8. 叶片从树体分得养分并累积自己的 Growth
 9. 叶片阶段变化，亲和和颜色产生可观察变化
@@ -629,7 +637,7 @@ Flow Block 应尽量满足：
 ```text
 计算错过 Tick 数
 土壤蒸发
-树体按 Stage 吸收
+树体按 RootPreference / Cap 吸收
 生成本 Tick 生长预算
 向子器官分流
 Growth Vector 转换
