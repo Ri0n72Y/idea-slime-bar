@@ -37,7 +37,7 @@
 ```text
 SOIL_Elems[7]              土壤元素储备
 
-TREE_Elems[7]              树体内部 Reserve
+TREE_Elems[7]              树体内部 Reserve（Sapling 起使用；Seed / Seedling 不使用）
 TREE_Growth[7]             树体当前 Stage 的 Growth Vector
 TREE_BaseAffinity[7]       当前 Stage 的基础亲和
 TREE_EffectiveAffinity[7]  当前 Stage 连续学习后的有效亲和
@@ -70,7 +70,18 @@ Reserve
 
 Growth 不得重新当作可输送养分使用。
 
-Stage 升级时清空的是当前 Stage 的 Growth Vector，不是内部 Reserve。
+Seed / Seedling 是当前明确例外：两者没有 Tree Reserve，直接执行：
+
+```text
+Soil
+→ Absorb
+→ Growth Conversion
+→ Growth Vector
+```
+
+进入 Sapling 后才开始使用 `TREE_Elems[7]` / Reserve。
+
+Stage 升级时清空的是当前 Stage 的 Growth Vector，不是内部 Reserve；Seed / Seedling 因为没有 Reserve，不存在对应清空问题。
 
 ## RootPreference 与 Affinity 的边界
 
@@ -91,28 +102,55 @@ SOIL_Elems
 0 <= RootPreference[i] <= 1
 ```
 
-它表示根系对不同元素的吸收偏好，不表示生长效率，也不允许通过超过 1 来提高总吸收量。
+它表示根系对不同元素的吸收偏好，不表示生长效率，也不允许自身通过超过 1 来提高总吸收量。
 
-最终吸收公式还需要同时考虑：
+当前已锁定：
+
+```text
+CFG_TreeRootPreference[7]
+=
+[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]
+```
+
+最终吸收还需要同时考虑：
 
 - 当前 Soil 可用元素；
-- Tree Stage 的总体吸收能力；
-- 单元素有效吸收上限 / 饱和；
+- 固定的总吸收上限 `CFG_MaxTotalAbsorbPerHour = 1.0`；
+- 单元素有效吸收上限；
 - 实际 dt。
 
-单一元素不能独自撑满当前 Stage 的完整根系吞吐量。
+单元素基础通道上限：
+
+```text
+ElementCap[i]
+=
+1.0 × 0.30 × Affinity[i]
+```
+
+因此 Growth Affinity 虽然不再充当“RootPreference / 提取权重”，但会影响对应元素通道的最大吸收量。单一元素不能独自撑满完整 1.0/h 吞吐量。
+
+尚未最终锁定：ElementCap 使用 BaseAffinity 还是实时 EffectiveAffinity，以及多元素预算在 RootPreference / Cap / Soil 可用量之间的最终重分配算法。
 
 ### Affinity：吃进去以后长得多有效
 
-Affinity 不再参与 Soil → Tree 的提取。
+Affinity 不再作为 Soil → Tree 的“偏好权重”；偏好由 RootPreference 独立承担。
 
-它用于：
+Affinity 当前有两类作用：
+
+```text
+1. 决定对应元素的单通道吸收上限
+2. 决定吸收后的 Growth Conversion 效率
+```
+
+Sapling 起的 Growth Conversion 路径：
 
 ```text
 TREE_Elems / Reserve
 → Growth Conversion
 → Growth Vector
 ```
+
+Seed / Seedling 则是吸收后直接进入 Growth Conversion。
 
 Growth 转换时使用完整 Affinity：
 
@@ -185,9 +223,13 @@ Growth = zero vector
 
 ### Tree RootPreference
 
-RootPreference 的七元素具体基础值**尚未确定**。
+当前已锁定：
 
-约束已固定：
+```text
+[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]
+```
+
+约束：
 
 ```text
 length = 7
@@ -195,7 +237,7 @@ order = Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo
 range = [0, 1]
 ```
 
-不要直接复制 Tree Affinity，也不要在实现阶段自行补默认值。
+该配置故意不把七元素完全拉平，使 Hydro / Dendro 在随机培养中保留一定自然富集机会。
 
 
 ## CFG 边界
@@ -204,9 +246,11 @@ range = [0, 1]
 
 - Growth Tick 间隔；
 - 土壤蒸发率；
-- Tree RootPreference 基础值；
-- 各 Tree Stage 的 `MaxAbsorbPerHour` 与单元素吸收饱和参数；
-- 各 Stage 的 GrowthThreshold；
+- Tree RootPreference 基础值（当前已锁定）；
+- 固定总吸收上限 `CFG_MaxTotalAbsorbPerHour = 1.0`；
+- 单元素基础 Cap `0.30 × Affinity`；
+- Seed / Seedling 的 GrowthThreshold（当前已锁定为 45 / 90）；
+- Sapling → Mature 及子器官后续 GrowthThreshold；
 - 子器官分流比例；
 - 各器官 Stage 的环境损耗；
 - 连续学习参数；
@@ -233,6 +277,19 @@ LastGrowthTickAt
 - 批量补算或等价近似。
 
 元素球仍拥有自己的出生 / 保存时间规则，不与 Growth Tick 时间戳混为一谈。
+
+当前元素球数值基线：
+
+```text
+InitialAmount = 8~10
+HalfLife = 15 min
+Destroy when total < 1
+Spawn check = every 5 min
+SpawnChance = 1 / (1 + (FieldBallTotal / 28)^3)
+Login catch-up window = max recent 30 min
+```
+
+登录补算按真实 SpawnTime 和球龄计算半衰，不额外制造一套“登录补偿球”。
 
 ## 节点图实现原则
 
