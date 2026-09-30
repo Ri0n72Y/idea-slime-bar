@@ -49,7 +49,7 @@ Debug 生成元素球
 - [x] Tree Stage 固定为 Seedling → Sapling → Mature。
 - [x] Tree Reserve 与 Growth 分离；`TREE_Growth` 是七元素向量。
 - [x] Stage 升级后清空当前 Growth，并在新 Stage 重新累计；Stage 本身不回退。
-- [x] `RootPreference[7]` 与 Growth Affinity 正式分离：RootPreference 只负责 Soil → Tree Reserve 的“吃什么”，范围严格为 `0~1`；Affinity 不再参与吸收，继续负责 Reserve → Growth 的转换效率、连续学习与遗传，并允许超过 1。
+- [x] `RootPreference[7]` 与 Growth Affinity 正式分离：RootPreference 负责混合 Soil 中“更偏向吃什么”，范围严格为 `0~1`；Affinity 不再充当吸收偏好权重，但会影响单元素吸收 Cap，并继续负责 Growth 转换效率、连续学习与遗传，允许超过 1。
 - [x] 只保留连续学习，不使用阶段跃迁时的离散元素奖励。
 - [x] Soil 捕获元素球时直接把 `BALL_Elems` 累加到 `SOIL_Elems`，不设 Pending 层、不在捕获时做容量计算。下一 Growth Tick 开始时若 Soil 总量超过容量，再对当前 `SOIL_Elems` 整体等比例压缩到容量，多余部分丢弃。
 - [x] Debug UI 需要在游戏中查看 / 修改当前作物的自定义变量。
