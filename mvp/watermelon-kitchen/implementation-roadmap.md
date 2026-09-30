@@ -17,7 +17,7 @@
 flowchart TD
     A[开发基础<br/>数据约定 / 编辑器边界 / GIA流程]
 
-    B[土壤与树体基础状态<br/>SOIL / TREE Reserve / Growth / Stage / Affinity]
+    B[土壤与树体基础状态<br/>SOIL / Growth / Stage / Sapling Reserve / Affinity]
     C[土壤浇灌与容量竞争<br/>Soil Input / Overflow]
     D[统一 Growth Tick<br/>蒸发 / 吸收 / 分流 / Growth / Stage]
 
