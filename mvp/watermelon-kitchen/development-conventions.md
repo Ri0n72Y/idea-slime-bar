@@ -89,11 +89,17 @@ Stage 升级时清空的是当前 Stage 的 Growth Vector，不是内部 Reserve
 
 ### RootPreference：从 Soil 吃什么
 
-`TREE_RootPreference[7]` 只用于：
+`TREE_RootPreference[7]` 只用于决定 Soil → Tree 吸收时的元素偏好：
 
 ```text
 SOIL_Elems
-→ TREE_Elems / Reserve
+→ AbsorbElems
+
+Seed / Seedling:
+AbsorbElems → Growth
+
+Sapling 起:
+AbsorbElems → TREE_Elems / Reserve
 ```
 
 每个分量必须满足：
