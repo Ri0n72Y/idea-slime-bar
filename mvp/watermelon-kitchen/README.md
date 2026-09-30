@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**设计状态：总体闭环与数据边界已收敛；基础生长链仍在逐项确认，当前重点是 Soil → Tree 的 RootPreference / 吸收饱和公式。**
+**设计状态：总体闭环与数据边界已收敛；Seed → Seedling → Sapling 的第一周数值基线已经锁定，当前重点转向 Sapling 起的 Reserve / 叶花果分流与成熟产量。**
 
 当前已经固定：
 
@@ -16,7 +16,7 @@
 - 千星奇域水瓜树的世界设定；
 - 点击对象、史莱姆自动移动、劳动与搬运的基础交互；
 - 土壤 → 树体 → 子器官的七元素养分流模型；
-- 统一 Growth Tick、按阶段根系规模、RootPreference、内部储备与 Growth Vector；
+- 统一 Growth Tick、固定 1.0/h 总吸收上限、RootPreference、单元素 30%×Affinity Cap、内部储备与 Growth Vector；
 - Stage 升级时清空 Growth，并固定当前连续学习得到的亲和作为下一阶段基准；
 - 叶片的嫩叶 / 肥厚叶 / 成叶阶段与子器官分流；
 - 花与果作为同一器官的两个阶段；
@@ -47,13 +47,16 @@
 5. [growth-foundation-requirements.md](growth-foundation-requirements.md)  
    当前正在逐条收敛的基础生长链 checklist。记录哪些规则已经确认、当前讨论到哪里，以及哪些内容还不能进入实现。
 
-6. [elemental-cultivation.md](elemental-cultivation.md)  
+6. [growth-balance-baseline.md](growth-balance-baseline.md)  
+   当前基础生长数值速查。集中记录 Soil、元素球、RootPreference、吸收上限、单元素 Cap、Seed / Seedling 阈值，以及对应的新手登录体验和第一轮推算。
+
+7. [elemental-cultivation.md](elemental-cultivation.md)  
    七元素培养结果、表现与后续料理规则。RootPreference 与 Growth Affinity 已分离；口味、绽放、水瓜汁等下游规则继续保留在本文件。
 
-7. [interaction.md](interaction.md)  
+8. [interaction.md](interaction.md)  
    MVP 的输入与劳动方式：玩家不直接控制史莱姆移动，而是点击可交互对象下达行动。
 
-8. [implementation-roadmap.md](implementation-roadmap.md)  
+9. [implementation-roadmap.md](implementation-roadmap.md)  
    当前实现地图与 SDD 工作流。用 Mermaid 和 Checklist 列出待实现功能、依赖关系、可选择起点，以及“Feature → Flow Blocks → Files → GitHub Issue/Spec → 开发 → 验收”的标准流程。
 
 ## 当前核心闭环
@@ -63,9 +66,11 @@
 ↓
 土壤七元素储备
 ↓
-Growth Tick：土壤蒸发 / 树体按 Stage、RootPreference 与单元素饱和规则吸收
+Growth Tick：土壤蒸发 / RootPreference + 单元素饱和吸收
 ↓
-树体内部 Reserve
+Seed / Seedling：直接转成 Growth
+↓
+Sapling 起：进入树体 Reserve
 ↓
 生长预算向叶 / 花 / 果分流
 ↓
@@ -94,10 +99,10 @@ Growth Tick：土壤蒸发 / 树体按 Stage、RootPreference 与单元素饱和
 
 以下列表保留为高层实现依赖顺序：
 
-1. 建立土壤七元素储备、树体 Reserve / Growth / Stage / Affinity 基础状态。
+1. 建立土壤七元素储备、Growth / Stage / Affinity 基础状态；Sapling 起再引入 Tree Reserve。
 2. 建立统一 Growth Tick，并支持按 UTC 时间补算离线 Tick。
-3. 实现土壤浇灌与容量归一化、土壤蒸发、树体按 Stage / RootPreference / 单元素饱和吸收。
-4. 实现树体 Growth 转换与 Seedling → Sapling → Mature。
+3. 实现元素球刷新 / 半衰、土壤浇灌与容量归一化、土壤蒸发、RootPreference / 单元素饱和吸收。
+4. 实现 Seed → Seedling → Sapling 的直接 Growth 转换，再进入 Sapling 起的 Reserve / Growth 模型。
 5. 实现叶片生成、叶片三个 Stage、子器官分流、连续学习与显色。
 6. 接入最小点击劳动和叶片采集，形成第一条可重复的可见闭环。
 7. 再接入元素球、花果、口味、绽放、取汁与水瓜汁混合。
@@ -140,7 +145,7 @@ Growth Tick：土壤蒸发 / 树体按 Stage、RootPreference 与单元素饱和
 
 进入开发时，以下内容仍应保持未定义状态，不应由实现者自行扩写：
 
-- RootPreference 的七元素基础值、单元素吸收饱和公式、各 Stage 的最终 GrowthThreshold / MaxAbsorbPerHour、连续学习函数和成熟产量仍需通过当前设计 checklist、Spec 与调试平衡确定；
+- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90 已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity 的选择、多元素重分配算法、Sapling → Mature 阈值、Reserve 细节与成熟产量；
 - 元素球的刷新位置、牵引细节、多人归属与元素种类的进一步叙事规则；
 - 元素锁定能力的获取、解除和表现方式；
 - 第二种及之后的元素反应；
