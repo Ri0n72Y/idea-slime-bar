@@ -18,8 +18,8 @@ Debug 生成元素球
 → Soil 在 Tick 开始时检查总量；若超容量则对当前 SOIL_Elems 整体等比例压缩
 → Soil 完成本 Tick
 → AquamelonTree 从 Soil 吸收
-→ TREE_Elems / Reserve
-→ 元素被转化为 TREE_Growth
+→ Seed / Seedling：直接转化为 Growth
+→ Sapling 起：先进入 TREE_Elems / Reserve，再进入 Growth / 器官分流
 → Seedling → Sapling → Mature
 → Debug UI 可查看 / 修改当前作物状态
 ~~~
@@ -58,7 +58,12 @@ Debug 生成元素球
 - [x] `generate_elem_ball` 作为独立、未来可复用的节点图能力。
 - [x] Growth Tick 改为“单位时间速率 + 实际 dt”的结算模型；在线更新周期只控制反馈频率，不控制最终生长总量。
 - [x] 在线第一版倾向约 60 秒结算一次；未来可改成 30 秒等，不需要重新平衡每小时速率。
-- [x] 土壤蒸发与树体 Growth 消耗当前都以“每小时保留约 99%”作为测试基线，并按 dt 使用连续时间公式。
+- [x] 土壤蒸发与 Sapling 起的 Tree Reserve Growth 消耗当前都以“每小时保留约 99%”作为测试基线，并按 dt 使用连续时间公式；Seed / Seedling 没有 Reserve。
+- [x] Tree RootPreference 已锁定为 `[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
+- [x] 基础总吸收上限已锁定为 `CFG_MaxTotalAbsorbPerHour = 1.0`，当前所有 Tree Stage 使用同一总上限。
+- [x] 单元素基础吸收 Cap 已锁定为 `0.30 × Affinity[i]`；高 Affinity 同时提高对应元素通道上限和 Growth 转换效率。
+- [x] Seed / Seedling 不拥有 Reserve，吸收后直接转化为 Growth；Sapling 起才开始拥有 `TREE_Elems[7]`。
+- [x] Seed → Seedling 的 GrowthThreshold 已锁定为 45；Seedling → Sapling 已锁定为 90。普通随机满速基线下约 47.35h + 94.70h，总计约 5.92 天。
 - [x] Debug UI 必须能够立即推进下一次 Growth Tick；调试推进使用一个标准在线更新步长，不需要真实等待下一次调度。
 
 ### 已选方向，但实现细节未确认
@@ -75,9 +80,9 @@ Debug 生成元素球
 - [x] Soil 容量约束：不存在 Pending。元素球捕获时只做 `SOIL_Elems += BALL_Elems`；下一 Growth Tick 若 `ΣSOIL_Elems > Capacity`，则整体等比例压缩到容量。
 - [x] Growth Tick 的信号 / 流水线顺序与状态边界。
 - [x] Soil Growth Tick：容量归一化 → 蒸发 → 进入 Tree Growth Update。
-- [>] Tree 从 Soil 吸收的具体公式：已确认 RootPreference、Stage / dt 与“单元素不能撑满总吞吐量”的体验目标，具体 RootPreference 数值、单元素吸收饱和公式与各 Stage 速率仍待确认。
-- [ ] Reserve → Growth 的完整公式与边界。
-- [ ] 各 Stage 的 GrowthThreshold / MaxAbsorbPerHour。
+- [>] Tree 从 Soil 吸收：RootPreference、总吸收上限 1.0/h、单元素 `0.30 × Affinity` Cap 和 Stage 不改变总吸收上限均已确认；仍待确认 Base / Effective Affinity 取值以及多元素重分配算法。
+- [ ] Sapling 起 Reserve → Growth 的完整公式与边界。
+- [>] Stage：Seed → Seedling = 45、Seedling → Sapling = 90 已确认；Sapling → Mature 及器官分流后的阈值仍待确认。
 - [ ] Debug UI 的具体控件和交互。
 - [ ] 最终文件拆分与 Spec / Issue。
 
@@ -112,7 +117,13 @@ CFG_FruitAffinity[7]
 CFG_TreeRootPreference[7]
 ~~~
 
-`CFG_TreeRootPreference[7]` 的具体七元素数值尚未确定；它不能直接复制 Affinity。RootPreference 的每个分量必须位于 `0~1`。
+`CFG_TreeRootPreference[7]` 已锁定：
+
+~~~text
+[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]
+~~~
+
+RootPreference 的每个分量必须位于 `0~1`。
 
 后续是否补充其他器官模板亲和，等对应器官进入范围再决定。
 
@@ -152,26 +163,39 @@ TREE_RootPreference[7]
 TREE_Stage
 ~~~
 
-正式 Tree Stage 之前还有半埋在土里的 Seed 状态。Seed 在土壤满足激活条件后开始累计发芽进度，目标体验约 1～2 天，但具体时间作为参数可调。
-
-Seed 暂不计入三个 Tree Stage：
+正式 Tree Stage 之前还有半埋在土里的 Seed 状态。Seed 暂不计入三个 Tree Stage：
 
 ~~~text
 Seed
-→ Germination
 → 0 = Seedling
 → 1 = Sapling
 → 2 = Mature
 ~~~
 
-发芽进度使用单位时间速率：
+Seed 与 Seedling 当前都没有 Tree Reserve，直接：
 
 ~~~text
-GerminationProgress
-+= GerminationRatePerHour × dtHours
+Soil
+→ Absorb
+→ Growth Conversion
+→ Growth Vector
 ~~~
 
-“浇够水”的具体激活阈值仍待确认。
+不再维护独立的 `GerminationProgress / GerminationRatePerHour`。
+
+当前已锁定：
+
+~~~text
+Seed → Seedling:
+GrowthThreshold = 45
+普通随机满速 ≈ 47.35h
+
+Seedling → Sapling:
+GrowthThreshold = 90
+普通随机满速 ≈ 94.70h
+~~~
+
+目标体验：积极玩家第三个自然日看到已经发芽的幼苗，持续规律维护约一周进入 Sapling。
 
 ### Player
 
@@ -404,18 +428,51 @@ InputElems : float[7]
 
 ### 3.3 元素球在线行为
 
+当前数值基线：
+
+~~~text
+InitialAmount = random(8, 10)
+HalfLife = 15 min
+DestroyThreshold = total < 1
+SpawnCheckInterval = 5 min
+~~~
+
 元素球未被捕获时：
 
 - 玩家进入一定吸引范围后，元素球缓慢向该玩家飘动；
 - 颜色根据 `BALL_Elems` 表现；
-- 元素量随时间衰减。
-
-衰减沿用统一 Growth Tick 时间模型：
+- 按真实时间使用 15 分钟半衰期：
 
 ~~~text
 BALL_Elems[i]
-*= CFG_ElemBallRetentionPerHour ^ dtHours
+*= 0.5 ^ (dtMinutes / 15)
 ~~~
+
+当总量小于 1 时销毁。
+
+每 5 分钟最多尝试生成 1 个新球。生成概率读取当前场上未捕获元素球的元素总量：
+
+~~~text
+FieldBallTotal
+=
+Σ all active BALL_Elems
+
+SpawnChance
+=
+1 / (1 + (FieldBallTotal / 28)^3)
+~~~
+
+没有硬性 8 球上限；设计目标是通过总元素压力让大部分时间自然停留在约 8 个有效球以内。
+
+登录时最多回放最近 30 分钟的正常刷新历史，并按每颗球真实 SpawnTime / age 计算衰减：
+
+~~~text
+SimulateWindow
+=
+min(actualOfflineElapsed, 30 min)
+~~~
+
+不额外创建独立的“登录补偿球”规则。
 
 元素球被 Soil 捕获并销毁后，不再继续执行元素球衰减。
 
@@ -730,47 +787,80 @@ Convert_Nutrient_To_Growth
 这描述的是职责边界，不提前锁死 7.1 之后具体使用哪一种编辑器执行形式。
 
 
-### 5.1 Soil → Tree Reserve 的当前设计目标
+### 5.1 Soil → Tree 的当前吸收基线
 
-保留：
-
-~~~text
-SOIL_Elems
-→ TREE_Elems / Reserve
-→ TREE_Growth
-~~~
-
-这两层不是为了增加一次重复计算，而是用于表达外部环境与植物内部储备的不同状态。Tree Reserve 还承担离线缓冲、后续器官分流以及未来健康 / 富集 / 疾病系统的扩展接口。
-
-Soil → Tree 这一步不再使用 Growth Affinity，而使用独立的：
+RootPreference：
 
 ~~~text
-TREE_RootPreference[7]
+CFG_TreeRootPreference[7]
+=
+[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]
 ~~~
 
-语义是“根系更容易吃什么”，每个分量严格限制在：
+固定总吸收上限：
 
 ~~~text
-0 <= RootPreference[i] <= 1
+CFG_MaxTotalAbsorbPerHour = 1.0
 ~~~
 
-Growth Affinity 保持原有语义：元素进入 Reserve 后，决定它转换成 Growth 的效率，并继续参与连续学习与遗传。
+当前 Seed / Seedling / Sapling / Mature 都使用同一个总吸收上限。Stage 通过 GrowthThreshold 改变成长所需时间，不通过吸收速度变化制造阶段时长。
 
-吸收公式还必须满足一个新的体验约束：
+单元素基础 Cap：
 
-> 单一元素即使供应充足，也不能独自填满植物全部吸收 / 生长吞吐量。
+~~~text
+SingleElementBaseCapShare = 0.30
 
-因此不能把 MaxAbsorbPerHour(stage) 简单全部分配给当前唯一存在的元素。每个元素需要存在独立的有效吸收上限 / 饱和机制；多种元素共同存在时，各元素贡献可以叠加，使总吸收接近当前 Stage 的完整根系能力。
+ElementCap[i]
+=
+1.0 × 0.30 × Affinity[i]
+~~~
 
-期望体验：
+按当前 Tree 基础 Affinity：
 
-- 每天浇灌：可以长期保持接近满速成长；
-- 约 3 天维护一次：仍属于高速成长；
-- 约 7 天不补充：土壤应接近 / 达到完全耗尽；Tree Reserve 再提供一层缓冲；
-- 只浇一种元素：定向培养有效，但因为其他元素不能补足吸收配额，总成长速度明显下降；
-- 均衡 / 混合供给：更容易维持高吞吐量。
+~~~text
+Fire     0.255 / h
+Hydro    0.345 / h
+Anemo    0.270 / h
+Electro  0.225 / h
+Dendro   0.360 / h
+Cryo     0.210 / h
+Geo      0.285 / h
+~~~
 
-具体 RootPreference 数值、单元素饱和公式和 Stage 吸收速率仍是当前第 7 项需要继续收敛的内容。
+RootPreference 决定混合 Soil 中“更偏向吃什么”；Affinity 决定对应元素通道的最大吞吐，同时继续决定吸收后 Growth Conversion 的效率。
+
+这故意形成：
+
+~~~text
+高 Affinity
+→ 单元素通道更高
+→ 同样元素转化 Growth 更高效
+→ 为未来高亲和高产品种留下长期价值
+~~~
+
+Seed / Seedling：
+
+~~~text
+Soil
+→ Absorb
+→ 直接 Growth Conversion
+~~~
+
+Sapling 起：
+
+~~~text
+Soil
+→ Reserve
+→ Growth metabolism / 器官分流
+~~~
+
+当前仍待确认：
+
+- ElementCap 使用 BaseAffinity 还是实时 EffectiveAffinity；
+- 多元素在 RootPreference、各元素 Cap、Soil 可用量之间的最终重分配算法；
+- Sapling 起 Reserve → Growth 的完整数值。
+
+维护体验与详细推算统一见 [基础生长数值速查](growth-balance-baseline.md)。
 
 ### 5.2 培养结果的体验目标
 
@@ -834,9 +924,9 @@ Debug UI 状态归 Player 所有。
 - [x] 4. 土壤容量竞争公式与边界
 - [x] 5. Growth Tick 的信号 / 流水线顺序
 - [x] 6. Soil Growth Tick
-- [>] 7. Tree Growth Tick：吸收 / RootPreference / 单元素饱和
-- [ ] 8. Tree Growth Tick：Reserve → Growth
-- [ ] 9. Seedling → Sapling → Mature
+- [>] 7. Tree Growth Tick：吸收 / RootPreference / 单元素饱和（数值基线已锁，剩余分配算法待确认）
+- [ ] 8. Tree Growth Tick：Sapling 起 Reserve → Growth
+- [>] 9. Seed → Seedling → Sapling → Mature（前两段阈值已锁，Sapling → Mature 待确认）
 - [ ] 10. Debug Crop Inspector
 - [ ] 11. 文件拆分与最终 Spec / Issue
 
