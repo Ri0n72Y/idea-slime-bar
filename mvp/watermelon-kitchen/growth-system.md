@@ -25,9 +25,10 @@ flowchart TD
     --> B[土壤 SOIL_Elems]
 
     B -->|自然蒸发| X[环境损耗]
-    B -->|按 RootPreference / Stage 吸收| C[树体 Reserve<br/>TREE_Elems]
+    B -->|Seed / Seedling：直接吸收| D[树自身 Growth Vector]
+    B -->|Sapling 起：吸收到内部储备| C[树体 Reserve<br/>TREE_Elems]
 
-    C -->|Growth Tick| D[树自身 Growth Vector]
+    C -->|Growth Tick| D
 
     C -->|子器官分流| E[叶片]
     E -->|继续分流| F[花]
@@ -92,18 +93,20 @@ TREE_Elems[i]
 × (1 - TreeGrowthRetentionPerHour ^ dtHours)
 ```
 
-Stage 吸收能力也改用：
+当前基础生长链使用统一总吸收上限：
 
 ```text
-MaxAbsorbPerHour(stage)
+CFG_MaxTotalAbsorbPerHour = 1.0
 ```
+
+Seed / Seedling / Sapling / Mature 当前都使用同一个总吸收上限；Stage 不再通过“根系规模”改变每小时总吞吐，主要通过 GrowthThreshold 改变成长时间。
 
 当前结算量：
 
 ```text
 MaxAbsorbThisUpdate
 =
-MaxAbsorbPerHour(stage) × dtHours
+CFG_MaxTotalAbsorbPerHour × dtHours
 ```
 
 在线与离线应尽量共享同一套公式。离线时直接按真实经过时间计算；只有遇到 Stage 升级、器官生成等离散事件时才分段处理。
@@ -150,18 +153,59 @@ BALL_Elems : float[7]
 
 当前 MVP 只生成纯净元素球，即每个球只有一个元素维度大于 0，但接口仍保持完整七元素向量。
 
+当前元素球数值基线：
+
+```text
+BallInitialAmount = random(8, 10)
+BallHalfLife = 15 min
+BallDestroyThreshold = 1
+BallSpawnCheckInterval = 5 min
+```
+
+每 5 分钟最多尝试生成 1 个新球。生成概率读取当前场上所有未捕获元素球的元素总量：
+
+```text
+FieldBallTotal
+=
+Σ all active BALL_Elems
+
+SpawnChance
+=
+1 / (1 + (FieldBallTotal / 28)^3)
+```
+
+这里不存在硬性的“最多 8 个球”上限；总元素量越高，继续生成的概率越低，目标是形成大概率约 8 个以内的软稳态。
+
 `generate_elem_ball(InputElems)` 在以当前 Tree / 种植区为中心的圆环范围内随机生成元素球。圆环内径应避开 Soil 捕获区，避免出生即被土壤接收。
 
 未被捕获的元素球：
 
 - 玩家进入吸引范围后缓慢向玩家飘动；
 - 根据所含元素显示颜色；
-- 按 Growth Tick 的真实 `dt` 衰减：
+- 按真实经过时间使用 15 分钟半衰期连续衰减：
 
 ```text
 BALL_Elems[i]
-*= CFG_ElemBallRetentionPerHour ^ dtHours
+*= 0.5 ^ (dtMinutes / 15)
 ```
+
+当：
+
+```text
+Σ BALL_Elems < 1
+```
+
+时销毁元素球。
+
+登录时不额外生成“补偿球”，而是最多回放最近 30 分钟的正常刷新历史：
+
+```text
+SimulateWindow
+=
+min(actualOfflineElapsed, 30 min)
+```
+
+回放仍按每 5 分钟一次的正常生成检查处理，并根据每个球真实的 SpawnTime 计算登录时剩余元素量。
 
 Soil 的感应区捕获带有 `ElementBall` 标签的实体时，直接执行：
 
@@ -366,222 +410,335 @@ Sapling 阶段“Tree 自身长大”与“生成 / 培养叶片”如何竞争�
 
 ## 4. 树从土壤吸收
 
-水瓜树拥有内部储备：
+根系吸收由三层约束共同决定：
 
 ```text
-TREE_Elems : float[7]
+RootPreference
+→ 混合 Soil 中偏向吃什么
+
+Affinity
+→ 单元素通道能吃到多高
+→ 吸收后转成 Growth 有多高效
+
+Soil Supply
+→ 实际有没有这么多元素可吃
 ```
 
-并新增独立的根系吸收偏好：
+当前 Tree RootPreference 已锁定：
 
 ```text
-TREE_RootPreference : float[7]
-```
-
-每个分量严格位于：
-
-```text
-0 <= RootPreference[i] <= 1
-```
-
-RootPreference 的语义只有一个：
-
-> 决定根系在混合土壤中“更容易吃什么”。
-
-它与 Growth Affinity 分离。Growth Affinity 不再参与 Soil → Tree Reserve 的提取；它继续负责 Reserve → Growth 的转换效率、连续学习、Stage 固化与后续遗传。
-
-保留 Soil → Tree Reserve 这一层。它表示外部环境与植物内部储备之间的真实缓冲，也为离线生长、未来子器官分流、元素富集以及健康 / 疾病系统预留状态。
-
-### 4.1 Stage-specific 根系规模
-
-不同 Tree Stage 拥有不同的总体根系吸收能力：
-
-```text
-MaxAbsorbPerHour(stage)
-```
-
-当前结算仍按真实时间：
-
-```text
-MaxAbsorbThisUpdate
+CFG_TreeRootPreference[7]
 =
-MaxAbsorbPerHour(stage) × dtHours
+[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]
 ```
 
-体验上：
+顺序仍为：
 
 ```text
-Seedling : 少量
-Sapling  : 中量
-Mature   : 大量
+Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo
 ```
 
-具体数值暂不锁死。
+RootPreference 每个分量严格位于 0～1。它不再与 Growth Affinity 使用同一组数值。
 
-### 4.2 RootPreference 只决定吸收倾向
+### 4.1 总吸收上限
 
-在土壤中同时存在多种元素时，RootPreference 参与决定各元素的吸收倾向。
-
-概念上：
+当前基础生长链统一使用：
 
 ```text
-Available[i] = SOIL_Elems[i]
-Preference[i] = TREE_RootPreference[i]
+CFG_MaxTotalAbsorbPerHour = 1.0
 ```
 
-但当前**不锁定最终数学公式**。尤其不再使用旧规则：
+所有 Tree Stage 使用同一总吸收上限：
 
 ```text
-ExtractionAffinity = min(GrowthAffinity, 1)
+Seed
+Seedling
+Sapling
+Mature
 ```
 
-RootPreference 与 Growth Affinity 是两个独立参数，不能相互代替。
+Stage 主要通过 GrowthThreshold 改变成长所需总量，而不是通过改变每小时总吸收速度制造阶段时长差异。
 
-### 4.3 单元素不能撑满完整吞吐量
-
-吸收系统必须满足：
-
-> 即使某一种元素在 Soil 中供应充足，它也不能单独占满 Tree 当前 Stage 的全部吸收能力。
-
-因此最终公式需要为每个元素提供独立的有效吸收上限 / 饱和区间。多种元素同时存在时，各维度的有效吸收可以叠加，整体才有机会接近当前 Stage 的完整根系吞吐量。
-
-这使培养形成明确取舍：
+任意 dt：
 
 ```text
-混合 / 均衡供给
-→ 更容易维持高总吸收
-→ 生长速度高
-
-只供给单元素
-→ 目标元素仍能持续富集
-→ 但该元素较快达到自身吸收饱和
-→ 其他维度无法补足
-→ 总吸收 / 总生长明显下降
+MaxTotalAbsorbThisUpdate
+=
+1.0 × dtHours
 ```
 
-RootPreference 决定“偏向吃哪一种”，单元素饱和规则决定“不能只靠一种吃满”。
+总实际吸收还必须满足：
 
-具体 RootPreference 七元素基础值、饱和函数、每元素上限与 Stage 的组合方式，仍在基础生长链设计中继续收敛。
+```text
+Σ AbsorbElems[i]
+<= MaxTotalAbsorbThisUpdate
 
-### 4.4 当前维护节奏目标
+AbsorbElems[i]
+<= SOIL_Elems[i]
+```
 
-在忽略 / 简化其他损耗的平衡目标下，希望形成：
+### 4.2 单元素饱和
 
-- 每天维护 / 浇灌：长期接近满速成长；
-- 约 3 天维护一次：仍能保持高速成长；
-- 约 7 天不再补充：土壤应接近或达到完全耗尽；
-- Tree Reserve 再提供第二层营养缓冲，因此“土壤刚空”不等于植株立即停止全部成长。
+单元素基础吸收上限份额：
 
-这些是体验目标，不是当前已经锁定的吸收数值。
+```text
+SingleElementBaseCapShare = 0.30
+```
+
+某个元素的理论单通道上限：
+
+```text
+ElementCap[i]
+=
+CFG_MaxTotalAbsorbPerHour
+× 0.30
+× Affinity[i]
+```
+
+当前 Tree 基础 Affinity：
+
+```text
+[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]
+```
+
+因此理论单元素吸收上限 / h：
+
+| 元素 | Cap / h |
+| --- | ---: |
+| Fire | 0.255 |
+| Hydro | 0.345 |
+| Anemo | 0.270 |
+| Electro | 0.225 |
+| Dendro | 0.360 |
+| Cryo | 0.210 |
+| Geo | 0.285 |
+
+这里故意允许 Affinity 同时带来两层收益：
+
+```text
+高 Affinity
+→ 对应元素通道上限更高
+→ 同样元素转换 Growth 也更高效
+```
+
+这为后续“培养高亲和、高产量的特化品种”预留长期价值。
+
+单元素即使供应无限，也不能直接填满 1.0/h；多种元素通道可以叠加，熟练玩家可以用主元素 + 辅助元素在“元素倾向”和“总生长速度”之间做配比。
+
+Soil 中某元素实际供应不足时，实际吸收还会进一步低于该通道上限。因此早期只收一种随机元素球，不仅受到 30% 基准 Cap 限制，还会受到自然刷新供给不足的限制。
+
+**尚未锁定：**
+
+- ElementCap 最终读取当前 Stage 的 BaseAffinity 还是实时 EffectiveAffinity；
+- 多元素在 RootPreference、各自 ElementCap 与 Soil 可用量之间的最终重分配算法。
+
+实现阶段不得自行补这两个规则。
+
+### 4.3 Seed / Seedling 与 Sapling 的状态边界
+
+Seed 和 Seedling 没有 Tree Reserve：
+
+```text
+Seed / Seedling
+
+Soil
+→ Calculate_Absorption
+→ 按 Growth Affinity 直接转成 TREE_Growth
+```
+
+进入 Sapling 后才开始拥有：
+
+```text
+TREE_Elems[7] / Reserve
+```
+
+后续才进入：
+
+```text
+Soil
+→ Reserve
+→ Growth metabolism
+→ Tree / Leaf / Flower / Fruit 分流
+```
+
+因此 Reserve 是小树开始形成复杂器官后的内部缓冲，不参与 Seed / Seedling 的基础成长。
+
+### 4.4 培养速度的结构性检查
+
+普通随机七元素、能够吃满 1.0/h 时，当前 RootPreference 加权后的基础平均 Growth Affinity 约为：
+
+```text
+0.9504
+```
+
+所以满速普通 Growth 约：
+
+```text
+0.9504 Growth / hour
+```
+
+理论策略检查：
+
+```text
+普通随机七元素：
+Absorb ≈ 1.0/h
+Growth ≈ 0.9504/h
+
+纯 Dendro：
+Absorb cap = 0.36/h
+Growth ≈ 0.432/h
+
+Hydro + Dendro：
+Absorb cap = 0.705/h
+Growth ≈ 0.829/h
+
+Hydro + Dendro + Geo：
+Absorb cap ≈ 0.99/h
+Growth ≈ 1.10/h
+```
+
+这意味着“只喂目标元素”很准但慢；懂配比的玩家可以用辅助元素补总吞吐，并可能比完全随机杂食更高效。这是有意保留的培养深度。
+
+完整数值速查与推算见 [基础生长数值速查](growth-balance-baseline.md)。
 
 
 ---
 
-## 5. 种子激活与树体 Stage
+## 5. Seed → Seedling → Sapling
 
-正式进入 Tree Stage 之前，水瓜以半埋在土中的 Seed 状态存在。
+正式 Tree Stage 之前，水瓜以半埋在土中的 Seed 状态存在。
 
-Seed 本身暂不视为 Tree 的三个成长 Stage 之一，而是一个发芽前状态：
+当前早期阶段：
 
 ```text
 Seed
-→ 满足土壤激活条件
-→ Germination Progress
 → Seedling
 → Sapling
 → Mature
 ```
 
-发芽所需时间作为可配置参数，例如第一版体验目标约 1～2 天，但不在当前文档锁死具体数值。
+Seed 不计入正式 Tree Stage 编号，但它和 Seedling 一样都直接从 Soil 吸收并形成 Growth，不再使用独立的 GerminationProgress / GerminationRate 计时器。
 
-发芽进度按实际经过时间累计，而不是依赖 Tick 次数：
+### 5.1 Seed → Seedling
 
-```text
-GerminationProgress
-+= GerminationRatePerHour × dtHours
-```
-
-土壤达到怎样的“浇够水”条件才开始 / 继续发芽，仍留给基础生长链需求逐条确认。
-
-### 5.1 三个 Tree Stage
-
-树有三个主要阶段：
+Seed 没有 Reserve：
 
 ```text
-Seedling 水瓜幼苗
-→ Sapling 水瓜树苗
-→ Mature 水瓜树
+Soil
+→ Absorb
+→ Growth Conversion
+→ SEED_Growth[7]
 ```
 
-每个 Stage 都有独立的：
-
-- Base Affinity；
-- Effective Affinity；
-- Growth Vector；
-- MaxAbsorbPerHour；
-- GrowthThreshold。
-
-### 5.2 Stage 升级
-
-达到当前阶段 GrowthThreshold 后：
+当前阈值：
 
 ```text
-进入下一 Stage
-→ 清空 TREE_Growth[7]
-→ 当前 Effective Affinity 固定为下一阶段 Base Affinity
-→ 下一阶段重新累积
+SeedGrowthThreshold = 45
 ```
 
-Stage 永不因为 Growth 被清空、扣除或子器官分流而回退。
-
-### 5.3 幼苗体验目标
-
-普通玩家应当能够在**一周内**从 Seedling 长成 Sapling。
-
-幼苗吸收量较低，主要作用是建立“浇灌—吸收—颜色—成长”的第一层反馈。
-
-### 5.4 小树体验目标
-
-Sapling：
-
-- 最多拥有 **2 个叶片位**；
-- 每片正在生长的叶片分走约 `0.3` 的生长预算；
-- 两片叶同时存在时，树自身只保留约 `0.4` 的生长预算。
-
-当前可按：
+普通随机混合供给、满吸收时：
 
 ```text
-0 片叶：Tree 1.0
-1 片叶：Tree 0.7 / Leaf 0.3
-2 片叶：Tree 0.4 / Leaf A 0.3 / Leaf B 0.3
+AverageGrowthAffinity ≈ 0.9504
+FullSpeedGrowth ≈ 0.9504 / h
+
+45 / 0.9504
+≈ 47.35 h
 ```
 
-理解第一版分流。
+因此积极玩家第一次把 Soil 做到 80 以上并规律维护时，第三个自然日 / 超过约 48 小时再次上线，应已经看到发芽后的 Seedling。
 
-Sapling 的体验目标：
+Seed Growth 本身已经保存七元素组成，因此发芽前后的轻微颜色变化、粒子逸散等表现可以直接读取真实 Growth / Affinity，不再额外维护一套 Germination Exposure。
 
-- 普通玩家：每周约成熟 2 片可收获叶；
-- 勤劳玩家：每周约成熟 4 片；
-- 元素使用正确时可以进一步提高；
-- 正常约 2～3 周成长为 Mature；
-- 玩家如果主动掰掉叶片、减少子器官分流并持续催长，可以探索出约 **1 周进入 Mature** 的快速路线。
+Stage 切换：
 
-这不是独立“加速按钮”，而是养分分流模型自然产生的策略。
+```text
+Seed Growth 达到 45
+→ 当前 EffectiveAffinity 固化为 Seedling BaseAffinity
+→ Growth 清零
+→ 进入 Seedling
+```
 
-### 5.5 成树
+### 5.2 Seedling → Sapling
 
-进入 Mature 后：
+Seedling 同样没有 Reserve：
 
-- 不再升级回其他树 Stage；
-- 后续 Growth 用于持续生成嫩叶等器官；
-- 生成器官会扣除对应 Growth，但不会使树回退阶段；
-- 成树拥有明显更高的 `MaxAbsorbPerHour`。
+```text
+Soil
+→ Absorb
+→ Growth Conversion
+→ TREE_Growth[7]
+```
 
-当前方向仍保留成树拥有更多叶片位；具体上限与单叶分流比例在 Mature Spec 中再平衡。
+当前阈值：
+
+```text
+SeedlingGrowthThreshold = 90
+```
+
+普通随机混合供给、满吸收时：
+
+```text
+90 / 0.9504
+≈ 94.70 h
+```
+
+因此两个早期阶段理论合计：
+
+```text
+≈ 142.0 h
+≈ 5.92 days
+```
+
+真实随机、漏球和非满 Soil 会留出少量余量，使积极玩家自然落在“约一周进入 Sapling”的目标窗口。
+
+### 5.3 Sapling
+
+进入 Sapling 后：
+
+- 开始拥有 `TREE_Elems[7] / Reserve`；
+- 开始进入 Tree Reserve → Growth 的代谢；
+- 开始进入抽叶、开花和下游器官分流玩法；
+- 总吸收上限仍为 1.0/h，不因 Stage 改变。
+
+Sapling → Mature 的 GrowthThreshold 与器官分流后的成熟时间仍待后续数值设计。
+
+### 5.4 第一周体验目标
+
+```text
+Day 0
+→ 第一次进入
+→ 积极玩家通常把 Soil 做到 80+
+→ 休闲玩家可以直接做到 100
+
+约 47h
+→ Seedling
+→ 第三个自然日上线时应已经看到发芽后的幼苗
+
+再约 95h
+→ Sapling
+
+理论满速总计约 6 天
+→ 真实体验约一周
+→ 开始抽叶 / 开花
+```
+
+半休闲玩家的预期节奏：
+
+```text
+第一次：浇透
+第二次：补水 + 看见明显的发芽过程反馈
+第三次：已经发芽
+```
+
+每周一次玩家第一次把 Soil 做到 100 后，第二次约一周上线时应看到已经发芽并继续成长了一段时间的植株，同时 Soil 已经明显需要再次维护。
+
 
 ---
 
-## 6. 树体内部储备、休眠与生长
+## 6. Sapling 起的树体内部储备、休眠与生长
+
+Tree Reserve 从 Sapling 开始进入模型。Seed / Seedling 不拥有 Reserve。
 
 树内部储备总量：
 
@@ -589,11 +746,11 @@ Sapling 的体验目标：
 TreeReserveTotal = Σ TREE_Elems[i]
 ```
 
-树体颜色直接以当前 Reserve 的组成作为表现来源之一，因此植株本身可以持续显示当前内部营养倾向。
+树体颜色可以读取当前 Reserve 组成作为表现来源之一，因此进入 Sapling 后，植株本身能够持续显示当前内部营养倾向。
 
 ### 6.1 休眠迟滞
 
-沿用当前方向：
+当前沿用已有基线：
 
 ```text
 Growing:
@@ -605,18 +762,16 @@ TreeReserveTotal >= 80
 → Growing
 ```
 
-Dormant 状态：
+Dormant：
 
-- 仍允许继续从土壤吸收；
-- 不进行正常 Growth Conversion；
+- 仍允许继续从 Soil 吸收；
+- 暂停正常 Growth Conversion；
 - 不死亡；
 - 达到恢复阈值后重新启动生长。
 
-具体阈值仍可在平衡阶段调整。
+`30 / 80` 当前仍属于后续 Sapling / Mature 平衡需要复核的基线，不在本轮早期阶段数值中重新锁死。
 
-### 6.2 树体生长消耗
-
-树体生长消耗使用单位时间比例，不再使用“每 Tick 固定消耗 1%”。
+### 6.2 Tree Reserve 生长代谢
 
 当前基线：
 
@@ -633,13 +788,10 @@ TREE_Elems[i]
 × (1 - 0.99 ^ dtHours)
 ```
 
-这些养分先向子器官分流，剩余部分再按完整 Tree Affinity 转换成：
+这些养分先进入子器官分流，再由剩余预算按完整 Growth Affinity 转换为 Tree Growth。
 
-```text
-TREE_Growth[7]
-```
+Sapling 的 Reserve 上限、初始 Reserve、Sapling → Mature GrowthThreshold 和叶 / 花 / 果分流后的实际周产量，留到下一轮数值设计。
 
-不再设置统一“转换损耗”。
 
 ---
 
@@ -809,6 +961,7 @@ Fruit 决定“果子最终装了多少内容物”
 Base Affinity
 → 连续学习
 → Stage 固定
+→ 影响单元素吸收通道上限
 → 决定 Growth 转换效率
 → 决定外观 / 生长速度
 ```
@@ -832,19 +985,29 @@ Base Affinity
 
 ## 11. 当前体验目标
 
-本系统的平衡目标不是让低频玩家“错过一天就停长”。
+本系统的平衡目标不是让低频玩家“错过一天就停长”，也不是让长期挂机线性换取无限产量。
 
-希望形成：
+当前希望形成：
 
-- 完全不了解系统的玩家，把随机刷出的元素球都投入土壤，通常得到元素组成较均衡、味道接近普通基线但带少量随机差异的普通水瓜；
-- 随机输入仍可能偶然形成较高的水 / 草等元素倾向，让新人偶尔获得特殊水瓜，但不容易稳定复现；
-- 每天维护可以让树长期接近高供给和满速成长；
-- 约 3 天维护一次仍然属于高速成长；
-- 约 7 天不补充时，土壤应接近 / 达到完全耗尽，Tree Reserve 继续提供第二层缓冲；
-- 主动只供给单元素可以定向培养，但总吸收与生长速度会因为单元素饱和而明显下降；
-- 有经验的玩家通过控制多元素比例，在“目标性状”和“生长速度”之间寻找更优解。
+- 第一次进入的玩家通常会想尽可能多做一些事，正常目标是把 Soil 做到至少 80；休闲玩家可以直接浇满 100；
+- 积极玩家第三个自然日 / 超过约 48 小时再次上线时，应已经看到发芽后的幼苗；
+- 积极玩家持续规律维护约一周，应进入 Sapling，开始进入抽叶 / 开花阶段；
+- 半休闲玩家形成“第一次浇透 → 第二次补水并看到发芽过程 → 第三次已发芽”的连续反馈；
+- 每周一次玩家第一次浇满 100，一周后回来时应看到已经发芽并继续成长了一段时间的植物，同时 Soil 已明显需要再次维护；
+- 完全不了解系统的新人把随机元素球都投入土壤，通常得到普通水瓜，但随机输入保留偶然形成 Hydro / Dendro 倾向、发现特殊水瓜的机会；
+- 主动只供给单元素可以稳定定向，但受到单元素通道 Cap 和自然供给不足双重限制，总成长明显变慢；
+- 有经验的玩家可以用目标元素 + 辅助元素补足吞吐，在性状与产量之间寻找更高效的配比。
 
-具体产量、RootPreference、吸收饱和函数与 Stage 阈值需要通过 Debug UI 和实际 Tick 模拟继续校准。
+成熟期仍保留以下待反推的周产量目标：
+
+| 上线习惯 | 目标 |
+| --- | ---: |
+| 每天维护 | 约 4–6 个水瓜 / 周 |
+| 每周 2–3 天 | 约 2–4 个水瓜 / 周 |
+| 每周 1 天 | 约 2 个水瓜 / 周，且再次上线时 Soil 已明显需要维护 |
+
+完整体验—数值速查见 [基础生长数值速查](growth-balance-baseline.md)。
+
 
 ---
 
@@ -853,13 +1016,12 @@ Base Affinity
 第一轮可见闭环优先实现：
 
 ```text
-土壤元素
-→ 树体吸收
-→ 树体 Reserve
-→ Growth Tick
-→ Tree Growth Vector
-→ 生成嫩叶
-→ 叶片 Growth Vector
+元素球
+→ Soil
+→ Seed：直接吸收并形成 Growth
+→ Seedling：直接吸收并形成 Growth
+→ Sapling：开始拥有 Reserve
+→ Tree Growth / 叶片 / 花果分流
 → 叶片阶段变化
 → 颜色变化
 → 采集
