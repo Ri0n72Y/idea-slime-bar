@@ -366,9 +366,9 @@ TREE_EffectiveAffinity[i] = TREE_BaseAffinity[i]
 
 只有 Growth 会塑造当前亲和。
 
-### Stage 升级
+### Seed / Seedling Stage 升级
 
-Tree 自身进入下一 Stage：
+Seed / Seedling 自身进入下一 Stage：
 
 ```text
 TREE_EffectiveAffinity
@@ -378,11 +378,41 @@ TREE_Growth
 → 清零
 ```
 
-### 未来生成叶片
+### Sapling 主干亲和循环
 
-当 Tree 未来生成叶片时，Tree 自身 Affinity 不改变。
+Sapling 不再继续升级到 Mature。当前主干 Growth 只用于自身亲和塑形和出芽竞争。
 
-父体当前偏移：
+当前主干一轮 Growth 上限：
+
+```text
+SaplingTreeGrowthCycle = 100
+```
+
+当：
+
+```text
+Σ TREE_Growth >= 100
+```
+
+时：
+
+```text
+根据本轮 TREE_Growth[7] 的组成更新 / 固定 Tree Affinity
+→ TREE_Growth 开启下一轮累计
+→ Tree Stage 不变化
+```
+
+因此“主干长满”表示完成一次树体亲和塑形周期，不表示进入新的 Tree Stage。
+
+### 叶芽与叶片亲和
+
+新叶先经历 Bud 阶段。Bud 使用独立的：
+
+```text
+BUD_Growth[7]
+```
+
+并沿用既有父子器官亲和初始化：
 
 ```text
 ParentOffset[i]
@@ -390,12 +420,8 @@ ParentOffset[i]
 TREE_EffectiveAffinity[i]
 -
 TREE_BaseAffinity[i]
-```
 
-叶片继承：
-
-```text
-LEAF_BaseAffinity[i]
+BUD_BaseAffinity[i]
 =
 CFG_LeafAffinity[i]
 +
@@ -404,7 +430,25 @@ ParentOffset[i] × CFG_AffinityInherifanceRate
 
 当前继承率为 0.5。
 
-Sapling 阶段“Tree 自身长大”与“生成 / 培养叶片”如何竞争同一份 Growth，当前暂不设计，不阻塞本轮 Tree 三阶段基础流程。
+Bud 出现后，新产生的“主干自身 Growth”不再进入 TREE_Growth，而进入 BUD_Growth。Bud 的颜色 / 元素倾向直接读取这段实际 Growth 的组成。
+
+当 Bud 累积满当前阈值 20 后：
+
+```text
+Σ BUD_Growth >= 20
+→ 固定 Bud 当前 Effective Affinity
+→ Bud 成为 Tender Leaf / 小叶
+→ 新叶从该亲和起点继续自己的 Growth
+```
+
+如果玩家在 Bud 完成前掐掉嫩叶芽：
+
+```text
+TREE_Growth[i] += BUD_Growth[i]
+Destroy Bud
+```
+
+即芽期已经形成的 Growth 完整退回主干，不产生额外损耗。
 
 ---
 
@@ -448,16 +492,15 @@ RootPreference 每个分量严格位于 0～1。它不再与 Growth Affinity 使
 CFG_MaxTotalAbsorbPerHour = 1.0
 ```
 
-所有 Tree Stage 使用同一总吸收上限：
+当前版本使用同一总吸收上限：
 
 ```text
 Seed
 Seedling
 Sapling
-Mature
 ```
 
-Stage 主要通过 GrowthThreshold 改变成长所需总量，而不是通过改变每小时总吸收速度制造阶段时长差异。
+Seed / Seedling 通过 GrowthThreshold 推进到下一阶段。Sapling 是当前版本的主要长期玩法阶段，不再继续推进到 Mature；Mature 的最终设计延后。
 
 任意 dt：
 
@@ -692,18 +735,136 @@ SeedlingGrowthThreshold = 90
 
 真实随机、漏球和非满 Soil 会留出少量余量，使积极玩家自然落在“约一周进入 Sapling”的目标窗口。
 
-### 5.3 Sapling
+### 5.3 Sapling：当前版本的主要长期阶段
 
 进入 Sapling 后：
 
 - 开始拥有 `TREE_Elems[7] / Reserve`；
 - 开始进入 Tree Reserve → Growth 的代谢；
-- 开始进入抽叶、开花和下游器官分流玩法；
-- 总吸收上限仍为 1.0/h，不因 Stage 改变。
+- 开始抽叶、开花、结果和长期亲和塑形；
+- 总吸收上限仍为 1.0/h；
+- 当前版本不再推进到 Mature，最终成株设计延后；
+- 当前树冠上限为 3 片叶。
 
-Sapling → Mature 的 GrowthThreshold 与器官分流后的成熟时间仍待后续数值设计。
+Sapling 的主要体验不再是“等待下一 Stage”，而是：
 
-### 5.4 第一周体验目标
+```text
+维护 Soil / Reserve
+→ 主干亲和逐轮塑形
+→ 每日尝试出芽
+→ 叶片竞争生长预算
+→ 花 / 果生产
+→ 玩家通过掐芽改变“扩张叶片”与“主干塑形”的取舍
+```
+
+### 5.4 每日 04:00 出芽检查
+
+出芽是每日离散事件，不在每个 Growth Tick 中投概率。
+
+当前统一使用服务器时间：
+
+```text
+DailyBudCheckAt = 04:00
+```
+
+每跨过一个 04:00 边界，先把上一事件边界到 04:00 之间的连续 Growth 结算完，再根据 04:00 当时的真实状态进行一次出芽判断。
+
+如果已经存在 Active Bud，则当天不再投新的出芽概率。
+
+当前概率：
+
+| 当前已形成叶片数 | 04:00 出芽概率 |
+| ---: | ---: |
+| 0 | 0.80 |
+| 1 | 0.40 |
+| 2 | 0.01 |
+| 3 | 0 |
+
+因此：
+
+- 0 → 1 叶是快速建立基础生产能力；
+- 1 → 2 叶是几天内逐渐形成的正常扩张；
+- 2 → 3 叶是长期低概率的旺盛状态；
+- 3 叶是当前版本树冠上限，不再继续出芽。
+
+如果 04:00 检查失败，当天不补投；下一次机会是下一个 04:00。
+
+### 5.5 Bud Growth 路由与“掐芽催熟”
+
+Tree Reserve 每次代谢产生本 Tick 的生长养分预算后，先向已经形成的叶片 / 下游器官分流；剩余的 Tree Own Budget 再按 Tree Affinity 转成“主干自身 GrowthGain”。
+
+没有 Active Bud 时：
+
+```text
+Tree Own GrowthGain
+→ TREE_Growth[7]
+```
+
+存在 Active Bud 时：
+
+```text
+Tree Own GrowthGain
+→ BUD_Growth[7]
+
+TREE_Growth 暂停增加
+```
+
+Bud 当前 Growth 阈值：
+
+```text
+BudGrowthThreshold = 20
+```
+
+玩家在芽未完成时采掉它：
+
+```text
+TREE_Growth[i] += BUD_Growth[i]
+BUD_Growth = 0
+Destroy Bud
+```
+
+因此“掐芽催熟”不依赖额外 Buff。玩家只是取消这次叶片扩张，把芽期投入完整退回主干，使主干更快完成自己的 100 Growth 亲和塑形周期。
+
+如果不掐：
+
+```text
+Σ BUD_Growth >= 20
+→ 固定 Bud Affinity
+→ 成为新叶
+→ 这 20 Growth 已经真正投入器官，不再回主干
+```
+
+### 5.6 叶片数量与主干预算
+
+沿用旧版“子器官先分流、主干拿剩余”的设计。当前每片已形成叶片占用约 0.3 的 Tree Growth Nutrient Budget：
+
+```text
+0 叶：
+Tree 1.0
+
+1 叶：
+Tree 0.7
+Leaf A 0.3
+
+2 叶：
+Tree 0.4
+Leaf A 0.3
+Leaf B 0.3
+
+3 叶：
+Tree 0.1
+Leaf A 0.3
+Leaf B 0.3
+Leaf C 0.3
+```
+
+这里的比例作用于“本 Tick 的生长养分预算”，不是从已经累计的 TREE_Growth 中持续扣值。
+
+所以第三片叶虽然增加生产器官，但会让主干自身 Growth 几乎停止；这是当前设计的预期取舍。
+
+有 Active Bud 时，Bud 只接管上表中的 Tree 份额，不会抢走已有 Leaf / Flower 已经分到的预算。
+
+### 5.7 第一周与 Sapling 体验目标
 
 ```text
 Day 0
@@ -720,18 +881,16 @@ Day 0
 
 理论满速总计约 6 天
 → 真实体验约一周
-→ 开始抽叶 / 开花
+→ 正式进入长期抽叶 / 花果玩法
 ```
 
-半休闲玩家的预期节奏：
+进入 Sapling 以后，当前参数的第一轮平衡目标是：
 
-```text
-第一次：浇透
-第二次：补水 + 看见明显的发芽过程反馈
-第三次：已经发芽
-```
-
-每周一次玩家第一次把 Soil 做到 100 后，第二次约一周上线时应看到已经发芽并继续成长了一段时间的植株，同时 Soil 已经明显需要再次维护。
+- 第一片叶很快开始形成；
+- 大约一周逐渐进入两叶主状态；
+- 第三片叶在前几周只出现在少量植株上；
+- 玩家掐芽可以明显提高主干亲和塑形速度，但会放弃叶片生产扩张；
+- 当前版本不以进入 Mature 作为主要目标。
 
 
 ---
@@ -788,22 +947,29 @@ TREE_Elems[i]
 × (1 - 0.99 ^ dtHours)
 ```
 
-这些养分先进入子器官分流，再由剩余预算按完整 Growth Affinity 转换为 Tree Growth。
+这些养分先进入子器官分流，再由剩余预算按完整 Growth Affinity 转换为 Tree Own GrowthGain。
 
-Sapling 的 Reserve 上限、初始 Reserve、Sapling → Mature GrowthThreshold 和叶 / 花 / 果分流后的实际周产量，留到下一轮数值设计。
+当前叶片分流基线为每片 0.3；0 / 1 / 2 / 3 叶对应主干剩余 1.0 / 0.7 / 0.4 / 0.1。存在 Active Bud 时，Tree Own GrowthGain 改写入 BUD_Growth；否则写入 TREE_Growth。
+
+Sapling 的 Reserve 上限、初始 Reserve、叶 / 花 / 果后续阈值与实际周产量仍需继续平衡。
 
 
 ---
 
 ## 7. 叶片
 
-叶片有三个 Stage：
+当前叶—花—果的玩家可见发育链：
 
 ```text
-Tender 嫩叶
-→ Thick 肥厚叶
-→ Mature 成叶
+嫩叶芽 Bud
+→ 小叶
+→ 大叶·花苞
+→ 大叶·鲜花
+→ 大叶·幼果
+→ 成叶·成果
 ```
+
+内部仍可保留 Leaf 的 Tender / Thick / Mature 语义，但表现与花果状态按上面的连续链组织。Bud 是成为正式叶片之前的独立前置状态。
 
 叶片**没有独立 Reserve**。
 
@@ -901,10 +1067,11 @@ Flower
 花：
 
 - 没有独立长期 Reserve；
-- 从上游叶片 / 植株获得当 Tick 养分；
+- 从上游叶片本 Tick 的养分预算中优先分流；
 - 具有环境蒸发；
 - 持续进行 Affinity 学习；
-- 持续累积自己的 Growth Vector。
+- 持续累积自己的 Growth Vector；
+- 不从已经累计好的 LEAF_Growth 中持续扣取 Growth。
 
 花期累积的 Growth / Affinity 决定未来果实的：
 
@@ -932,6 +1099,18 @@ Flower
 Flower 决定“果子长成什么样”
 Fruit 决定“果子最终装了多少内容物”
 ```
+
+当前花果体验节奏继续保持约 2 天。表现顺序为：
+
+```text
+大叶·花苞
+→ 大叶·鲜花
+→ 大叶·幼果
+→ 成叶·成果
+≈ 48h
+```
+
+各子阶段如何拆分这 48 小时尚未锁定。
 
 ---
 
