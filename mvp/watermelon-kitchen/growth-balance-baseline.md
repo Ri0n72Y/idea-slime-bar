@@ -31,7 +31,7 @@ Seed / Seedling 阶段要尽早提供轻反馈：
 
 ### 成熟后的长期维护目标
 
-这部分是后续 Sapling / Mature 平衡的产量目标，**当前尚未完成数值反推**：
+这部分是 Sapling 长期生产循环的产量目标，**当前尚未完成最终数值反推**：
 
 | 上线习惯 | 周产量体验目标 |
 | --- | ---: |
@@ -246,7 +246,7 @@ Affinity：
 CFG_MaxTotalAbsorbPerHour = 1.0
 ```
 
-当前基础设计中，Seed / Seedling / Sapling / Mature **不因 Stage 改变这个总吸收上限**。
+当前基础设计中，Seed / Seedling / Sapling **不因 Stage 改变这个总吸收上限**；Mature 最终设计延后。
 
 Stage 的主要时间差异通过：
 
