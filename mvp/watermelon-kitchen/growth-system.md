@@ -99,7 +99,7 @@ TREE_Elems[i]
 CFG_MaxTotalAbsorbPerHour = 1.0
 ```
 
-Seed / Seedling / Sapling / Mature 当前都使用同一个总吸收上限；Stage 不再通过“根系规模”改变每小时总吞吐，主要通过 GrowthThreshold 改变成长时间。
+当前版本的 Seed / Seedling / Sapling 都使用同一个总吸收上限。Seed / Seedling 通过 GrowthThreshold 推进；Sapling 作为长期玩法阶段继续沿用同一吸收上限，不再通过 Stage 升级改变总吞吐。
 
 当前结算量：
 
