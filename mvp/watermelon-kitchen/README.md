@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**设计状态：总体闭环与数据边界已收敛；Seed → Seedling → Sapling 的第一周数值基线已经锁定，当前重点转向 Sapling 起的 Reserve / 叶花果分流与成熟产量。**
+**设计状态：总体闭环与数据边界已收敛；Seed → Seedling → Sapling 的第一周数值基线已经锁定，Sapling 现作为当前版本主要长期玩法阶段，重点转向每日出芽、叶片分流、花果循环与产量。**
 
 当前已经固定：
 
@@ -18,8 +18,12 @@
 - 土壤 → 树体 → 子器官的七元素养分流模型；
 - 统一 Growth Tick、固定 1.0/h 总吸收上限、RootPreference、单元素 30%×Affinity Cap、内部储备与 Growth Vector；
 - Stage 升级时清空 Growth，并固定当前连续学习得到的亲和作为下一阶段基准；
-- 叶片的嫩叶 / 肥厚叶 / 成叶阶段与子器官分流；
-- 花与果作为同一器官的两个阶段；
+- Sapling 每日服务器时间 04:00 的出芽检查、0/1/2/3叶概率 0.80 / 0.40 / 0.01 / 0；
+- Bud 独立 Growth、20 Growth 成叶、掐芽时 Growth 完整回主干；
+- 0/1/2/3叶时 Tree 剩余生长预算 1.0 / 0.7 / 0.4 / 0.1，每片叶约0.3；
+- Sapling 主干100 Growth只更新自身亲和，不进入下一 Stage；
+- 叶片的嫩芽 / 小叶 / 大叶 / 成叶与子器官分流；
+- 花与果作为同一器官的两个阶段，当前花果体验链约48小时；
 - 基于 UTC 时间的离线 Growth Tick 补算方向；
 - 全局可调配置与七元素固定索引；
 - 只显示最强元素颜色、不提供元素 UI；
@@ -72,11 +76,15 @@ Seed / Seedling：直接转成 Growth
 ↓
 Sapling 起：进入树体 Reserve
 ↓
-生长预算向叶 / 花 / 果分流
+每日04:00检查出芽 + Bud / Leaf 长期循环
 ↓
-按亲和转换为 Growth Vector
+生长预算先向叶 / 花 / 果分流
 ↓
-连续学习亲和 + Stage 变化
+Tree Own Growth 写入主干或 Active Bud
+↓
+按亲和转换为各自 Growth Vector
+↓
+连续学习亲和；Sapling 主干满100只更新自身亲和
 ↓
 器官颜色 / 形态变化
 ↓
@@ -103,10 +111,11 @@ Sapling 起：进入树体 Reserve
 2. 建立统一 Growth Tick，并支持按 UTC 时间补算离线 Tick。
 3. 实现元素球刷新 / 半衰、土壤浇灌与容量归一化、土壤蒸发、RootPreference / 单元素饱和吸收。
 4. 实现 Seed → Seedling → Sapling 的直接 Growth 转换，再进入 Sapling 起的 Reserve / Growth 模型。
-5. 实现叶片生成、叶片三个 Stage、子器官分流、连续学习与显色。
-6. 接入最小点击劳动和叶片采集，形成第一条可重复的可见闭环。
-7. 再接入元素球、花果、口味、绽放、取汁与水瓜汁混合。
-8. 最后把各独立功能串成完整“培养 → 采集 → 制作 → 发现 → 再培养”闭环。
+5. 实现每日04:00出芽事件、Bud=20、掐芽回流、最多3叶和 Tree/Leaf 分流。
+6. 实现叶片发育、花果子器官分流、连续学习与显色。
+7. 接入最小点击劳动和叶片采集，形成第一条可重复的可见闭环。
+8. 再接入元素球、花果、口味、绽放、取汁与水瓜汁混合。
+9. 最后把各独立功能串成完整“培养 → 采集 → 制作 → 发现 → 再培养”闭环。
 
 这里描述的是实现依赖顺序，不额外增加新的玩法设计。
 
@@ -145,7 +154,7 @@ Sapling 起：进入树体 Reserve
 
 进入开发时，以下内容仍应保持未定义状态，不应由实现者自行扩写：
 
-- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90 已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity 的选择、多元素重分配算法、Sapling → Mature 阈值、Reserve 细节与成熟产量；
+- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90、Sapling 主干100 Growth周期、Bud=20、每日04:00出芽概率和0~3叶分流已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity 的选择、多元素重分配算法、Reserve 上限 / 休眠细节、Leaf / Flower 阈值与最终产量；
 - 元素球的刷新位置、牵引细节、多人归属与元素种类的进一步叙事规则；
 - 元素锁定能力的获取、解除和表现方式；
 - 第二种及之后的元素反应；
