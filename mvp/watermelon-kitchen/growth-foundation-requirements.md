@@ -1,6 +1,6 @@
 # 水瓜厨房：基础生长链需求草案
 
-本文用于逐条收敛“浇水 → 土壤元素 → 树体吸收 → Growth Tick → 三阶段成熟 → Debug”的第一条基础生长链。
+本文用于逐条收敛“浇水 → 土壤元素 → 树体吸收 → Growth Tick → Seed / Seedling → Sapling 长期器官循环 → Debug”的第一条基础生长链。
 
 当前只记录已经讨论到的方向和待确认问题，**不作为实现 Spec，也不直接进入开发**。后续每次只处理一个小节，确认后再继续下一项。
 
@@ -20,7 +20,8 @@ Debug 生成元素球
 → AquamelonTree 从 Soil 吸收
 → Seed / Seedling：直接转化为 Growth
 → Sapling 起：先进入 TREE_Elems / Reserve，再进入 Growth / 器官分流
-→ Seedling → Sapling → Mature
+→ 每日 04:00 出芽检查
+→ Bud / Leaf / Flower / Fruit 长期循环
 → Debug UI 可查看 / 修改当前作物状态
 ~~~
 
@@ -41,14 +42,14 @@ Debug 生成元素球
 
 ### 已明确确认
 
-- [x] 本轮只围绕基础生长链：浇水 → 土壤元素 → 树体吸收 / 累积 → Growth → Seedling / Sapling / Mature → Debug 查看修改。
+- [x] 本轮围绕基础生长链：浇水 → 土壤元素 → 树体吸收 / 累积 → Growth → Seedling → Sapling 长期器官循环 → Debug 查看修改。
 - [x] 本轮实体固定为 4 类：Soil、AquamelonTree、Level、Player。
 - [x] CFG 不再使用结构体，恢复为普通变量和 `float[7]` 列表，命名继续采用 `CFG_xxx`。
 - [x] Level 保存 Tree / Leaf / Fruit 等器官的基础亲和模板。
 - [x] Tree / Leaf / Fruit 将来各自拥有个体亲和，不只永久读取全局 CFG。
-- [x] Tree Stage 固定为 Seedling → Sapling → Mature。
+- [x] 当前版本 Tree 主阶段为 Seedling → Sapling；Sapling 是主要长期玩法阶段，Mature 最终设计延后。
 - [x] Tree Reserve 与 Growth 分离；`TREE_Growth` 是七元素向量。
-- [x] Stage 升级后清空当前 Growth，并在新 Stage 重新累计；Stage 本身不回退。
+- [x] Seed / Seedling 升级后清空当前 Growth 并在新阶段重新累计；Sapling 不再升级，主干每累计 100 Growth 完成一次自身亲和塑形周期。
 - [x] `RootPreference[7]` 与 Growth Affinity 正式分离：RootPreference 负责混合 Soil 中“更偏向吃什么”，范围严格为 `0~1`；Affinity 不再充当吸收偏好权重，但会影响单元素吸收 Cap，并继续负责 Growth 转换效率、连续学习与遗传，允许超过 1。
 - [x] 只保留连续学习，不使用阶段跃迁时的离散元素奖励。
 - [x] Soil 捕获元素球时直接把 `BALL_Elems` 累加到 `SOIL_Elems`，不设 Pending 层、不在捕获时做容量计算。下一 Growth Tick 开始时若 Soil 总量超过容量，再对当前 `SOIL_Elems` 整体等比例压缩到容量，多余部分丢弃。
@@ -64,6 +65,12 @@ Debug 生成元素球
 - [x] 单元素基础吸收 Cap 已锁定为 `0.30 × Affinity[i]`；高 Affinity 同时提高对应元素通道上限和 Growth 转换效率。
 - [x] Seed / Seedling 不拥有 Reserve，吸收后直接转化为 Growth；Sapling 起才开始拥有 `TREE_Elems[7]`。
 - [x] Seed → Seedling 的 GrowthThreshold 已锁定为 45；Seedling → Sapling 已锁定为 90。普通随机满速基线下约 47.35h + 94.70h，总计约 5.92 天。
+- [x] Sapling 主干 Growth 周期阈值 = 100；达到后只更新 / 固定自身元素亲和，不进入下一 Stage。
+- [x] 出芽只在服务器时间每日 04:00 检查一次：0叶 0.80、1叶 0.40、2叶 0.01、3叶 0。
+- [x] Bud 使用独立 `BUD_Growth[7]`，阈值 = 20；Active Bud 存在时，Tree 自身本应获得的 GrowthGain 全部进入 Bud。
+- [x] 玩家掐掉未完成 Bud 时，`BUD_Growth` 完整合并回 `TREE_Growth`；Bud 正常到 20 后固定亲和并成为正式叶片。
+- [x] 叶片分流继续使用本 Tick 生长养分预算：0叶 Tree 1.0；1叶 Tree 0.7 + Leaf 0.3；2叶 Tree 0.4 + 两叶各0.3；3叶 Tree 0.1 + 三叶各0.3。三叶时主干几乎停止是预期结果。
+- [x] 离线恢复按事件边界回放：连续 Growth 区间用真实 dt 批算；跨过 04:00 时先结算此前 Growth，再用当时真实 LeafCount / Bud 状态投一次出芽。
 - [x] Debug UI 必须能够立即推进下一次 Growth Tick；调试推进使用一个标准在线更新步长，不需要真实等待下一次调度。
 
 ### 已选方向，但实现细节未确认
@@ -81,8 +88,9 @@ Debug 生成元素球
 - [x] Growth Tick 的信号 / 流水线顺序与状态边界。
 - [x] Soil Growth Tick：容量归一化 → 蒸发 → 进入 Tree Growth Update。
 - [>] Tree 从 Soil 吸收：RootPreference、总吸收上限 1.0/h、单元素 `0.30 × Affinity` Cap 和 Stage 不改变总吸收上限均已确认；仍待确认 Base / Effective Affinity 取值以及多元素重分配算法。
-- [ ] Sapling 起 Reserve → Growth 的完整公式与边界。
-- [>] Stage：Seed → Seedling = 45、Seedling → Sapling = 90 已确认；Sapling → Mature 及器官分流后的阈值仍待确认。
+- [>] Sapling 起 Reserve → Growth：Tree / Leaf 基础分流与 Bud Growth 路由已确认；Reserve 上限、Dormant 阈值和 Flower 分流仍待继续确认。
+- [x] Stage：Seed → Seedling = 45、Seedling → Sapling = 90 已确认；Sapling 作为当前长期终态，不再推进 Mature。
+- [>] Sapling 器官链：每日出芽、Bud=20、最多3叶和 Tree/Leaf 分流已确认；Leaf → Flower → Fruit 具体阈值仍待确认。
 - [ ] Debug UI 的具体控件和交互。
 - [ ] 最终文件拆分与 Spec / Issue。
 
@@ -157,19 +165,22 @@ SOIL_Elems[7]
 ~~~text
 TREE_Elems[7]
 TREE_Growth[7]
+BUD_Growth[7]              # 仅 Active Bud 存在时
 TREE_BaseAffinity[7]
 TREE_EffectiveAffinity[7]
 TREE_RootPreference[7]
 TREE_Stage
 ~~~
 
-正式 Tree Stage 之前还有半埋在土里的 Seed 状态。Seed 暂不计入三个 Tree Stage：
+正式 Tree Stage 之前还有半埋在土里的 Seed 状态。当前版本阶段：
 
 ~~~text
 Seed
 → 0 = Seedling
 → 1 = Sapling
-→ 2 = Mature
+
+Sapling = 当前长期玩法阶段
+Mature = 延后设计
 ~~~
 
 Seed 与 Seedling 当前都没有 Tree Reserve，直接：
@@ -803,7 +814,7 @@ CFG_TreeRootPreference[7]
 CFG_MaxTotalAbsorbPerHour = 1.0
 ~~~
 
-当前 Seed / Seedling / Sapling / Mature 都使用同一个总吸收上限。Stage 通过 GrowthThreshold 改变成长所需时间，不通过吸收速度变化制造阶段时长。
+当前 Seed / Seedling / Sapling 都使用同一个总吸收上限。Seed / Seedling 通过 GrowthThreshold 推进；Sapling 不再升级，而是在长期器官循环中持续使用同一吸收上限。
 
 单元素基础 Cap：
 
