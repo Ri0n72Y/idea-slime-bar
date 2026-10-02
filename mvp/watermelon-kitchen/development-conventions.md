@@ -38,8 +38,9 @@
 SOIL_Elems[7]              土壤元素储备
 
 TREE_Elems[7]              树体内部 Reserve（Sapling 起使用；Seed / Seedling 不使用）
-TREE_Growth[7]             树体当前 Stage 的 Growth Vector
-TREE_BaseAffinity[7]       当前 Stage 的基础亲和
+TREE_Growth[7]             树体当前 Growth Vector；Sapling 中按100为一个主干亲和塑形周期
+BUD_Growth[7]              Active Bud 的独立 Growth Vector；芽被掐时完整退回 TREE_Growth
+TREE_BaseAffinity[7]       当前 Stage / 周期的基础亲和
 TREE_EffectiveAffinity[7]  当前 Stage 连续学习后的有效亲和
 TREE_RootPreference[7]     根系对七元素的吸收偏好，范围 0~1
 
@@ -81,7 +82,7 @@ Soil
 
 进入 Sapling 后才开始使用 `TREE_Elems[7]` / Reserve。
 
-Stage 升级时清空的是当前 Stage 的 Growth Vector，不是内部 Reserve；Seed / Seedling 因为没有 Reserve，不存在对应清空问题。
+Seed / Seedling 升级时清空当前 Stage 的 Growth Vector，不清空 Reserve。Sapling 不再继续升级到 Mature；`TREE_Growth` 达到 100 只触发一次树体亲和更新 / 固化，并开始下一轮主干 Growth 累积。
 
 ## RootPreference 与 Affinity 的边界
 
@@ -190,14 +191,14 @@ BaseAffinity
 → EffectiveAffinity
 ```
 
-进入下一 Stage 时：
+Seed / Seedling 进入下一 Stage 时：
 
 ```text
 BaseAffinity = 当前 EffectiveAffinity
 Growth = zero vector
 ```
 
-下一 Stage 再从新的 BaseAffinity 开始连续学习。
+Sapling 没有下一 Stage。当前主干每累计满 100 Growth，按本轮 Growth 组成更新 / 固定自身 Affinity，然后开始下一轮主干 Growth 累积。
 
 不实现离散“升级时额外 +100% / +200% 某元素亲和”的奖励。
 
@@ -256,8 +257,10 @@ range = [0, 1]
 - 固定总吸收上限 `CFG_MaxTotalAbsorbPerHour = 1.0`；
 - 单元素基础 Cap `0.30 × Affinity`；
 - Seed / Seedling 的 GrowthThreshold（当前已锁定为 45 / 90）；
-- Sapling → Mature 及子器官后续 GrowthThreshold；
-- 子器官分流比例；
+- Sapling 主干 Growth 周期阈值（当前 100）；
+- Bud GrowthThreshold（当前 20）；
+- 每日 04:00 出芽概率（0叶0.80 / 1叶0.40 / 2叶0.01 / 3叶0）；
+- 子器官分流比例（当前 Leaf 每片 0.3；0/1/2/3叶时 Tree 剩余 1.0/0.7/0.4/0.1）；
 - 各器官 Stage 的环境损耗；
 - 连续学习参数；
 - 表型阈值。
@@ -274,13 +277,15 @@ range = [0, 1]
 
 ```text
 LastGrowthTickAt
+LastBudCheck / 可等价判断是否已处理某个服务器日 04:00
 ```
 
 用于：
 
 - 在线 Tick 调度；
-- 离线期间根据 UTC 时间计算漏掉的 Tick；
-- 批量补算或等价近似。
+- 离线期间根据真实经过时间补算连续 Growth；
+- 登录时按事件边界回放每日 04:00 出芽检查；
+- 防止短时间重登重复触发同一个服务器日的出芽机会。
 
 元素球仍拥有自己的出生 / 保存时间规则，不与 Growth Tick 时间戳混为一谈。
 
@@ -296,6 +301,41 @@ Login catch-up window = max recent 30 min
 ```
 
 登录补算按真实 SpawnTime 和球龄计算半衰，不额外制造一套“登录补偿球”。
+
+## Sapling Bud 与分流状态约定
+
+Sapling 的出芽不是每 Tick 随机事件，而是服务器时间每日 04:00 的离散事件。
+
+当前规则：
+
+```text
+LeafCount 0 → 0.80
+LeafCount 1 → 0.40
+LeafCount 2 → 0.01
+LeafCount 3 → 0
+```
+
+如果 04:00 已存在 Active Bud，则跳过当天检查。
+
+Tree Reserve 形成的本 Tick生长养分预算先向已存在叶片分流：
+
+```text
+0叶：Tree 1.0
+1叶：Tree 0.7 / Leaf 0.3
+2叶：Tree 0.4 / Leaf A 0.3 / Leaf B 0.3
+3叶：Tree 0.1 / Leaf A 0.3 / Leaf B 0.3 / Leaf C 0.3
+```
+
+有 Active Bud 时，Tree 份额转换得到的 GrowthGain 写入 `BUD_Growth[7]`，而不是 `TREE_Growth[7]`。Bud 累计满 20 后成为正式叶片；若玩家提前掐芽，则：
+
+```text
+TREE_Growth[i] += BUD_Growth[i]
+BUD_Growth = zero vector
+```
+
+Bud 是持久世界状态，不是一次 Tick 的临时变量，因为离线回放和玩家采芽都需要跨 Tick 读取。
+
+离线补算不得简单把完整离线时长压成一次最终计算；至少需要按 04:00、Bud 达到阈值、Tree Growth 达到100、Leaf / Flower / Fruit 阈值等离散事件边界分段。
 
 ## 节点图实现原则
 
