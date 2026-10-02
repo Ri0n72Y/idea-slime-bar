@@ -353,27 +353,28 @@ CFG_AffinityInherifanceRate = 0.5
 
 子器官出生后，再根据自己的 Growth Vector 独立计算 Effective Affinity。
 
-### 2.4 当前暂不处理的分叉
+### 2.4 Sapling 主干与出芽竞争 —— 已确认
 
-在 Sapling 阶段，之后会同时存在：
+Sapling 不再继续升级到 Mature。当前同一份 Tree Own GrowthGain 在“主干自身亲和塑形”和“当前 Active Bud”之间二选一：
 
 ~~~text
-Growth 达标
-├── 自身继续长大
-└── 生成 / 培养叶片
+没有 Active Bud
+→ Tree Own GrowthGain → TREE_Growth
+
+存在 Active Bud
+→ Tree Own GrowthGain → BUD_Growth
 ~~~
 
-这意味着同一份 Growth 未来可能面对多个成长目标。
+其中：
 
-当前还不决定：
+~~~text
+TREE_Growth cycle = 100
+BUD_Growth threshold = 20
+~~~
 
-- 两个目标的触发优先级；
-- 是否使用同一个 GrowthThreshold；
-- 长叶是否消耗 Tree Growth；
-- Tree Growth 在生成叶片后是否部分保留；
-- “长大”和“长叶”能否同时发生。
+Bud 正常到 20 后成为叶片；玩家提前掐芽，则 Bud Growth 完整并回 TREE_Growth。
 
-这一问题先挂起，不阻塞当前只实现 Tree 自身 Seedling → Sapling → Mature 的基础流程。
+因此“掐芽催熟”不是额外加速，而是主动放弃叶片扩张、把已投入芽的 Growth 收回主干。
 
 
 ---
@@ -936,9 +937,10 @@ Debug UI 状态归 Player 所有。
 - [x] 5. Growth Tick 的信号 / 流水线顺序
 - [x] 6. Soil Growth Tick
 - [>] 7. Tree Growth Tick：吸收 / RootPreference / 单元素饱和（数值基线已锁，剩余分配算法待确认）
-- [ ] 8. Tree Growth Tick：Sapling 起 Reserve → Growth
-- [>] 9. Seed → Seedling → Sapling → Mature（前两段阈值已锁，Sapling → Mature 待确认）
-- [ ] 10. Debug Crop Inspector
-- [ ] 11. 文件拆分与最终 Spec / Issue
+- [>] 8. Tree Growth Tick：Sapling 起 Reserve → Growth（Tree/Leaf/Bud 分流已锁，Reserve 与 Flower 细节待确认）
+- [x] 9. Seed → Seedling → Sapling（45 / 90 已锁；Sapling 为当前长期终态）
+- [>] 10. Sapling 每日出芽 / Bud / 0~3叶循环（基础规则已锁，Leaf/Flower/Fruit 阈值待继续）
+- [ ] 11. Debug Crop Inspector
+- [ ] 12. 文件拆分与最终 Spec / Issue
 
 在以上内容逐条确认前，不进入实际实现。
