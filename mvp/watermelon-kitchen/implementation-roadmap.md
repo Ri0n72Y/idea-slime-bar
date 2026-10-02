@@ -122,7 +122,7 @@ flowchart TD
 - [ ] `SOIL_Elems : float[7]`。
 - [ ] `TREE_Elems : float[7]`，语义为 Sapling 起的树体内部 Reserve；Seed / Seedling 不使用 Reserve。
 - [ ] `TREE_Growth : float[7]`。
-- [ ] Seed 前置状态 + `TREE_Stage`：Seedling / Sapling / Mature。
+- [ ] Seed 前置状态 + `TREE_Stage`：Seedling / Sapling；Mature 最终设计延后。
 - [ ] Tree Base Affinity / Effective Affinity。
 - [ ] `LastGrowthTickAt`。
 - [ ] 状态初始化、读取、保存边界。
@@ -155,11 +155,12 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] F2.4 Seed / Seedling：吸收结果直接转换为 Growth。
 - [ ] F2.5 Sapling 起：吸收结果写入 Tree Reserve。
 - [ ] F2.6 Sapling 起判断 Growing / Dormant，并从 Reserve 提取生长预算。
-- [ ] F2.7 先向子器官分流，再把剩余预算转换为 `TREE_Growth[7]`。
-- [ ] F2.8 连续学习 Effective Affinity。
-- [ ] F2.9 检查 Stage / 器官生成条件。
-- [ ] F2.10 更新 `LastGrowthTickAt`。
-- [ ] F2.11 离线进入时批量补算或使用经 Spec 验证的等价近似。
+- [ ] F2.7 先向已存在 Leaf / Flower 分流，再把 Tree 剩余预算转换为 Tree Own GrowthGain。
+- [ ] F2.8 无 Active Bud 时写入 `TREE_Growth[7]`；有 Active Bud 时写入 `BUD_Growth[7]`。
+- [ ] F2.9 连续学习 Effective Affinity；Seed / Seedling 检查 Stage，Sapling 检查主干100 Growth周期和 Bud=20。
+- [ ] F2.10 跨服务器时间 04:00 时，先结算此前连续 Growth，再基于真实 LeafCount / Bud 状态做一次出芽检查。
+- [ ] F2.11 更新 `LastGrowthTickAt` 与每日 Bud 检查状态。
+- [ ] F2.12 离线进入时按事件边界分段回放，不逐分钟模拟，也不把整个离线区间错误压成一次最终随机计算。
 
 复杂流程不得全部塞进单一节点图；实际开发时按上述职责继续拆 Flow Block / Spec。
 
@@ -214,33 +215,40 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 
 目标：把树体 Growth 和子器官建立成可持续运行的生长链。
 
-#### F5-Tree — 树体 Stage
+#### F5-Tree — Seed / Seedling / Sapling
 
-- [ ] Seed → Seedling → Sapling → Mature。
+- [ ] Seed → Seedling → Sapling；Sapling 是当前版本长期玩法阶段，Mature 延后。
 - [ ] Seed / Seedling 没有 Reserve，直接 Soil → Absorb → Growth。
 - [ ] Sapling 起开始拥有 Tree Reserve。
-- [ ] 每个 Stage 有独立 Growth Vector。
-- [ ] 升级 Stage 时清空 Growth。
-- [ ] 升级时固定当前 Effective Affinity 为下一 Stage 的 Base Affinity。
-- [ ] 所有阶段当前统一使用 `MaxTotalAbsorbPerHour = 1.0`。
+- [ ] Seed / Seedling 升级时清空 Growth，并固定当前 Effective Affinity 为下一 Stage Base。
+- [ ] 所有当前阶段统一使用 `MaxTotalAbsorbPerHour = 1.0`。
 - [ ] Seed → Seedling 的 GrowthThreshold = 45。
 - [ ] Seedling → Sapling 的 GrowthThreshold = 90。
-- [ ] Mature 生成器官后只扣 Growth，不回退 Stage。
+- [ ] Sapling 主干 Growth 周期 = 100；满值只更新 / 固定自身 Affinity，不升级 Stage。
+- [ ] 每日服务器时间 04:00 检查一次出芽：0叶0.80 / 1叶0.40 / 2叶0.01 / 3叶0。
+- [ ] Active Bud 使用 `BUD_Growth[7]`；阈值 = 20。
+- [ ] Bud 存在时，Tree Own GrowthGain 全部写入 Bud，Tree Growth 暂停增长。
+- [ ] 玩家掐芽时，Bud Growth 完整合并回 Tree Growth。
+- [ ] Bud 正常到 20 后固定亲和并成为正式叶片。
+- [ ] 当前最多 3 叶。
 
 体验目标：
 
 - 积极玩家约 47h 后看到 Seedling，第三个自然日上线时已有明确发芽反馈。
-- 再约 95h 进入 Sapling；真实体验约一周开始抽叶 / 开花。
-- Sapling：正常约 2～3 周进入 Mature。
-- 玩家主动摘叶减少分流并持续催长时，可以探索出约 1 周进入 Mature 的快速路线。
+- 再约 95h 进入 Sapling；真实体验约一周进入主要长期玩法。
+- Sapling 后约第1天常见第一芽，第3天左右形成第一片叶，第6～7天逐渐进入两叶主状态。
+- 第三叶在前几周只属于少量旺盛植株。
+- 玩家掐芽不是获得额外加速 Buff，而是把 Bud Growth 退回主干，更快完成主干100 Growth亲和塑形周期。
 
 #### F5-Leaf — 叶片
 
-- [ ] Sapling 最多 2 个叶片位。
-- [ ] 0 叶时树自身获得 1.0 生长预算。
-- [ ] 1 叶时约为 Tree 0.7 / Leaf 0.3。
-- [ ] 2 叶时约为 Tree 0.4 / Leaf A 0.3 / Leaf B 0.3。
-- [ ] Tender → Thick → Mature。
+- [ ] 当前 Sapling 最多 3 片叶。
+- [ ] 0 叶时 Tree 1.0。
+- [ ] 1 叶时 Tree 0.7 / Leaf 0.3。
+- [ ] 2 叶时 Tree 0.4 / Leaf A 0.3 / Leaf B 0.3。
+- [ ] 3 叶时 Tree 0.1 / 三片 Leaf 各0.3；主干几乎停止是预期结果。
+- [ ] 玩家可见链：嫩叶芽 → 小叶 → 大叶·花苞 → 大叶·鲜花 → 大叶·幼果 → 成叶·成果。
+- [ ] 内部 Leaf 仍可保留 Tender → Thick → Mature 语义。
 - [ ] 叶片没有独立 Reserve，吸多少当 Tick 用多少。
 - [ ] Tender 当前无环境损耗。
 - [ ] Mature 当前自身保留率基线 0.6，约 0.4 逸散到环境。
@@ -253,6 +261,8 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 这部分已经有模型，但不要求进入第一条可见闭环。
 
 - [ ] Flower 与 Fruit 是同一器官的两个 Stage。
+- [ ] Flower 从 Leaf 本 Tick 生长预算中分流，不从已累计的 LEAF_Growth 中持续扣值。
+- [ ] 当前花果链体验目标约 48h：大叶·花苞 → 大叶·鲜花 → 大叶·幼果 → 成叶·成果。
 - [ ] Flower 持续学习 Affinity，并存在蒸发。
 - [ ] Flower 阶段决定未来果皮颜色 / 形态和 Fruit Stage 基准亲和。
 - [ ] 进入 Fruit 后固定 Affinity，不再继续学习。
@@ -490,8 +500,8 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 - [ ] 土壤元素按 RootPreference、1.0/h 总上限和单元素 Cap 被吸收。
 - [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 按 0.99/h retention 产生生长预算。
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
-- [ ] Sapling 最多出现 2 个叶片位。
-- [ ] 叶片获得约 0.3 的分流预算。
+- [ ] Sapling 当前最多出现 3 片叶；大多数长期处于2叶，少量进入3叶。
+- [ ] 每片叶获得约 0.3 的分流预算；3叶时 Tree 仅保留约0.1。
 - [ ] 叶片经历 Tender → Thick → Mature。
 - [ ] 叶片 Effective Affinity 持续学习。
 - [ ] Stage 升级固定亲和并清空 Growth。
@@ -561,7 +571,7 @@ SOIL_Elems
 - 水瓜汁混合；
 - 气候反馈；
 - 遗传；
-- Mature 阶段完整产量平衡；
+- Mature 最终设计；
 - 正式多器官生态。
 
 ### 4.7 后续扩展
