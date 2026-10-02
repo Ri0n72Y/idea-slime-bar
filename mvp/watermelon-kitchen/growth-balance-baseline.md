@@ -530,25 +530,271 @@ Growth 约：
 
 ---
 
-## 9. 当前继续设计的边界
+## 9. Sapling：当前版本主玩法阶段
 
-下一阶段讨论从 Sapling 开始：
+当前版本不再要求 Sapling 继续成长为 Mature。Sapling 本身就是主要长期玩法阶段，当前树冠上限为 3 片叶。
+
+主干本身继续累计 Growth，但用途改为周期性亲和塑形：
 
 ```text
-Sapling
-→ 开始拥有 Reserve
-→ TreeGrowthRetentionPerHour = 0.99 的生长代谢
-→ 叶片 / 花 / 果分流
-→ 成熟产量
+SaplingTreeGrowthCycle = 100
+
+Σ TREE_Growth >= 100
+→ 根据本轮 Growth 组成更新 / 固定 Tree Affinity
+→ 开启下一轮主干 Growth 累计
+→ Stage 不变化
 ```
 
-需要继续反推：
+因此“主干长满”不再解锁下一个 Stage。
 
-- Sapling → Mature 的 GrowthThreshold；
+---
+
+## 10. 每日出芽事件
+
+出芽只在服务器时间每天 04:00 检查一次。
+
+```text
+DailyBudCheckAt = 04:00
+```
+
+当前概率已经锁定：
+
+| 当前叶片数 | 当日出芽概率 |
+| ---: | ---: |
+| 0 | 0.80 |
+| 1 | 0.40 |
+| 2 | 0.01 |
+| 3 | 0 |
+
+如果 04:00 时已经存在尚未完成的 Active Bud，则当天跳过，不再补投。
+
+这一组概率的体验含义：
+
+- 第一片叶基本会很快建立；
+- 第二片叶通常需要再等几天；
+- 第三片叶在前几周属于少量旺盛植株；
+- 第四片叶当前版本不产生。
+
+---
+
+## 11. Bud Growth 与掐芽催熟
+
+Bud 拥有独立七元素 Growth：
+
+```text
+BUD_Growth[7]
+BudGrowthThreshold = 20
+```
+
+Tree Reserve 产生本 Tick Growth Nutrient Budget 后，先按已有叶片数量分流：
+
+```text
+0叶：Tree 1.0
+1叶：Tree 0.7 / Leaf 0.3
+2叶：Tree 0.4 / Leaf A 0.3 / Leaf B 0.3
+3叶：Tree 0.1 / Leaf A 0.3 / Leaf B 0.3 / Leaf C 0.3
+```
+
+这里的比例作用于**本 Tick 生长养分预算**，不是持续从已经累计的 TREE_Growth 中扣值。
+
+没有 Bud：
+
+```text
+Tree Own GrowthGain
+→ TREE_Growth
+```
+
+有 Bud：
+
+```text
+Tree Own GrowthGain
+→ BUD_Growth
+
+TREE_Growth 暂停增加
+```
+
+如果玩家在 Bud 完成前掐掉嫩叶芽：
+
+```text
+TREE_Growth[i] += BUD_Growth[i]
+BUD_Growth = 0
+Destroy Bud
+```
+
+因此芽期 Growth 不损失，而是回到主干。这就是当前版本“掐芽催熟”的真实机制：
+
+> 放弃一次叶片扩张，把已经投入芽的 Growth 退回主干，让主干更快完成 100 Growth 的亲和塑形周期。
+
+如果 Bud 正常长到 20：
+
+```text
+Σ BUD_Growth >= 20
+→ 固定 Bud 当前亲和
+→ 变成正式 Leaf
+```
+
+这 20 Growth 已经成为器官，不再退回主干。
+
+三片叶时，主干只剩约 0.1 的预算，几乎停止自身 Growth；这是当前设计的正确结果，而不是需要修正的异常。
+
+---
+
+## 12. 登录时的离线事件回放
+
+当前数值设计的目标不是模拟“24 小时在线世界”，而是在登录时恢复离线期间真正应该发生的结果。
+
+因此离线计算不是只做一次总 dt，也不能简单在最后补投若干次随机事件。
+
+应按关键事件边界分段：
+
+```text
+LastUpdate
+→ 下一个 04:00
+→ Bud 达到 20
+→ Leaf / Flower / Fruit 阈值
+→ Tree Growth 达到 100
+→ 下一个 04:00
+→ ...
+→ Now
+```
+
+每个连续区间使用真实 dt 批量计算 Soil / Reserve / Growth；到 04:00 边界时，必须先完成此前 Growth，再读取当时真实叶数和 Bud 状态投一次当天的出芽概率。
+
+示意：
+
+```text
+9/27 18:00 last update
+↓
+9/28 04:00
+先计算 10h Growth
+→ 再投当天 Bud
+
+如果成功：
+04:00 后 Tree Own Growth → BUD_Growth
+
+如果 Bud 在当天达到20：
+→ Bud → Leaf
+
+↓
+9/29 04:00
+基于此刻真实 LeafCount / ActiveBud 再投一次
+...
+↓
+Login Now
+```
+
+短时间重登不会重复获得当天 04:00 的机会。
+
+---
+
+## 13. 第一轮叶片时间推算
+
+以下只作为当前平衡检查，不是硬编码时间。
+
+假设：
+
+- Sapling 刚进入时 Reserve 从 0 开始；
+- Soil 长期足够，吸收维持约 1.0/h；
+- `TreeGrowthRetentionPerHour = 0.99`；
+- 普通混合 Growth Affinity 暂按平均 `0.9504`；
+- 暂不叠加尚未解决的实时 EffectiveAffinity 正反馈；
+- 每片叶固定分流 0.3；
+- Bud 需要 20 Growth。
+
+Reserve 进入稳态后，Bud 的理论成长速度约为：
+
+| 已有叶数 | Bud 获得的 Tree 份额 | Bud Growth / h | 20 Growth 理论时间 |
+| ---: | ---: | ---: | ---: |
+| 0 | 1.0 | ≈ 0.950 | ≈ 21.0h |
+| 1 | 0.7 | ≈ 0.665 | ≈ 30.1h |
+| 2 | 0.4 | ≈ 0.380 | ≈ 52.6h |
+
+考虑 Sapling 初期 Reserve 从 0 热机，以及每天 04:00 的真实出芽概率后，第一轮事件模拟约得到：
+
+| 事件 | 平均时间 | 中位数 | 90% 玩家此前完成 |
+| --- | ---: | ---: | ---: |
+| 第一芽出现 | ≈ 0.75d | ≈ 0.62d | ≈ 1.62d |
+| 第一片叶形成 | **≈ 3.20d** | **≈ 3.11d** | **≈ 3.54d** |
+| 第二芽出现 | ≈ 5.13d | ≈ 4.56d | ≈ 7.71d |
+| 第二片叶形成 | **≈ 6.84d** | **≈ 6.28d** | **≈ 9.16d** |
+
+所以当前参数自然形成：
+
+```text
+进入 Sapling
+→ 第1天左右常见第一芽
+→ 第3天左右第一片叶
+→ 第5天左右常见第二芽
+→ 第6~7天进入两叶主状态
+```
+
+第三片叶因为同时受到“每天 1%”和“只有 0.4 主干预算”两层限制，会成为长期小概率状态。
+
+当前模拟约为：
+
+```text
+14天内形成第3叶 ≈ 5%
+30天内 ≈ 19%
+60天内 ≈ 40%
+
+第3叶形成时间中位数 ≈ 78天
+平均值 ≈ 108天
+```
+
+这符合“绝大部分两片叶、少量三片叶”的当前目标。
+
+---
+
+## 14. 叶—花—果当前体验链
+
+当前可见发育顺序：
+
+```text
+嫩叶芽
+→ 小叶
+→ 大叶·花苞
+→ 大叶·鲜花
+→ 大叶·幼果
+→ 成叶·成果
+```
+
+沿用旧模型：
+
+- Leaf 没有独立 Reserve；
+- 每 Tick 从 Tree Growth Nutrient Budget 分流自己的份额；
+- Flower 再从 Leaf 本 Tick 的预算中优先分流；
+- Flower 不是从已累计的 LEAF_Growth 中持续扣 Growth；
+- Flower 阶段持续 Growth / Affinity 学习；
+- 进入 Fruit 后 Affinity 固定，不再继续学习；
+- Fruit 后续重点累计实际元素力 / 汁液 / 内容物。
+
+当前花果链目标仍为约 2 天：
+
+```text
+大叶·花苞
+→ 大叶·鲜花
+→ 大叶·幼果
+→ 成叶·成果
+≈ 48h
+```
+
+48 小时内部各子阶段的具体拆分尚未锁定。
+
+---
+
+## 15. 当前继续设计的边界
+
+当前下一步不再反推 Sapling → Mature，而是继续完善 Sapling 自身的长期生产循环。
+
+仍需确认：
+
 - Sapling Reserve 的进入 / 上限 / 恢复规则；
 - `30 / 80` Dormant / Growing 迟滞是否继续作为最终值；
-- Tree Growth 与叶片、花果的分流；
-- 每天玩家 4–6 果 / 周、每周 2–3 天玩家 2–4 果 / 周、每周一次玩家约 2 果 / 周的成熟期数值；
+- 小叶 → 大叶·花苞所需 Growth；
+- Flower 从 Leaf 本 Tick 预算中分走多少；
+- 48h 花果周期内部各阶段阈值；
+- 成果采摘后叶片如何继续循环 / 衰老 / 再次开花；
+- 每天玩家 4–6 果 / 周、每周 2–3 天玩家 2–4 果 / 周、每周一次玩家约 2 果 / 周的最终产量；
 - 单元素 Cap 到底读取 BaseAffinity 还是 EffectiveAffinity；
 - 多元素吸收预算的最终重分配算法。
 
