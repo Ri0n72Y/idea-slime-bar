@@ -806,15 +806,33 @@ Flower 凋谢
 
 ### 生殖器官 nutrient sink
 
-当前相对父级 Leaf Growth Nutrient Budget 的目标：
+这里是**第二层、leaf-local 分流**。第一层 `Tree -> Tree self + each Leaf` 的 0/1/2/3 叶预算保持不变；Flower / Fruit 的 sink 分母只等于“所属母叶本次 settlement 获得的 Growth Nutrient Budget”，不会重新分配 Tree 或其它叶片的预算。
 
 | 阶段 | Sink baseline / target | 设计含义 |
 | --- | ---: | --- |
-| Flower | ≈ 50% | 强 sink，仍保留明显 Leaf 自身预算 |
-| Green Fruit | 80–90% | 极强 sink，使其它生长几乎停滞；实现时再校准区间 |
-| Mature Fruit | ≈ 20% | 成熟后低效率继续富集 |
+| Flower | ≈ 50% | 从母叶预算取约一半，母叶自身仍保留约一半 |
+| Green Fruit | 80–90% | 从母叶预算取绝大部分，使该母叶自身成长几乎停滞；实现时再校准区间 |
+| Mature Fruit | ≈ 20% | 从母叶预算取少量继续富集，母叶恢复大部分自身成长 |
 
-Green Fruit 的 `80–90%` 当前故意保留为区间，不擅自收敛到单一数字。
+Green Fruit 的 `80–90%` 当前故意保留为区间，不擅自收敛到单一数字。多叶同时结果时，每个 Fruit 只在自己的母叶预算内部独立分流，不做跨叶归一化或全局 sink cap。
+
+三叶 Tree 示例，若 Leaf A 挂 Green Fruit 且本次 sink 取 85%：
+
+```text
+Level 1:
+Tree   = 0.1
+Leaf A = 0.3
+Leaf B = 0.3
+Leaf C = 0.3
+
+Level 2 inside Leaf A:
+Fruit A     = 0.3 * 0.85 = 0.255
+Leaf A self = 0.3 * 0.15 = 0.045
+
+Tree / Leaf B / Leaf C 保持 0.1 / 0.3 / 0.3
+```
+
+摘除 Fruit 只会让所属母叶重新获得完整的自身 Leaf budget；不会触发其它叶片或 Tree 的第一层预算重分配。
 
 ### Fruit Flavor 与成熟后继续富集
 

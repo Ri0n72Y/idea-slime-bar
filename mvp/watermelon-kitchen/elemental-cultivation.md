@@ -17,7 +17,7 @@
 ↓
 Growth Tick 消耗 Reserve 并形成七元素 Growth Vector
 ↓
-树向叶 / 花 / 果等子器官分流
+Tree 先向各 Leaf 做第一层预算分流；每片 Leaf 再只在自己的预算内向附属 Flower / Fruit 分流
 ↓
 器官按自身亲和、Stage 与损耗继续生长
 ↓
@@ -193,7 +193,7 @@ TreeGrowthRetentionPerHour = 0.99
 
 在线更新周期只控制反馈频率，真实变化量按 `RatePerHour + dt` 计算。
 
-树体内部元素的减少主要来自“用于生长的实际代谢和向子器官分流”，而不是额外再叠加统一的树体自然蒸发。
+树体内部元素的减少主要来自“用于生长的实际代谢和 Tree → Leaf 第一层分流”；Flower / Fruit 只继续分流所属母叶已经获得的预算，而不是额外从整株 Tree 抽取。树体不再额外叠加统一的自然蒸发。
 
 ## 培养结果与玩家体验目标
 

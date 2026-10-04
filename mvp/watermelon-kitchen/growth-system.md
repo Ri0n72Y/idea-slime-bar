@@ -601,7 +601,8 @@ TREE_Elems[7] / Reserve
 Soil
 → Reserve
 → Growth metabolism
-→ Tree / Leaf / Flower / Fruit 分流
+→ Level 1：Tree self + each Leaf
+→ Level 2：each Leaf self + its attached Flower / Fruit
 ```
 
 因此 Reserve 是小树开始形成复杂器官后的内部缓冲，不参与 Seed / Seedling 的基础成长。
@@ -792,7 +793,7 @@ DailyBudCheckAt = 04:00
 
 ### 5.5 Bud Growth 路由与“掐芽催熟”
 
-Tree Reserve 每次代谢产生本 Tick 的生长养分预算后，先向已经形成的叶片 / 下游器官分流；剩余的 Tree Own Budget 再按 Tree Affinity 转成“主干自身 GrowthGain”。
+Tree Reserve 每次代谢产生本 Tick 的生长养分预算后，先完成第一层 `Tree -> Tree self + each Leaf` 分流；每片 Leaf 再只在自己当次获得的预算内部，向自身与其附属 Flower / Fruit 做第二层分流。剩余的 Tree Own Budget 再按 Tree Affinity 转成“主干自身 GrowthGain”。
 
 没有 Active Bud 时：
 
@@ -864,7 +865,7 @@ Leaf C 0.3
 
 所以第三片叶虽然增加生产器官，但会让主干自身 Growth 几乎停止；这是当前设计的预期取舍。
 
-有 Active Bud 时，Bud 只接管上表中的 Tree 份额，不会抢走已有 Leaf / Flower 已经分到的预算。
+有 Active Bud 时，Bud 只接管上表中的 Tree 份额，不会改变任何 Leaf 的第一层预算；Flower / Fruit 也只在所属母叶的预算内部继续分流。
 
 ### 5.7 第一周与 Sapling 体验目标
 
@@ -949,7 +950,7 @@ TREE_Elems[i]
 × (1 - 0.99 ^ dtHours)
 ```
 
-这些养分先进入子器官分流，再由剩余预算按完整 Growth Affinity 转换为 Tree Own GrowthGain。
+这些养分先按第一层规则分成 Tree self budget 与各 Leaf budget；各 Leaf 如有附属 Flower / Fruit，再只在自己的 Leaf budget 内做第二层分流。Tree self budget 按完整 Growth Affinity 转换为 Tree Own GrowthGain。
 
 当前叶片分流基线为每片 0.3；0 / 1 / 2 / 3 叶对应主干剩余 1.0 / 0.7 / 0.4 / 0.1。存在 Active Bud 时，Tree Own GrowthGain 改写入 BUD_Growth；否则写入 TREE_Growth。
 
@@ -995,7 +996,7 @@ FlowerBud
 
 ### 7.2 叶片养分与 Affinity
 
-叶片仍然没有独立 Reserve。它每次从 Tree Growth Nutrient Budget 得到自己的份额，再用于当前叶片组织和下游生殖器官。
+叶片仍然没有独立 Reserve。每次 settlement 先按 0/1/2/3 叶规则完成 `Tree -> Tree self + each Leaf` 的第一层预算分配；每片 Leaf 得到自己的 Growth Nutrient Budget 后，再只在该预算内部用于叶片自身与其附属生殖器官。Flower / Fruit 不直接从整株 Tree 总预算或其它叶片的共享池取值。
 
 既有 Leaf baseline 保持不变：
 
@@ -1077,7 +1078,7 @@ Fruit 沿同一 Growth 轴从 30 继续向 100 推进。当前 Green Fruit 是�
 GreenFruitSinkShare = 0.80 ~ 0.90
 ```
 
-这只是平衡目标区间，当前不收敛为唯一最终数字。它应足以让同一父级上其它叶片 / 组织的继续生长显著放缓，形成“结果后强烈富集”的体验。
+这只是平衡目标区间，当前不收敛为唯一最终数字。它只作用于所属母叶当次获得的 Growth Nutrient Budget：例如取 85% 时，该母叶自身只保留 15%，因此母叶自身成长几乎停止；其它叶片与 Tree 的第一层预算不变。
 
 进入 Fruit 后：
 
@@ -1118,7 +1119,7 @@ Mature Fruit 仍可继续接受元素，但 nutrient sink / 富集效率大幅�
 MatureFruitSinkShare ≈ 0.20
 ```
 
-因此成熟后继续留果仍有意义，但不会继续像 Green Fruit 一样压制整棵树的其它生长。
+因此成熟后继续留果仍有意义；约 20% 只从所属母叶当次预算中分流，母叶恢复大部分自身成长，其它叶片与 Tree 的第一层预算不受影响。
 
 Mature Fruit 可像成熟叶一样出现少量“亮晶晶逸散”视觉，用来提示仍有元素流动 / 富集；当前只记录视觉意图，不实现 VFX / shader / material system。
 
@@ -1210,8 +1211,9 @@ Green Fruit 不作为惩罚、失败或“没等够”的低级成果。
 如果玩家移除 Flower 或采摘 Fruit：
 
 ```text
-当前生殖器官的 nutrient sink 消失
-→ 之后的父级 Leaf Growth Nutrient Budget 按既有叶片规则重新分配
+当前生殖器官的 leaf-local nutrient sink 消失
+→ 所属母叶重新获得完整的自身 Leaf budget
+→ 其它叶片与 Tree 的第一层预算保持不变
 ```
 
 未来是否由此形成多汁叶、再次开花或其它分支，仍留给后续 Spec；当前不额外定义触发阈值或状态。
@@ -1270,7 +1272,8 @@ Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `Fl
 → Seed：直接吸收并形成 Growth
 → Seedling：直接吸收并形成 Growth
 → Sapling：开始拥有 Reserve
-→ Tree Growth / 叶片 / 花果分流
+→ Tree / Leaf 第一层分流
+→ 各 Leaf 内部的 Flower / Fruit 第二层分流
 → 叶片阶段变化
 → 颜色变化
 → 采集

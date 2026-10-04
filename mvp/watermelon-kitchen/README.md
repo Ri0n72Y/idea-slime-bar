@@ -20,7 +20,7 @@
 - Stage 升级时清空 Growth，并固定当前连续学习得到的亲和作为下一阶段基准；
 - Sapling 每日服务器时间 04:00 的出芽检查、0/1/2/3叶概率 0.80 / 0.40 / 0.01 / 0；
 - Bud 独立 Growth、20 Growth 成叶、掐芽时 Growth 完整回主干；
-- 0/1/2/3叶时 Tree 剩余生长预算 1.0 / 0.7 / 0.4 / 0.1，每片叶约0.3；
+- 0/1/2/3叶时第一层预算固定为 Tree 1.0 / 0.7 / 0.4 / 0.1，每片叶约0.3；Flower / Fruit 只在所属母叶的0.3预算内部继续分流，不影响其它叶片；
 - Sapling 主干100 Growth只更新自身亲和，不进入下一 Stage；
 - 叶片的嫩芽 / 小叶 / 大叶 / 成叶与子器官分流；
 - Bud→SmallLeaf→LargeLeaf→FlowerBud 使用集中时间边界；Flower/Fruit 使用同一生殖 Growth 轴 0→30→100；
@@ -80,11 +80,11 @@ Sapling 起：进入树体 Reserve
 ↓
 SmallLeaf 12h → LargeLeaf 12h → FlowerBud 约24h → 可见开花
 ↓
-Flower Growth 0→30，约50% sink，持续塑形 Affinity
+Flower Growth 0→30，在母叶预算内约50% sink，持续塑形 Affinity
 ↓
 Growth=30 形成 Fruit 并锁定 Affinity
 ↓
-Green Fruit 30→100，80–90% 强 sink；Mature Fruit 100+ 约20%继续富集
+Green Fruit 30→100，在母叶预算内80–90%强 sink；Mature Fruit 100+ 在母叶预算内约20%继续富集
 ↓
 FruitElementAmount → 派生 FlavorRatio
 ↓
@@ -154,7 +154,7 @@ Green / Mature Fruit 均可采摘，并以物理形态提示阶段
 
 进入开发时，以下内容仍应保持未定义状态，不应由实现者自行扩写：
 
-- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90、Sapling 主干100 Growth周期、Bud=20、每日04:00出芽概率、0~3叶分流、SmallLeaf/LargeLeaf/FlowerBud 时间边界、Flower 0→30、Fruit 30→100、Affinity lock、三档生殖 sink 与 FruitElementAmount / FlavorRatio 已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity、多元素重分配、Reserve 上限 / 休眠细节、具体 Growth rate 校准与最终产量；
+- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90、Sapling 主干100 Growth周期、Bud=20、每日04:00出芽概率、0~3叶分流、SmallLeaf/LargeLeaf/FlowerBud 时间边界、Flower 0→30、Fruit 30→100、Affinity lock、三档 leaf-local 生殖 sink 与 FruitElementAmount / FlavorRatio 已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity、多元素重分配、Reserve 上限 / 休眠细节、具体 Growth rate 校准与最终产量；
 - 元素球的刷新位置、牵引细节、多人归属与元素种类的进一步叙事规则；
 - 元素锁定能力的获取、解除和表现方式；
 - 第二种及之后的元素反应；

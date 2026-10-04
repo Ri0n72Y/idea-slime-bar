@@ -155,7 +155,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] F2.4 Seed / Seedling：吸收结果直接转换为 Growth。
 - [ ] F2.5 Sapling 起：吸收结果写入 Tree Reserve。
 - [ ] F2.6 Sapling 起判断 Growing / Dormant，并从 Reserve 提取生长预算。
-- [ ] F2.7 先向已存在 Leaf / 当前生殖器官按阶段 sink 分流，再把 Tree 剩余预算转换为 Tree Own GrowthGain。
+- [ ] F2.7 先完成第一层 `Tree -> Tree self + each Leaf` 分配；再由每片 Leaf 只在自己当次预算内部，向 Leaf self 与其附属 Flower / Fruit 按阶段 sink 做第二层分流。Tree self budget 再转换为 Tree Own GrowthGain；不做跨叶预算重分配。
 - [ ] F2.8 无 Active Bud 时写入 `TREE_Growth[7]`；有 Active Bud 时写入 `BUD_Growth[7]`。
 - [ ] F2.9 连续学习 Effective Affinity；Seed / Seedling 检查 Stage，Sapling 检查主干100 Growth周期和 Bud=20。
 - [ ] F2.10 跨服务器时间 04:00 时，先结算此前连续 Growth，再基于真实 LeafCount / Bud 状态做一次出芽检查。
@@ -262,14 +262,14 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 
 - [ ] Flower / Fruit 是同一个生殖器官的连续 Growth 轴。
 - [ ] Flower 使用 Growth 0→30；正常供给下约 12h 达到 30 是体验目标，不建立 FlowerTimer。
-- [ ] Flower 从父级 Leaf 本 Tick Growth Nutrient Budget 中分流，当前 sink baseline ≈50%，并继续塑形 Affinity。
+- [ ] Flower 从所属母叶本次 settlement 获得的 Leaf Growth Nutrient Budget 中分流，当前 sink baseline ≈50%，并继续塑形 Affinity；不会直接从 Tree 总预算或其它 Leaf 取值。
 - [ ] Growth 到 30：Flower 凋谢并形成 Fruit；当前 Affinity 在此锁定。
 - [ ] Fruit 从同一 Growth 轴 30 继续到 100；30≤Growth<100 为 Green Fruit，Growth≥100 为 Mature Fruit。
-- [ ] Green Fruit sink 目标为 80–90%，保留实现时校准区间；Mature Fruit sink baseline ≈20%。
+- [ ] Green Fruit sink 目标为母叶当次预算的 80–90%，保留实现时校准区间；Mature Fruit sink baseline ≈20%。多叶同时结果时各自只在自己的母叶预算内部独立分流，不相互抢占。
 - [ ] Fruit 形成后不再塑形 Affinity，开始累计 `FruitElementAmount[7]`。
 - [ ] `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`；总量为 0 时尚未形成 Flavor，ratio 只派生、不重复持久化。
 - [ ] Mature Fruit 到 100 后仍继续低效率累计元素，因此 FlavorRatio 仍可变化；100 只锁物理成熟。
-- [ ] Fruit 形成后随时可采摘；Green Fruit 是独立料理材料，不是失败状态。
+- [ ] Fruit 形成后随时可采摘；Green Fruit 是独立料理材料，不是失败状态。摘果只使所属母叶重新获得完整的自身 Leaf budget，不触发其它叶片或 Tree 的第一层预算重分配。
 - [ ] Green Fruit 外观从青绿 / 柔软逐步过渡到 Mature Fruit 的深褐木质果壳；内部由混沌元素粘液过渡到“果壳 → 光滑内膜 → 果肉膜 → 清澈水瓜水”。
 - [ ] Mature Fruit 可用少量亮晶晶逸散表达仍在富集；本 Feature 不实现通用 shader / VFX framework。
 - [ ] 成熟后催化 / 精炼 / 老种子等只保留未来语义插口，不定义状态或公式。
@@ -650,7 +650,8 @@ Flow Block 应尽量满足：
 土壤蒸发
 树体按 RootPreference / Cap 吸收
 生成本 Tick 生长预算
-向子器官分流
+Tree / Leaf 第一层分流
+各 Leaf 内部的生殖器官第二层分流
 Growth Vector 转换
 连续学习
 Stage / 器官生成判定
