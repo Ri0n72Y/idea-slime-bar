@@ -629,11 +629,12 @@ Destroy Bud
 
 ```text
 Σ BUD_Growth >= 20
-→ 固定 Bud 当前亲和
-→ 变成正式 Leaf
+→ Bud 完成
+→ 以此刻 Tree 的当前亲和按标准父子器官继承规则生成 SmallLeaf
+→ SmallLeaf 后续独立塑形自己的 Affinity
 ```
 
-这 20 Growth 已经成为器官，不再退回主干。
+这 20 Growth 已经成为器官，不再退回主干；SmallLeaf 的 Affinity 只在出生瞬间继承一次，不实时跟随 Tree。
 
 三片叶时，主干只剩约 0.1 的预算，几乎停止自身 Growth；这是当前设计的正确结果，而不是需要修正的异常。
 
@@ -651,7 +652,8 @@ Destroy Bud
 LastUpdate
 → 下一个 04:00
 → Bud 达到 20
-→ Leaf / Flower / Fruit 阈值
+→ SmallLeaf / LargeLeaf / FlowerBud 的 elapsed-time boundary
+→ Flower / Fruit 的 Reproductive Growth = 30 / 100
 → Tree Growth 达到 100
 → 下一个 04:00
 → ...
@@ -684,6 +686,8 @@ Login Now
 ```
 
 短时间重登不会重复获得当天 04:00 的机会。
+
+开花可见性是离线恢复中的一个特殊事件边界：如果某个 FlowerBud 在本次离线恢复中首次跨过 bloom boundary，则该器官只结算到“Flower 刚开始”，本次离线恢复不再继续推进它的 Flower Growth。玩家登录后再从可见花期继续；不为此建立独立 scheduler / timer framework。
 
 ---
 
@@ -745,57 +749,113 @@ Reserve 进入稳态后，Bud 的理论成长速度约为：
 
 ---
 
-## 14. 叶—花—果当前体验链
+## 14. Sapling 后半段生命周期数值基线
 
-当前可见发育顺序：
-
-```text
-嫩叶芽
-→ 小叶
-→ 大叶·花苞
-→ 大叶·鲜花
-→ 大叶·幼果
-→ 成叶·成果
-```
-
-沿用旧模型：
-
-- Leaf 没有独立 Reserve；
-- 每 Tick 从 Tree Growth Nutrient Budget 分流自己的份额；
-- Flower 再从 Leaf 本 Tick 的预算中优先分流；
-- Flower 不是从已累计的 LEAF_Growth 中持续扣 Growth；
-- Flower 阶段持续 Growth / Affinity 学习；
-- 进入 Fruit 后 Affinity 固定，不再继续学习；
-- Fruit 后续重点累计实际元素力 / 汁液 / 内容物。
-
-当前花果链目标仍为约 2 天：
+当前可见链已经锁定为：
 
 ```text
-大叶·花苞
-→ 大叶·鲜花
-→ 大叶·幼果
-→ 成叶·成果
-≈ 48h
+Bud
+→ SmallLeaf
+→ LargeLeaf
+→ FlowerBud
+→ Flower
+→ Green Fruit
+→ Mature Fruit
 ```
 
-48 小时内部各子阶段的具体拆分尚未锁定。
+### 开花前：elapsed-time boundary
 
----
+```text
+Bud Growth = 20
+→ SmallLeaf
+
+SmallLeaf: 12h
+→ LargeLeaf
+
+LargeLeaf: 再 12h
+→ FlowerBud
+
+FlowerBud: 再约 24h
+→ bloom boundary / Flower
+```
+
+SmallLeaf / LargeLeaf / FlowerBud 统一由 settlement 按经过时间推进，不为每个阶段建立独立 timer。
+
+Bud 完成生成 SmallLeaf 时，以当时 Tree 的当前亲和按标准父子器官规则做一次性继承；Leaf 出生后独立塑形，不实时跟随 Tree。
+
+### 开花后：Reproductive Growth
+
+```text
+Flower:       0 -> 30
+Green Fruit:  30 <= Growth < 100
+Mature Fruit: Growth >= 100
+```
+
+正常供给下 Flower 约 12h 达到 30 是体验目标，不是独立 FlowerTimer。
+
+达到 30：
+
+```text
+Flower 凋谢
+→ Fruit 形成
+→ 当前 Affinity locked
+→ 开始累计 FruitElementAmount[7]
+```
+
+达到 100 只代表 Green Fruit -> Mature Fruit 的物理成熟边界。
+
+### 生殖器官 nutrient sink
+
+当前相对父级 Leaf Growth Nutrient Budget 的目标：
+
+| 阶段 | Sink baseline / target | 设计含义 |
+| --- | ---: | --- |
+| Flower | ≈ 50% | 强 sink，仍保留明显 Leaf 自身预算 |
+| Green Fruit | 80–90% | 极强 sink，使其它生长几乎停滞；实现时再校准区间 |
+| Mature Fruit | ≈ 20% | 成熟后低效率继续富集 |
+
+Green Fruit 的 `80–90%` 当前故意保留为区间，不擅自收敛到单一数字。
+
+### Fruit Flavor 与成熟后继续富集
+
+Fruit 形成后只累计实际进入果实的七元素量：
+
+```text
+FruitElementAmount[7]
+```
+
+Flavor 不做额外转换：
+
+```text
+FlavorRatio[e]
+= FruitElementAmount[e] / Σ FruitElementAmount
+```
+
+总量为 0 时视为尚未形成 Flavor。`FruitElementAmount` 是持久化事实，`FlavorRatio` 是派生值。
+
+Mature Fruit 到 100 后仍继续按约 20% 的低 sink 累计元素，因此 FlavorRatio 仍可变化；100 不锁 Flavor、不停止元素累计，也不自动采摘。
+
+### 采摘与物理形态
+
+- Green Fruit 从形成后即可采摘，是独立料理材料，不是失败状态；果皮有弹性，内部为未稳定分层的元素粘液，可出现析出 / 结晶等元素质地。
+- 30 -> 100 的外观从青绿色、柔软感逐渐过渡到深褐、木质感。
+- Mature Fruit 形成深褐木质果壳，内部结构稳定为“果壳 → 光滑内膜 → 果肉膜 → 清澈水瓜水”，主要提供稳定水瓜汁类素材。
+- Mature Fruit 可用少量亮晶晶逸散提示仍在低效率富集；这里只是视觉要求。
+
+成熟后的更多 Flavor 催化、特殊质地、过量精炼或“老种子”只保留未来语义插口，本轮不定义规则。
 
 ## 15. 当前继续设计的边界
 
-当前下一步不再反推 Sapling → Mature，而是继续完善 Sapling 自身的长期生产循环。
+当前下一步仍是完善 Sapling 长期生产循环，而不是扩展新的生命周期框架。
 
 仍需确认：
 
 - Sapling Reserve 的进入 / 上限 / 恢复规则；
 - `30 / 80` Dormant / Growing 迟滞是否继续作为最终值；
-- 小叶 → 大叶·花苞所需 Growth；
-- Flower 从 Leaf 本 Tick 预算中分走多少；
-- 48h 花果周期内部各阶段阈值；
-- 成果采摘后叶片如何继续循环 / 衰老 / 再次开花；
+- 在现有吸收 / Reserve / Affinity 公式下，具体 Growth rate 如何校准，才能稳定实现 Flower 约 12h、Green Fruit 的目标成熟节奏与周产量；
+- 成果采摘后叶片如何继续循环 / 再次开花；
 - 每天玩家 4–6 果 / 周、每周 2–3 天玩家 2–4 果 / 周、每周一次玩家约 2 果 / 周的最终产量；
 - 单元素 Cap 到底读取 BaseAffinity 还是 EffectiveAffinity；
 - 多元素吸收预算的最终重分配算法。
 
-在这些数值确认前，不由实现阶段自行补全。
+已经确认的 SmallLeaf / LargeLeaf / FlowerBud 时间边界、Flower 0->30、Fruit 30->100、Affinity 锁定点、FruitElementAmount / FlavorRatio 与三档 nutrient sink 不再作为“待实现者自行补全”的开放问题。

@@ -23,11 +23,11 @@
 - 0/1/2/3叶时 Tree 剩余生长预算 1.0 / 0.7 / 0.4 / 0.1，每片叶约0.3；
 - Sapling 主干100 Growth只更新自身亲和，不进入下一 Stage；
 - 叶片的嫩芽 / 小叶 / 大叶 / 成叶与子器官分流；
-- 花与果作为同一器官的两个阶段，当前花果体验链约48小时；
-- 基于 UTC 时间的离线 Growth Tick 补算方向；
+- Bud→SmallLeaf→LargeLeaf→FlowerBud 使用集中时间边界；Flower/Fruit 使用同一生殖 Growth 轴 0→30→100；
+- 基于服务器时间和事件边界的离线 Growth settlement；首次跨 bloom boundary 时让玩家登录后看到花期；
 - 全局可调配置与七元素固定索引；
 - 只显示最强元素颜色、不提供元素 UI；
-- 七元素对果实六维口味的基础修正；
+- Fruit 形成后累计 `FruitElementAmount[7]`，v0 Flavor 直接派生为七元素比例；Mature Fruit 后仍可低效率继续富集；
 - 第一种元素反应：水 + 草 → 绽放 / 草种子性状体；
 - 果实 → 水瓜汁；
 - 1～3 份等体积水瓜汁混合及结果重算。
@@ -78,17 +78,17 @@ Sapling 起：进入树体 Reserve
 ↓
 每日04:00检查出芽 + Bud / Leaf 长期循环
 ↓
-生长预算先向叶 / 花 / 果分流
+SmallLeaf 12h → LargeLeaf 12h → FlowerBud 约24h → 可见开花
 ↓
-Tree Own Growth 写入主干或 Active Bud
+Flower Growth 0→30，约50% sink，持续塑形 Affinity
 ↓
-按亲和转换为各自 Growth Vector
+Growth=30 形成 Fruit 并锁定 Affinity
 ↓
-连续学习亲和；Sapling 主干满100只更新自身亲和
+Green Fruit 30→100，80–90% 强 sink；Mature Fruit 100+ 约20%继续富集
 ↓
-器官颜色 / 形态变化
+FruitElementAmount → 派生 FlavorRatio
 ↓
-采集器官与果实
+Green / Mature Fruit 均可采摘，并以物理形态提示阶段
 ↓
 后续取汁 / 混合 / 料理
 ↓
@@ -112,9 +112,9 @@ Tree Own Growth 写入主干或 Active Bud
 3. 实现元素球刷新 / 半衰、土壤浇灌与容量归一化、土壤蒸发、RootPreference / 单元素饱和吸收。
 4. 实现 Seed → Seedling → Sapling 的直接 Growth 转换，再进入 Sapling 起的 Reserve / Growth 模型。
 5. 实现每日04:00出芽事件、Bud=20、掐芽回流、最多3叶和 Tree/Leaf 分流。
-6. 实现叶片发育、花果子器官分流、连续学习与显色。
+6. 实现 SmallLeaf / LargeLeaf / FlowerBud 的集中时间结算，再实现 Flower 0→30、Fruit 30→100、阶段 sink 与 Affinity 锁定。
 7. 接入最小点击劳动和叶片采集，形成第一条可重复的可见闭环。
-8. 再接入元素球、花果、口味、绽放、取汁与水瓜汁混合。
+8. 再接入元素球、`FruitElementAmount → FlavorRatio`、采果与后续料理；绽放、六维 Taste 等扩展另开 Spec。
 9. 最后把各独立功能串成完整“培养 → 采集 → 制作 → 发现 → 再培养”闭环。
 
 这里描述的是实现依赖顺序，不额外增加新的玩法设计。
@@ -154,7 +154,7 @@ Tree Own Growth 写入主干或 Active Bud
 
 进入开发时，以下内容仍应保持未定义状态，不应由实现者自行扩写：
 
-- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90、Sapling 主干100 Growth周期、Bud=20、每日04:00出芽概率和0~3叶分流已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity 的选择、多元素重分配算法、Reserve 上限 / 休眠细节、Leaf / Flower 阈值与最终产量；
+- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90、Sapling 主干100 Growth周期、Bud=20、每日04:00出芽概率、0~3叶分流、SmallLeaf/LargeLeaf/FlowerBud 时间边界、Flower 0→30、Fruit 30→100、Affinity lock、三档生殖 sink 与 FruitElementAmount / FlavorRatio 已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity、多元素重分配、Reserve 上限 / 休眠细节、具体 Growth rate 校准与最终产量；
 - 元素球的刷新位置、牵引细节、多人归属与元素种类的进一步叙事规则；
 - 元素锁定能力的获取、解除和表现方式；
 - 第二种及之后的元素反应；

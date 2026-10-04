@@ -404,44 +404,44 @@ SaplingTreeGrowthCycle = 100
 
 因此“主干长满”表示完成一次树体亲和塑形周期，不表示进入新的 Tree Stage。
 
-### 叶芽与叶片亲和
+### 叶芽与 SmallLeaf 的亲和继承
 
-新叶先经历 Bud 阶段。Bud 使用独立的：
+Bud 继续使用独立的：
 
 ```text
 BUD_Growth[7]
 ```
 
-并沿用既有父子器官亲和初始化：
+Bud 的职责是承接当前 Tree Own GrowthGain、形成芽期元素倾向并累计到阈值 20。MVP 不再为 Bud 额外建立一套需要长期保留的独立 Affinity 状态。
 
-```text
-ParentOffset[i]
-=
-TREE_EffectiveAffinity[i]
--
-TREE_BaseAffinity[i]
-
-BUD_BaseAffinity[i]
-=
-CFG_LeafAffinity[i]
-+
-ParentOffset[i] × CFG_AffinityInherifanceRate
-```
-
-当前继承率为 0.5。
-
-Bud 出现后，新产生的“主干自身 Growth”不再进入 TREE_Growth，而进入 BUD_Growth。Bud 的颜色 / 元素倾向直接读取这段实际 Growth 的组成。
-
-当 Bud 累积满当前阈值 20 后：
+当 Bud 达到阈值时：
 
 ```text
 Σ BUD_Growth >= 20
-→ 固定 Bud 当前 Effective Affinity
-→ Bud 成为 Tender Leaf / 小叶
-→ 新叶从该亲和起点继续自己的 Growth
+→ Bud 完成
+→ 生成 SmallLeaf
 ```
 
-如果玩家在 Bud 完成前掐掉嫩叶芽：
+SmallLeaf 出生这一刻，使用现有的标准父子器官亲和继承规则，从**此刻主干的当前亲和**计算自己的 Affinity 初值：
+
+```text
+ParentOffset[i]
+= TREE_EffectiveAffinity[i] - TREE_BaseAffinity[i]
+
+SMALL_LEAF_BaseAffinity[i]
+= CFG_LeafAffinity[i]
+  + ParentOffset[i] × CFG_AffinityInherifanceRate
+```
+
+当前继承率仍为：
+
+```text
+CFG_AffinityInherifanceRate = 0.5
+```
+
+这是一次性遗传。SmallLeaf 出生后拥有自己的 Base / Effective Affinity，并只根据自己的后续 Growth 独立塑形；Tree 之后如何变化，不会实时回写 Leaf Affinity。
+
+如果玩家在 Bud 完成前掐掉芽：
 
 ```text
 TREE_Growth[i] += BUD_Growth[i]
@@ -651,14 +651,15 @@ Growth ≈ 1.10/h
 
 正式 Tree Stage 之前，水瓜以半埋在土中的 Seed 状态存在。
 
-当前早期阶段：
+当前 Tree 主阶段：
 
 ```text
 Seed
 → Seedling
 → Sapling
-→ Mature
 ```
+
+Tree 的 `Mature` 最终阶段仍延后设计；它与本文后面的 `Mature Fruit` 是两个不同概念，当前不得混用。
 
 Seed 不计入正式 Tree Stage 编号，但它和 Seedling 一样都直接从 Soil 吸收并形成 Growth，不再使用独立的 GerminationProgress / GerminationRate 计时器。
 
@@ -829,8 +830,9 @@ Destroy Bud
 
 ```text
 Σ BUD_Growth >= 20
-→ 固定 Bud Affinity
-→ 成为新叶
+→ Bud 完成
+→ 按此刻 Tree 的标准父子器官遗传规则生成 SmallLeaf
+→ SmallLeaf 从自己的独立 Affinity 初值开始后续生命周期
 → 这 20 Growth 已经真正投入器官，不再回主干
 ```
 
@@ -956,211 +958,279 @@ Sapling 的 Reserve 上限、初始 Reserve、叶 / 花 / 果后续阈值与实�
 
 ---
 
-## 7. 叶片
+## 7. 叶片与开花前生命周期
 
-当前叶—花—果的玩家可见发育链：
-
-```text
-嫩叶芽 Bud
-→ 小叶
-→ 大叶·花苞
-→ 大叶·鲜花
-→ 大叶·幼果
-→ 成叶·成果
-```
-
-内部仍可保留 Leaf 的 Tender / Thick / Mature 语义，但表现与花果状态按上面的连续链组织。Bud 是成为正式叶片之前的独立前置状态。
-
-叶片**没有独立 Reserve**。
-
-它每 Tick 从树体本次生长预算中获得养分，吸多少就当次用于：
-
-- 向自己的子器官继续分流；
-- 环境蒸发；
-- 转换为 `LEAF_Growth[7]`。
-
-### 7.1 嫩叶
-
-Tender：
-
-- 当前不设置环境损耗；
-- 获得的有效养分可以快速转换为 Growth；
-- 亲和仍处于连续学习状态；
-- 颜色 / 形态可以随着 Growth 与 Effective Affinity 改变。
-
-### 7.2 肥厚叶
-
-Thick：
-
-- 继续进行连续学习；
-- 继续积累自己的 Growth Vector；
-- 可以作为后续 Mature 前的过渡阶段；
-- 具体蒸发参数在叶片 Spec 中确定。
-
-### 7.3 成叶
-
-Mature：
-
-- 当前叶片自身保留率基线为 `0.6`；
-- 即自身预算的约 `40%` 逸散到环境；
-- 仍可继续承担下游花 / 果的供给；
-- 自身 Growth 累积明显慢于嫩叶；
-- 外观阶段稳定，但内部隐藏 Affinity 仍可作为后续系统数据存在。
-
-例如一片成叶本 Tick 得到 10 单位养分，并带有一朵吸收 50% 预算的花：
+当前 Sapling 后半段的玩家可见链统一为：
 
 ```text
-10
-→ 花 5
-→ 叶剩 5
-
-叶自身：
-5 × 0.6 = 3 用于 Growth
-5 × 0.4 = 2 逸散到环境
+Bud
+→ SmallLeaf
+→ LargeLeaf
+→ FlowerBud
+→ Flower
+→ Green Fruit
+→ Mature Fruit
 ```
 
-### 7.4 叶片 Stage 升级
+Bud 是正式叶片出生前的 Growth 门槛；SmallLeaf / LargeLeaf / FlowerBud 则使用**生命周期 elapsed-time boundary**。这里不要把所有状态都强行改造成 GrowthThreshold，也不要给每个阶段建立独立 Timer。
 
-每次叶片进入下一 Stage：
+### 7.1 SmallLeaf → LargeLeaf → FlowerBud
+
+Bud 达到 20 后生成 SmallLeaf，并在出生瞬间从当前 Tree 做一次标准亲和继承。之后 Leaf Affinity 与 Tree 脱钩。
+
+当前时间体验基线：
 
 ```text
-清空 LEAF_Growth[7]
-当前 Effective Affinity
-→ 固定为下一 Stage 的 Base Affinity
+SmallLeaf
+→ 约 12h 后进入 LargeLeaf
+
+LargeLeaf
+→ 再约 12h 后形成 FlowerBud
+
+FlowerBud
+→ 再约 24h 到达 bloom boundary
 ```
 
-只保留**连续学习**。
+这些时间只定义生命周期边界。在线和离线都由统一 settlement 根据实际经过时间推进；不为 SmallLeaf / LargeLeaf / FlowerBud 分别维护倒计时器。
 
-不再额外设置“阶段跃迁时给某元素一次离散双倍奖励”。
+### 7.2 叶片养分与 Affinity
 
-### 7.5 叶片表型
+叶片仍然没有独立 Reserve。它每次从 Tree Growth Nutrient Budget 得到自己的份额，再用于当前叶片组织和下游生殖器官。
 
-进入新 Stage 时，根据该阶段固定下来的 Base Affinity 判断是否达到元素形态阈值。
+既有 Leaf baseline 保持不变：
+
+- SmallLeaf / 嫩叶阶段当前不设置环境损耗；
+- 叶片在尚未锁定的发育阶段继续根据自己的 Growth 独立塑形 Effective Affinity；
+- 成叶自身保留率基线仍为 `0.6`，约 `40%` 可逸散到环境；
+- 这些是养分行为，不要求再建立一套独立生命周期 Timer。
+
+Leaf 的颜色 / 形态可以读取自己的 Growth / Effective Affinity；Tree 后续亲和变化不会实时同步给已经出生的 Leaf。
+
+### 7.3 开花边界与离线可见性
+
+开花是希望玩家实际看到的事件。
+
+如果一次离线恢复**首次跨过某个 FlowerBud 的 bloom boundary**：
 
 ```text
-某元素 Affinity 达到表现阈值
-→ 对应颜色 / 变种形态
-
-未达到
-→ 普通叶片形态
+先把该器官结算到 bloom boundary
+→ 切换为刚开始的 Flower
+→ 本次离线恢复不再继续推进这个 Flower 的后续 Growth
+→ 玩家登录后从可见花期开始继续正常 settlement
 ```
 
-没有达到表现阈值并不意味着该元素亲和消失。
-
-因此普通外观叶片仍可能携带隐藏的“遗传信息”。
-
-多种元素同时超过阈值时如何选择视觉主形态，留到表现 Spec 确定。
-
----
+其他 Tree / Soil / 其他器官仍按自己的事件边界正常恢复。这里不引入 scheduler、Timer Manager 或复杂的未来事件框架；只是在现有事件边界回放中把首次开花作为一个可见性停点。
 
 ## 8. 花与果
 
-花和果是**同一个器官的两个 Stage**：
+Flower 与 Fruit 继续视为同一个生殖器官的连续生命周期，但从开花开始改用**生殖器官 Growth**推进物理成熟：
 
 ```text
-Flower
-→ Fruit
+Flower:       Growth 0 -> 30
+Green Fruit:  30 <= Growth < 100
+Mature Fruit: Growth >= 100
 ```
 
-### 8.1 Flower Stage
+这里的 Growth 是同一条连续成长轴。实现时可以由器官 Growth 数据推导总进度，不要求为了这个表述额外保存一份重复 scalar。
 
-花：
+### 8.1 Flower：0 -> 30
 
-- 没有独立长期 Reserve；
-- 从上游叶片本 Tick 的养分预算中优先分流；
-- 具有环境蒸发；
-- 持续进行 Affinity 学习；
-- 持续累积自己的 Growth Vector；
-- 不从已经累计好的 LEAF_Growth 中持续扣取 Growth。
+Flower：
 
-花期累积的 Growth / Affinity 决定未来果实的：
+- 从父级 Leaf 本 Tick 的 Growth Nutrient Budget 中优先分流；
+- 继续根据实际进入自身的 Growth 塑形 Effective Affinity；
+- 仍可存在花期环境逸散；
+- 不从已经累计的 `LEAF_Growth` 中持续扣值。
 
-- 果皮颜色；
-- 基础形态 / 变种形态；
-- Fruit Stage 的固定元素亲和。
-
-可以理解为：
-
-> 花在进入 Fruit Stage 后，花本身成为了果皮与外层形态。
-
-### 8.2 Fruit Stage
-
-进入 Fruit Stage 时：
-
-- 固定 Affinity；
-- 不再继续进行 Affinity 学习；
-- 不再按花期规则向环境蒸发；
-- 后续吸收重点用于累积汁液 / 果实内容物；
-- 达到成熟条件后可采集。
-
-因此：
+当前 Flower 的营养 sink 目标约为：
 
 ```text
-Flower 决定“果子长成什么样”
-Fruit 决定“果子最终装了多少内容物”
+FlowerSinkShare ≈ 0.50
 ```
 
-当前花果体验节奏继续保持约 2 天。表现顺序为：
+即正常情况下约拿走父级 Leaf 当前生长预算的一半。该值是当前 baseline，不要求另建 FlowerTimer。
+
+在正常供给下，“玩家可见花期约 12h”继续作为体验目标。实际何时达到 30 由统一 Growth settlement 决定。
+
+当：
 
 ```text
-大叶·花苞
-→ 大叶·鲜花
-→ 大叶·幼果
-→ 成叶·成果
-≈ 48h
+Reproductive Growth >= 30
 ```
 
-各子阶段如何拆分这 48 小时尚未锁定。
-
----
-
-## 9. 提前采摘与叶片分支
-
-下游器官会改变上游器官的养分去向。
-
-如果玩家提前摘掉花 / 果：
+发生：
 
 ```text
-原本流向花果的养分需求消失
-→ 更多养分留在叶片
-→ 叶片可以进入多汁成熟方向
+Flower 凋谢
+→ 形成 Fruit
+→ 当前 Affinity 固定 / locked
+→ 开始 Fruit 阶段
 ```
 
-因此“提前摘果后出现多汁叶”不作为孤立特殊规则，而是作为养分流变化产生的成熟分支。
+这个 `30` 是 Affinity 的结果锁定点。
 
-具体触发条件和多汁叶数值留到叶—花—果联动 Spec 决定。
+### 8.2 Green Fruit：30 -> 100
 
----
-
-## 10. 亲和的长期意义
-
-当前千星奇域版本只需要实现：
+Fruit 沿同一 Growth 轴从 30 继续向 100 推进。当前 Green Fruit 是极强 nutrient sink：
 
 ```text
-Base Affinity
-→ 连续学习
-→ Stage 固定
-→ 影响单元素吸收通道上限
-→ 决定 Growth 转换效率
-→ 决定外观 / 生长速度
+GreenFruitSinkShare = 0.80 ~ 0.90
 ```
 
-完整游戏未来还会继续：
+这只是平衡目标区间，当前不收敛为唯一最终数字。它应足以让同一父级上其它叶片 / 组织的继续生长显著放缓，形成“结果后强烈富集”的体验。
+
+进入 Fruit 后：
+
+- Affinity 不再继续塑形；
+- 不再使用 Flower 的环境蒸发语义；
+- 开始累计**结果以后实际进入果实的七元素量**：
 
 ```text
-成熟果实采摘
-→ 锁定果实 Affinity
-→ 作为种子
-→ 下一代继承
+FruitElementAmount[7]
 ```
 
-形成隔代培养。
+这个向量是 Fruit Flavor 的持久化事实源。
 
-**千星奇域当前版本不实现重新播种和亲和遗传。**
+### 8.3 Mature Fruit：100+
 
-遗传规则只保留为根目录通用植物系统的长期设计。
+当：
 
----
+```text
+Reproductive Growth >= 100
+```
+
+Fruit 只跨过物理成熟边界：
+
+```text
+Green Fruit -> Mature Fruit
+```
+
+`100` 当前**不表示**：
+
+- Flavor locked；
+- Element accumulation stopped；
+- 自动采摘；
+- 老化阶段开始。
+
+Mature Fruit 仍可继续接受元素，但 nutrient sink / 富集效率大幅降低。当前 baseline：
+
+```text
+MatureFruitSinkShare ≈ 0.20
+```
+
+因此成熟后继续留果仍有意义，但不会继续像 Green Fruit 一样压制整棵树的其它生长。
+
+Mature Fruit 可像成熟叶一样出现少量“亮晶晶逸散”视觉，用来提示仍有元素流动 / 富集；当前只记录视觉意图，不实现 VFX / shader / material system。
+
+### 8.4 Fruit Flavor：直接读取结果后元素比例
+
+v0 不存在额外的 `element amount -> flavor value` 转换。
+
+当：
+
+```text
+FruitElementTotal = Σ FruitElementAmount[e]
+```
+
+且总量大于 0 时：
+
+```text
+FlavorRatio[e]
+= FruitElementAmount[e] / FruitElementTotal
+```
+
+当总量为 0 时，视为尚未形成 Flavor。
+
+因此当前只需要持久化 `FruitElementAmount[7]`；`FlavorRatio[7]` 是派生解释，不需要无理由再存一份重复向量。
+
+Mature Fruit 在 100 之后仍继续累计 `FruitElementAmount`，所以 `FlavorRatio` 也可以继续变化。Affinity 已经锁定，不会因此重新塑形。
+
+### 8.5 Green Fruit / Mature Fruit 的采摘价值与物理形态
+
+Fruit 从形成开始就可以被玩家采摘。
+
+**Green Fruit**：
+
+- 是主动早摘可获得的独立料理材料，不是失败成果；
+- 果皮仍有弹性；
+- 内部是混沌、尚未清晰分层的粘液；
+- 不同元素可以形成完全不同的内部形态；
+- 允许出现特定元素析出 / 结晶等特殊口感；
+- 多元素混合状态可以较草率、尚未稳定整合。
+
+**Mature Fruit**：
+
+- 果皮逐渐木质化，最终形成明显的深褐色果壳；
+- 内部形成清晰结构：
+
+```text
+果壳
+→ 光滑内膜
+→ 果肉膜
+→ 清澈水瓜水
+```
+
+- 主要提供稳定的水瓜汁类素材。
+
+外观必须直接提示成长阶段：
+
+```text
+Green Fruit
+青绿色基础果皮 + 当前元素颜色 / 纹理影响
+
+30 -> 100
+从青绿、柔软感逐渐过渡到深褐、木质感
+
+Mature Fruit
+明显深褐木质果壳
+```
+
+这些目前只属于视觉设计要求，不要求实现 shader / texture runtime。
+
+### 8.6 成熟后的未来语义插口
+
+成熟后持续富集未来可以被用于更多 Flavor 催化、特殊质地 / 形态、过量精炼或更晚生命周期（例如“老种子”）。
+
+当前只记录“这里存在未来扩展可能”。不定义阈值、公式、状态名、接口，也不建立 catalyst / refinement / old-seed framework。
+
+## 9. 采摘与上游养分回流
+
+Fruit 从形成后即可采摘：
+
+```text
+Green Fruit
+→ 可主动早摘，获得特殊未稳定整合的料理材料
+
+Mature Fruit
+→ 可采摘，获得结构稳定、以水瓜水为核心的成熟材料
+```
+
+Green Fruit 不作为惩罚、失败或“没等够”的低级成果。
+
+如果玩家移除 Flower 或采摘 Fruit：
+
+```text
+当前生殖器官的 nutrient sink 消失
+→ 之后的父级 Leaf Growth Nutrient Budget 按既有叶片规则重新分配
+```
+
+未来是否由此形成多汁叶、再次开花或其它分支，仍留给后续 Spec；当前不额外定义触发阈值或状态。
+
+## 10. 当前生命周期中的 Affinity 边界
+
+当前 Sapling 器官链只需要以下 Affinity 语义：
+
+```text
+Tree 当前亲和
+→ SmallLeaf 出生时一次性标准遗传
+→ Leaf / Flower 根据自己的 Growth 独立塑形
+→ Flower Growth 到 30、形成 Fruit 时锁定
+→ Fruit 阶段不再塑形 Affinity
+```
+
+Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `FlavorRatio[7]`，不是 Affinity。
+
+当前版本不实现重新播种、多代亲和遗传、成熟后精炼或“老种子”生命周期。成熟后持续富集只为这些未来方向保留语义插口，不提前建立框架。
 
 ## 11. 当前体验目标
 

@@ -1,6 +1,6 @@
 # 水瓜厨房 MVP：七元素培养与水瓜汁混合
 
-本设计稿定义“水瓜厨房”第一版 MVP 中七元素的表现、果实口味、绽放与水瓜汁混合规则。
+本设计稿保留七元素培养表现与下游料理设计记录。**当前 Sapling 生命周期、Fruit Affinity 锁定点、`FruitElementAmount[7]` 与 v0 `FlavorRatio` 的 source of truth 已迁移到 [七元素养分与生长系统](growth-system.md)。本文后半部旧六维 Taste / 绽放 / 水瓜汁公式只作为延后设计草稿，不得覆盖当前 v0 Fruit Flavor 语义。**
 
 **植物如何从土壤获取元素、如何形成 Growth Vector、如何经历 Stage、叶片 / 花 / 果如何持续学习亲和与分流养分，已经迁移到 [七元素养分与生长系统](growth-system.md)。本文件不再作为这些生长规则的 source of truth。**
 
@@ -362,23 +362,54 @@ ColorStrength = 1
 
 ## 果实与后续料理数据边界
 
-以下口味、绽放和水瓜汁规则暂时保留为后续料理层设计。
-
-但新版生长系统下，果实数据来源不再是旧的“生成时 OrganElement 快照”。
-
-未来进入 Fruit Spec 时，需要把这些公式的输入统一映射到：
+当前 v0 已确认的 Fruit 数据边界是：
 
 ```text
-花期固定下来的 Affinity / 外层形态
-+
-Fruit Stage 实际累积的汁液 / 果实元素组成
+Flower Growth 0 -> 30
+→ Growth=30 形成 Fruit，并锁定当前 Affinity
+→ 30 <= Growth < 100：Green Fruit
+→ Growth >= 100：Mature Fruit
 ```
 
-在这一映射 Spec 完成前，不应直接把旧 `OrganElement` 公式接到新版 Growth Tick。
+Fruit 形成以后不再塑形 Affinity，而是累计：
 
-## 下游果实与料理规则的迁移说明
+```text
+FruitElementAmount[7]
+```
 
-下面的口味、绽放和水瓜汁规则继续保留，作为已经确定的**下游结果设计**。
+当前 v0 的 Flavor **不做额外数值转换**：
+
+```text
+FruitElementTotal = Σ FruitElementAmount[e]
+
+FlavorRatio[e]
+= FruitElementAmount[e] / FruitElementTotal
+```
+
+总量为 0 时视为尚未形成 Flavor。`FruitElementAmount[7]` 是持久化事实，`FlavorRatio[7]` 是派生解释，不应无必要重复保存。
+
+Mature Fruit 到 Growth=100 后仍可以继续低效率累积元素，因此 FlavorRatio 仍会变化。100 只表示物理成熟，不表示 Flavor locked 或元素累计停止。
+
+Green Fruit / Mature Fruit 的物理形态、采摘价值和生殖器官 nutrient sink 以 [七元素养分与生长系统](growth-system.md) 为准。
+
+## 延后设计草稿：六维 Taste、绽放与水瓜汁
+
+以下内容来自更早的料理层设计。它们现在**不属于 v0 Fruit Flavor source of truth，也不进入本轮实现**。
+
+后续如果重新启用六维 Taste、绽放、取汁或混合，需要基于当时的 `FruitElementAmount / FlavorRatio` 重新形成独立 Spec；不得直接把下面旧公式接入当前 Growth Tick。
+
+尤其当前不存在：
+
+```text
+FruitElementAmount
+→ six-dimensional Taste
+```
+
+这样的 v0 conversion pipeline。下面公式仅保留设计参考。
+
+## 延后草稿的历史迁移说明
+
+下面的口味、绽放和水瓜汁规则继续保留为**历史设计草稿**，不再视为当前已确定的 v0 下游结果。
 
 但它们旧文中的输入曾被写成一次性的 `OrganElement` 快照。新的果实模型已经变为：
 
@@ -390,7 +421,7 @@ Flower Stage
 → 成熟果实
 ```
 
-因此后续真正实现 F7 / F8 / F9 时，需要在对应 Spec 中明确：
+因此未来若重新启用这些料理扩展，需要在对应 Spec 中重新明确：
 
 - 口味读取 Fruit Stage 的哪一组最终向量；
 - 绽放检测读取果皮、内容物还是两者组合；
@@ -398,7 +429,7 @@ Flower Stage
 
 在这些输入尚未重新锁定前，下面的数值公式保留，但**不要直接按旧 `OrganElement` 数据源实现。**
 
-## 果实基础口味
+## 延后草稿：果实基础六维 Taste
 
 第一版只使用六个口味维度：
 
@@ -424,7 +455,7 @@ Tingle      刺激
 | 清爽 | 55 |
 | 刺激 | 0 |
 
-## 七元素口味修正
+## 延后草稿：七元素 Taste 修正
 
 下表表示某元素达到 100 时的最大修正：
 
@@ -457,7 +488,7 @@ BaseFruitTaste
 
 因此两个同为 Hydro Aquamelon 的果实，只要其他元素组成不同，味道仍然可以不同。玩家第一版不看到这些精确数值。口味值用于生成饮品结果及后续评价。
 
-## MVP 唯一元素反应：水 + 草
+## 延后草稿：水 + 草绽放
 
 第一版只实现水元素与草元素的“绽放”性状，不实现其他元素反应。
 
@@ -551,7 +582,7 @@ BloomConfig.TasteModifier
 - 绽放发生后，苦涩明显降低，甜和清爽进一步提升；
 - 同时出现草种子性状体。
 
-## 果实与水瓜汁
+## 延后草稿：果实与水瓜汁
 
 第一版料理前处理只有：
 
@@ -569,7 +600,7 @@ BloomConfig.TasteModifier
 
 颜色、口味和元素反应根据这份元素数据重新计算，不依赖固定料理 ID。
 
-## MVP 唯一料理：混合水瓜汁
+## 延后草稿：混合水瓜汁
 
 第一版只允许混合 1～3 份等体积水瓜汁。
 
@@ -614,7 +645,7 @@ DominantElement
 
 相同最终元素组成应得到相同的基础颜色、口味和元素反应结果。
 
-## 第一版闭环示例
+## 延后草稿：料理闭环示例
 
 玩家先将水瓜树培养成偏水状态。
 

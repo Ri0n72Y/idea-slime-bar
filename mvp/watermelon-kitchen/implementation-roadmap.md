@@ -25,7 +25,7 @@ flowchart TD
     F[器官生长系统<br/>Leaf / Flower / Fruit Stages]
     G[元素表型与显色<br/>Growth / Affinity / Material]
 
-    H[果实口味]
+    H[Fruit Flavor 比例]
     I[水草绽放]
     J[采集与取汁]
     K[1~3份水瓜汁混合]
@@ -100,7 +100,7 @@ flowchart TD
 - [ ] 显示 `TREE_Stage`。
 - [ ] 显示 / 修改 `TREE_Growth[7]`。
 - [ ] 显示 Tree Base / Effective Affinity。
-- [ ] 显示最后 Growth Tick 时间、当前 UTC 时间和待补算 Tick 数。
+- [ ] 显示最后 Growth Tick 时间、当前服务器时间和待补算 Tick 数。
 - [ ] 提供“执行一次 Growth Tick”的调试入口。
 - [ ] 对当前叶片显示 Stage、Growth Vector、Base / Effective Affinity。
 - [ ] 能够直接调整关键 Growth 值以跨越 Stage / 器官生成阈值。
@@ -132,7 +132,7 @@ flowchart TD
 
 ---
 
-### F2 — 统一 Growth Tick 与 UTC 离线补算
+### F2 — 统一 Growth Tick 与服务器时间离线补算
 
 目标：建立土壤、树体和后续器官共用的离散生长结算节奏。
 
@@ -155,7 +155,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] F2.4 Seed / Seedling：吸收结果直接转换为 Growth。
 - [ ] F2.5 Sapling 起：吸收结果写入 Tree Reserve。
 - [ ] F2.6 Sapling 起判断 Growing / Dormant，并从 Reserve 提取生长预算。
-- [ ] F2.7 先向已存在 Leaf / Flower 分流，再把 Tree 剩余预算转换为 Tree Own GrowthGain。
+- [ ] F2.7 先向已存在 Leaf / 当前生殖器官按阶段 sink 分流，再把 Tree 剩余预算转换为 Tree Own GrowthGain。
 - [ ] F2.8 无 Active Bud 时写入 `TREE_Growth[7]`；有 Active Bud 时写入 `BUD_Growth[7]`。
 - [ ] F2.9 连续学习 Effective Affinity；Seed / Seedling 检查 Stage，Sapling 检查主干100 Growth周期和 Bud=20。
 - [ ] F2.10 跨服务器时间 04:00 时，先结算此前连续 Growth，再基于真实 LeafCount / Bud 状态做一次出芽检查。
@@ -229,7 +229,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] Active Bud 使用 `BUD_Growth[7]`；阈值 = 20。
 - [ ] Bud 存在时，Tree Own GrowthGain 全部写入 Bud，Tree Growth 暂停增长。
 - [ ] 玩家掐芽时，Bud Growth 完整合并回 Tree Growth。
-- [ ] Bud 正常到 20 后固定亲和并成为正式叶片。
+- [ ] Bud 正常到 20 后，以此刻 Tree 的当前亲和按标准父子器官继承规则生成 SmallLeaf；SmallLeaf 出生后拥有独立 Affinity。
 - [ ] 当前最多 3 叶。
 
 体验目标：
@@ -240,34 +240,39 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - 第三叶在前几周只属于少量旺盛植株。
 - 玩家掐芽不是获得额外加速 Buff，而是把 Bud Growth 退回主干，更快完成主干100 Growth亲和塑形周期。
 
-#### F5-Leaf — 叶片
+#### F5-Leaf — 叶片与开花前生命周期
 
 - [ ] 当前 Sapling 最多 3 片叶。
 - [ ] 0 叶时 Tree 1.0。
 - [ ] 1 叶时 Tree 0.7 / Leaf 0.3。
 - [ ] 2 叶时 Tree 0.4 / Leaf A 0.3 / Leaf B 0.3。
 - [ ] 3 叶时 Tree 0.1 / 三片 Leaf 各0.3；主干几乎停止是预期结果。
-- [ ] 玩家可见链：嫩叶芽 → 小叶 → 大叶·花苞 → 大叶·鲜花 → 大叶·幼果 → 成叶·成果。
-- [ ] 内部 Leaf 仍可保留 Tender → Thick → Mature 语义。
-- [ ] 叶片没有独立 Reserve，吸多少当 Tick 用多少。
-- [ ] Tender 当前无环境损耗。
-- [ ] Mature 当前自身保留率基线 0.6，约 0.4 逸散到环境。
-- [ ] 叶片继续把一部分预算供给下游花 / 果。
-- [ ] 每次 Stage 升级清空 Leaf Growth，并固定当前 Effective Affinity。
-- [ ] 普通 Sapling 每周约成熟 2 片叶；勤劳玩家约 4 片；正确元素可进一步提高。
+- [ ] Bud=20 后生成 SmallLeaf，并在出生瞬间从当前 Tree 一次性继承标准父子器官 Affinity；之后不实时跟随 Tree。
+- [ ] SmallLeaf 约 12h → LargeLeaf；再约 12h → FlowerBud；再约 24h → bloom boundary。
+- [ ] SmallLeaf / LargeLeaf / FlowerBud 由统一 settlement 按 elapsed time 推进，不建立三个独立 Timer。
+- [ ] 离线首次跨越 bloom boundary 时，该器官停在刚开始的 Flower，让玩家登录后看到花期；不建立 scheduler framework。
+- [ ] Leaf 没有独立 Reserve，继续从 Tree 的本 Tick Growth Nutrient Budget 取自己的份额。
+- [ ] Leaf 在未锁定阶段根据自己的 Growth 独立塑形 Affinity；SmallLeaf 出生后 Tree 的变化不回写。
+- [ ] 嫩叶当前无环境损耗；成叶自身保留率 baseline 仍为 0.6，约 0.4 可逸散到环境。
+- [ ] 颜色 / 形态继续读取 Growth / Effective Affinity；视觉细节由表现 Spec 处理。
 
-#### F5-FlowerFruit — 花 / 果
+#### F5-FlowerFruit — Flower / Green Fruit / Mature Fruit
 
-这部分已经有模型，但不要求进入第一条可见闭环。
+这部分已形成当前 Sapling 后半段生命周期合同，但仍不要求塞进第一条叶片垂直切片。
 
-- [ ] Flower 与 Fruit 是同一器官的两个 Stage。
-- [ ] Flower 从 Leaf 本 Tick 生长预算中分流，不从已累计的 LEAF_Growth 中持续扣值。
-- [ ] 当前花果链体验目标约 48h：大叶·花苞 → 大叶·鲜花 → 大叶·幼果 → 成叶·成果。
-- [ ] Flower 持续学习 Affinity，并存在蒸发。
-- [ ] Flower 阶段决定未来果皮颜色 / 形态和 Fruit Stage 基准亲和。
-- [ ] 进入 Fruit 后固定 Affinity，不再继续学习。
-- [ ] Fruit 不再按花期规则蒸发，改为累积汁液 / 内容物。
-- [ ] 提前移除花 / 果会改变叶片后续养分去向，并为多汁叶分支留下机制接口。
+- [ ] Flower / Fruit 是同一个生殖器官的连续 Growth 轴。
+- [ ] Flower 使用 Growth 0→30；正常供给下约 12h 达到 30 是体验目标，不建立 FlowerTimer。
+- [ ] Flower 从父级 Leaf 本 Tick Growth Nutrient Budget 中分流，当前 sink baseline ≈50%，并继续塑形 Affinity。
+- [ ] Growth 到 30：Flower 凋谢并形成 Fruit；当前 Affinity 在此锁定。
+- [ ] Fruit 从同一 Growth 轴 30 继续到 100；30≤Growth<100 为 Green Fruit，Growth≥100 为 Mature Fruit。
+- [ ] Green Fruit sink 目标为 80–90%，保留实现时校准区间；Mature Fruit sink baseline ≈20%。
+- [ ] Fruit 形成后不再塑形 Affinity，开始累计 `FruitElementAmount[7]`。
+- [ ] `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`；总量为 0 时尚未形成 Flavor，ratio 只派生、不重复持久化。
+- [ ] Mature Fruit 到 100 后仍继续低效率累计元素，因此 FlavorRatio 仍可变化；100 只锁物理成熟。
+- [ ] Fruit 形成后随时可采摘；Green Fruit 是独立料理材料，不是失败状态。
+- [ ] Green Fruit 外观从青绿 / 柔软逐步过渡到 Mature Fruit 的深褐木质果壳；内部由混沌元素粘液过渡到“果壳 → 光滑内膜 → 果肉膜 → 清澈水瓜水”。
+- [ ] Mature Fruit 可用少量亮晶晶逸散表达仍在富集；本 Feature 不实现通用 shader / VFX framework。
+- [ ] 成熟后催化 / 精炼 / 老种子等只保留未来语义插口，不定义状态或公式。
 
 ---
 
@@ -278,7 +283,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 需要覆盖：
 
 - [ ] 未成熟器官可随着连续学习和 Growth 构成改变表现。
-- [ ] Stage 切换时，当前 Effective Affinity 固定为下一 Stage 的 Base Affinity。
+- [ ] Seed / Seedling 与仍在学习的 Leaf 阶段继续遵守既有 Affinity 固化语义；生殖器官例外是 Flower Growth=30 时直接锁定 Affinity，Fruit 30→100 不再塑形。
 - [ ] 某元素 Affinity 达到表现阈值时，可以进入对应颜色 / 变种形态。
 - [ ] 未达到阈值时保持普通形态，但隐藏 Affinity 仍然保留。
 - [ ] 多元素同时超过阈值时的视觉选择规则由表现 Spec 决定。
@@ -289,24 +294,20 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 
 ---
 
-### F7 — 果实六维口味
+### F7 — Fruit Flavor Ratio
 
-目标：从果实七元素快照计算六维隐藏口味。
+目标：让果实结果后的七元素实际累计量直接成为 v0 Flavor 的事实源，不引入第二套味道转换。
 
 需要覆盖：
 
-- [ ] F7.1 基础口味向量。
-- [ ] F7.2 七元素口味修正矩阵。
-- [ ] F7.3 按元素强度线性累加。
-- [ ] F7.4 六维结果 clamp 到 0～100。
-- [ ] F7.5 不向玩家直接显示精确数值。
-- [ ] F7.6 为后续水瓜汁和混合复用同一计算逻辑。
+- [ ] F7.1 持久化 `FruitElementAmount[7]`，只累计 Fruit 形成以后实际进入果实的七元素量。
+- [ ] F7.2 `ΣFruitElementAmount = 0` 时，Flavor 尚未形成。
+- [ ] F7.3 总量大于 0 时派生 `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`。
+- [ ] F7.4 不额外持久化重复 `FlavorRatio` 向量，除非后续实现出现明确必要性。
+- [ ] F7.5 Growth=100 后仍允许元素继续累计，因此 FlavorRatio 可以继续变化。
+- [ ] F7.6 本 Feature 不实现六维 Taste、Affinity→Flavor efficiency、Flavor decay / cap、催化或精炼。
 
-复合节点候选：
-
-- [ ] `fruit_taste_calc` 或更通用的 `element_taste_calc`。
-
-正式命名应在该功能 Spec 中确定。
+当前不建立通用 Flavor conversion pipeline。未来具体料理如何解释这个比例，在对应 Feature 重新形成 Spec。
 
 ---
 
@@ -502,9 +503,9 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
 - [ ] Sapling 当前最多出现 3 片叶；大多数长期处于2叶，少量进入3叶。
 - [ ] 每片叶获得约 0.3 的分流预算；3叶时 Tree 仅保留约0.1。
-- [ ] 叶片经历 Tender → Thick → Mature。
+- [ ] 叶片前半段按 SmallLeaf → LargeLeaf → FlowerBud 的已确认 elapsed-time boundary 推进；第一条切片仍可在进入 Flower runtime 前收口。
 - [ ] 叶片 Effective Affinity 持续学习。
-- [ ] Stage 升级固定亲和并清空 Growth。
+- [ ] 按各阶段合同处理 Affinity：Leaf 学习阶段独立塑形；Flower→Fruit 在 Growth=30 锁定；不要用一个通用规则覆盖所有阶段。
 - [ ] 叶片表现可以随培养方向产生差异。
 - [ ] 玩家点击成熟可采叶片。
 - [ ] 史莱姆移动并完成摘叶。
@@ -813,7 +814,7 @@ MANUAL: connect compound node xxx_calc
 第一条闭环之后再进入：
 
 - [ ] **F5-FlowerFruit**
-- [ ] **F7 果实六维口味**
+- [ ] **F7 Fruit Flavor Ratio**
 - [ ] **F8 水 + 草绽放**
 - [ ] **F9 取汁**
 - [ ] **F10 水瓜汁混合**

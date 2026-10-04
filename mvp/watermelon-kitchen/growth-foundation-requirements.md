@@ -25,13 +25,12 @@ Debug 生成元素球
 → Debug UI 可查看 / 修改当前作物状态
 ~~~
 
-暂不处理：
+本文件现在同时记录已确认的 Sapling 后半段生命周期合同，但**本轮仍不进入 runtime 实现**。当前第一条实现切片暂不处理：
 
-- 叶片实际生长流程；
-- 花 / 果；
-- 子器官分流；
+- Leaf / Flower / Fruit 的实际节点图与 runtime；
+- 独立 scheduler / timer manager；
 - 元素球自然刷新；
-- 料理；
+- 料理与具体 Flavor 扩展；
 - 遗传落地；
 - 最终数值平衡；
 - 完整玩家交互。
@@ -68,9 +67,16 @@ Debug 生成元素球
 - [x] Sapling 主干 Growth 周期阈值 = 100；达到后只更新 / 固定自身元素亲和，不进入下一 Stage。
 - [x] 出芽只在服务器时间每日 04:00 检查一次：0叶 0.80、1叶 0.40、2叶 0.01、3叶 0。
 - [x] Bud 使用独立 `BUD_Growth[7]`，阈值 = 20；Active Bud 存在时，Tree 自身本应获得的 GrowthGain 全部进入 Bud。
-- [x] 玩家掐掉未完成 Bud 时，`BUD_Growth` 完整合并回 `TREE_Growth`；Bud 正常到 20 后固定亲和并成为正式叶片。
+- [x] 玩家掐掉未完成 Bud 时，`BUD_Growth` 完整合并回 `TREE_Growth`；Bud 正常到 20 后生成 SmallLeaf，SmallLeaf 在出生瞬间按当前 Tree 的标准父子器官亲和继承规则取得自己的 Affinity 初值，之后独立塑形、不实时跟随 Tree。
 - [x] 叶片分流继续使用本 Tick 生长养分预算：0叶 Tree 1.0；1叶 Tree 0.7 + Leaf 0.3；2叶 Tree 0.4 + 两叶各0.3；3叶 Tree 0.1 + 三叶各0.3。三叶时主干几乎停止是预期结果。
-- [x] 离线恢复按事件边界回放：连续 Growth 区间用真实 dt 批算；跨过 04:00 时先结算此前 Growth，再用当时真实 LeafCount / Bud 状态投一次出芽。
+- [x] Bud → SmallLeaf 后的开花前生命周期使用集中 elapsed-time settlement：SmallLeaf 约 12h → LargeLeaf；再 12h → FlowerBud；再约 24h → bloom boundary。不得为三段分别建立独立 Timer。
+- [x] 离线恢复首次跨过某个 FlowerBud 的 bloom boundary 时，该器官停在“Flower 刚开始”，本次离线恢复不继续推进其 Flower Growth；玩家登录后开始可见花期。不得因此建立复杂 scheduler。
+- [x] Flower / Fruit 使用同一生殖器官 Growth 轴：Flower 0→30；到 30 花凋谢、形成 Fruit 并锁定当前 Affinity；Fruit 从 30 继续，30≤Growth<100 为 Green Fruit，Growth≥100 为 Mature Fruit。
+- [x] 生殖器官相对父级 Leaf Growth Nutrient Budget 的当前目标：Flower ≈50%；Green Fruit 80–90%（保留校准区间）；Mature Fruit ≈20%。
+- [x] Fruit 形成后不再塑形 Affinity，改为累计 `FruitElementAmount[7]`；`FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`，总量为 0 时尚未形成 Flavor。FlavorRatio 为派生值，不额外持久化重复向量。
+- [x] Fruit 形成后即可采摘；Green Fruit 是独立料理材料而非失败状态。Growth=100 只表示物理成熟，不锁 Flavor、不停止元素累计、不自动采摘。
+- [x] Mature Fruit 达到 100 后仍可按约 20% 的低 sink 继续富集，所以 `FruitElementAmount` / `FlavorRatio` 仍可变化；未来催化 / 精炼 / 老种子只保留语义插口，不定义规则。
+- [x] 离线恢复按事件边界回放：连续 Growth 区间用真实 dt 批算；跨过 04:00 时先结算此前 Growth，再用当时真实 LeafCount / Bud 状态投一次出芽；SmallLeaf / LargeLeaf / FlowerBud 边界与 Flower/Fruit 的 30 / 100 也进入同一集中 settlement，首次跨 bloom boundary 时遵守可见花期停点。
 - [x] Debug UI 必须能够立即推进下一次 Growth Tick；调试推进使用一个标准在线更新步长，不需要真实等待下一次调度。
 
 ### 已选方向，但实现细节未确认
@@ -88,9 +94,9 @@ Debug 生成元素球
 - [x] Growth Tick 的信号 / 流水线顺序与状态边界。
 - [x] Soil Growth Tick：容量归一化 → 蒸发 → 进入 Tree Growth Update。
 - [>] Tree 从 Soil 吸收：RootPreference、总吸收上限 1.0/h、单元素 `0.30 × Affinity` Cap 和 Stage 不改变总吸收上限均已确认；仍待确认 Base / Effective Affinity 取值以及多元素重分配算法。
-- [>] Sapling 起 Reserve → Growth：Tree / Leaf 基础分流与 Bud Growth 路由已确认；Reserve 上限、Dormant 阈值和 Flower 分流仍待继续确认。
+- [>] Sapling 起 Reserve → Growth：Tree / Leaf 基础分流、Bud Growth 路由与当前生殖器官 sink baseline 已确认；仍待确认 Reserve 上限、Dormant 阈值以及实现时的具体 Growth rate 校准。
 - [x] Stage：Seed → Seedling = 45、Seedling → Sapling = 90 已确认；Sapling 作为当前长期终态，不再推进 Mature。
-- [>] Sapling 器官链：每日出芽、Bud=20、最多3叶和 Tree/Leaf 分流已确认；Leaf → Flower → Fruit 具体阈值仍待确认。
+- [x] Sapling 器官链：每日出芽、Bud=20、最多3叶、Tree/Leaf 分流、SmallLeaf/LargeLeaf/FlowerBud 时间边界、Flower 0→30、Fruit 30→100、Affinity 锁定点与 Fruit Flavor ratio 数据边界均已确认。
 - [ ] Debug UI 的具体控件和交互。
 - [ ] 最终文件拆分与 Spec / Issue。
 
@@ -372,7 +378,9 @@ TREE_Growth cycle = 100
 BUD_Growth threshold = 20
 ~~~
 
-Bud 正常到 20 后成为叶片；玩家提前掐芽，则 Bud Growth 完整并回 TREE_Growth。
+Bud 正常到 20 后生成 SmallLeaf；玩家提前掐芽，则 Bud Growth 完整并回 TREE_Growth。
+
+SmallLeaf 的初始 Affinity 不取 Bud 的实时状态，而是在出生这一刻直接使用 2.3 的标准子器官继承规则，从当前 Tree 继承一次。之后 SmallLeaf 只根据自己的 Growth 更新 Effective Affinity，不实时跟随 Tree。
 
 因此“掐芽催熟”不是额外加速，而是主动放弃叶片扩张、把已投入芽的 Growth 收回主干。
 
@@ -878,7 +886,7 @@ Soil
 
 吸收与后续 Growth / 果实规则最终需要支持以下玩家层次：
 
-- 完全不了解系统的新人，把随机遇到的元素球都投入土壤，通常得到没有明显元素倾向、带少量随机差异的普通水瓜，整体味道接近普通水瓜基线；
+- 完全不了解系统的新人，把随机遇到的元素球都投入土壤，通常得到没有明显元素倾向、带少量随机差异的普通水瓜；当前 v0 的 Fruit Flavor 直接由结果后累计七元素量的比例解释，不在本基础链中转换成另一套味道数值；
 - 新人仍可能偶然得到一两个亲和较高的 Hydro / Dendro 等元素水瓜，但复现性低，作为“发现系统存在”的惊喜；
 - 有意识只投单元素能够稳定推动目标元素性状，但以显著降低生长速度为代价；
 - “单元素水瓜”要求某一元素达到显著水平，并与第二 / 第三元素拉开足够差距；其他元素仍然存在，因此同类元素水瓜之间仍会有风味差异；
@@ -937,9 +945,9 @@ Debug UI 状态归 Player 所有。
 - [x] 5. Growth Tick 的信号 / 流水线顺序
 - [x] 6. Soil Growth Tick
 - [>] 7. Tree Growth Tick：吸收 / RootPreference / 单元素饱和（数值基线已锁，剩余分配算法待确认）
-- [>] 8. Tree Growth Tick：Sapling 起 Reserve → Growth（Tree/Leaf/Bud 分流已锁，Reserve 与 Flower 细节待确认）
+- [>] 8. Tree Growth Tick：Sapling 起 Reserve → Growth（Tree/Leaf/Bud 分流与 Flower / Fruit sink baseline 已锁，Reserve 与具体 Growth rate 校准待确认）
 - [x] 9. Seed → Seedling → Sapling（45 / 90 已锁；Sapling 为当前长期终态）
-- [>] 10. Sapling 每日出芽 / Bud / 0~3叶循环（基础规则已锁，Leaf/Flower/Fruit 阈值待继续）
+- [x] 10. Sapling 每日出芽 / Bud / 0~3叶 / Flower / Fruit 生命周期合同（时间边界、30/100、Affinity lock、FruitElementAmount / FlavorRatio 已锁）
 - [ ] 11. Debug Crop Inspector
 - [ ] 12. 文件拆分与最终 Spec / Issue
 
