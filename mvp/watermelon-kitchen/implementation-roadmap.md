@@ -27,7 +27,7 @@ flowchart TD
 
     H[Fruit Flavor 比例]
     I[水草绽放]
-    J[采集与取汁]
+    J[采集与材料加工]
     K[1~3份水瓜汁混合]
 
     L[点击式劳动基础<br/>选择行动 / 自动移动 / 中断 / 搬运]
@@ -250,6 +250,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] Bud=20 后生成 SmallLeaf，并在出生瞬间从当前 Tree 一次性继承标准父子器官 Affinity；之后不实时跟随 Tree。
 - [ ] SmallLeaf 约 12h → LargeLeaf；再约 12h → FlowerBud；再约 24h → bloom boundary。
 - [ ] SmallLeaf / LargeLeaf / FlowerBud 由统一 settlement 按 elapsed time 推进，不建立三个独立 Timer。
+- [ ] Fruit Growth 达到 100 时，Green Fruit -> Mature Fruit 与 parent Leaf -> fibrous Aquamelon Leaf 同步发生；该叶采摘后得到 `AquamelonLeaf`，不新增“成熟叶计时器”。
 - [ ] 离线首次跨越 bloom boundary 时，该器官停在刚开始的 Flower，让玩家登录后看到花期；不建立 scheduler framework。
 - [ ] Leaf 没有独立 Reserve，继续从 Tree 的本 Tick Growth Nutrient Budget 取自己的份额。
 - [ ] Leaf 在未锁定阶段根据自己的 Growth 独立塑形 Affinity；SmallLeaf 出生后 Tree 的变化不回写。
@@ -334,20 +335,26 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 
 ---
 
-### F9 — 采集与果实取汁
+### F9 — 采集、世界材料与最小加工
 
-目标：把已经具有元素、颜色、口味和绽放状态的果实转化成可继续制作的水瓜汁。
+目标：把已确认的活体器官转换为场景中的独立 world Material，并实现 Green Fruit / Mature Aquamelon 当前已经锁定的最小材料拆分。这个 Feature 不建立传统背包、堆叠系统、通用 Item framework 或 recipe engine。
 
 需要覆盖：
 
-- [ ] F9.1 果实可采集。
-- [ ] F9.2 采集后成为场景中的实际物品。
-- [ ] F9.3 取汁交互。
-- [ ] F9.4 水瓜汁继承果实七元素快照。
-- [ ] F9.5 水瓜汁重新计算颜色、口味和绽放结果。
-- [ ] F9.6 第一版不处理出汁率和加工损耗。
+- [ ] F9.1 SmallLeaf 采摘后生成独立 `TenderLeaf` / 嫩叶材料。
+- [ ] F9.2 LargeLeaf 采摘后生成独立 `ThickLeaf` / 肥厚的叶片材料。
+- [ ] F9.3 Fruit Growth=100 的同一成熟事件把 parent Leaf 转成纤维质 Aquamelon Leaf；采摘后生成 `AquamelonLeaf` / 水瓜树叶。
+- [ ] F9.4 Green Fruit 在 `30 <= Growth < 100` 可采摘为 `GreenFruit` / 青果。
+- [ ] F9.5 Mature Fruit 在 `Growth >= 100` 可采摘为 `Aquamelon` / 水瓜。
+- [ ] F9.6 Living Organ -> world Material 后退出 Tree / Leaf nutrient allocation、organ Growth 与 on-tree enrichment。
+- [ ] F9.7 每个具体材料至少携带 `MaterialType`、`ElementAmount[7]`、`Affinity[7]` 语义；`FlavorRatio` 继续由 ElementAmount 比例派生，不要求统一 generic 数据框架。
+- [ ] F9.8 `GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；青果皮与青果肉都是独立材料。
+- [ ] F9.9 `Aquamelon -> AquamelonShell x2 + AquamelonJuice x1`；两个水瓜壳与一份水瓜汁都是独立材料实体。
+- [ ] F9.10 `AquamelonShell -> AquamelonFlesh + remaining shell material`；当前只确认可剥出一份水瓜肉，不定义剩余壳命名、总产量、工具、耗时或损耗。
+- [ ] F9.11 `GreenFruitFlesh != AquamelonFlesh`，`GreenFruitPeel != AquamelonShell`；不建立 generic `AquamelonPeel`，也不把解剖学“果肉膜”强制定义为 `AquamelonPulpMembrane` 掉落。
+- [ ] F9.12 Processing 产物拥有独立 `ElementAmount / Affinity` 数据能力，但本 Feature 不定义元素量分配、Affinity 继承 / 变化、yield 或 mass conservation 公式。
 
-依赖点击劳动和搬运基础。
+依赖点击劳动和搬运基础；材料仍以世界对象存在，可直接放置在场景中。
 
 ---
 
@@ -418,7 +425,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] 叶 / 花 / 果按各自 Stage 生长并形成不同形态。
 - [ ] 玩家能够观察元素带来的颜色 / 生长速度 / 形态差异。
 - [ ] 玩家采集器官和果实。
-- [ ] 果实进入取汁与水瓜汁混合。
+- [ ] 采摘后的器官进入 world Material 与最小加工；其中 Mature Aquamelon 可产出 AquamelonJuice，再进入水瓜汁混合。
 - [ ] 制作结果能够反向影响下一轮培养选择。
 - [ ] 完成一次端到端人工验收。
 
@@ -817,7 +824,7 @@ MANUAL: connect compound node xxx_calc
 - [ ] **F5-FlowerFruit**
 - [ ] **F7 Fruit Flavor Ratio**
 - [ ] **F8 水 + 草绽放**
-- [ ] **F9 取汁**
+- [ ] **F9 采集与材料加工**
 - [ ] **F10 水瓜汁混合**
 - [ ] **F12 长期休眠 / 生长平衡深化**
 - [ ] **F13 完整 MVP 集成**
