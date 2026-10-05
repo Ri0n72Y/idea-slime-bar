@@ -22,14 +22,14 @@
 - Bud 独立 Growth、20 Growth 成叶、掐芽时 Growth 完整回主干；
 - 0/1/2/3叶时第一层预算固定为 Tree 1.0 / 0.7 / 0.4 / 0.1，每片叶约0.3；Flower / Fruit 只在所属母叶的0.3预算内部继续分流，不影响其它叶片；
 - Sapling 主干100 Growth只更新自身亲和，不进入下一 Stage；
-- 叶片的嫩芽 / 小叶 / 大叶 / 成叶与子器官分流；
+- 叶片的 Bud / SmallLeaf / LargeLeaf 生命周期，以及 Fruit Growth=100 时 parent Leaf 同步转为纤维质 Aquamelon Leaf；
 - Bud→SmallLeaf→LargeLeaf→FlowerBud 使用集中时间边界；Flower/Fruit 使用同一生殖 Growth 轴 0→30→100；
 - 基于服务器时间和事件边界的离线 Growth settlement；首次跨 bloom boundary 时让玩家登录后看到花期；
 - 全局可调配置与七元素固定索引；
 - 只显示最强元素颜色、不提供元素 UI；
 - Fruit 形成后累计 `FruitElementAmount[7]`，v0 Flavor 直接派生为七元素比例；Mature Fruit 后仍可低效率继续富集；
 - 第一种元素反应：水 + 草 → 绽放 / 草种子性状体；
-- 果实 → 水瓜汁；
+- 活体器官采摘后的独立 world Material identity，以及 GreenFruit 与 Mature Aquamelon 两条不同加工路线；
 - 1～3 份等体积水瓜汁混合及结果重算。
 
 当前不扩展第二种元素反应、更多料理、顾客经营或多人系统。基础生长链以 [growth-foundation-requirements.md](growth-foundation-requirements.md) 的 checklist 为当前设计进度来源；未确认的吸收 / Growth / Stage 数值不得由实现阶段自行补全。
@@ -88,9 +88,17 @@ Green Fruit 30→100，在母叶预算内80–90%强 sink；Mature Fruit 100+ �
 ↓
 FruitElementAmount → 派生 FlavorRatio
 ↓
-Green / Mature Fruit 均可采摘，并以物理形态提示阶段
+Fruit Growth=100：Green Fruit → Mature Fruit；parent Leaf 同步纤维化为 Aquamelon Leaf
 ↓
-后续取汁 / 混合 / 料理
+采摘：SmallLeaf → TenderLeaf；LargeLeaf → ThickLeaf；Aquamelon Leaf → AquamelonLeaf
+↓
+采摘：Green Fruit → GreenFruit；Mature Fruit → Aquamelon
+↓
+GreenFruit → GreenFruitPeel + GreenFruitFlesh
+Aquamelon → AquamelonShell x2 + AquamelonJuice
+AquamelonShell → AquamelonFlesh + remaining shell material
+↓
+后续混合 / 料理
 ↓
 玩家观察结果
 ↓
@@ -113,8 +121,8 @@ Green / Mature Fruit 均可采摘，并以物理形态提示阶段
 4. 实现 Seed → Seedling → Sapling 的直接 Growth 转换，再进入 Sapling 起的 Reserve / Growth 模型。
 5. 实现每日04:00出芽事件、Bud=20、掐芽回流、最多3叶和 Tree/Leaf 分流。
 6. 实现 SmallLeaf / LargeLeaf / FlowerBud 的集中时间结算，再实现 Flower 0→30、Fruit 30→100、阶段 sink 与 Affinity 锁定。
-7. 接入最小点击劳动和叶片采集，形成第一条可重复的可见闭环。
-8. 再接入元素球、`FruitElementAmount → FlavorRatio`、采果与后续料理；绽放、六维 Taste 等扩展另开 Spec。
+7. 接入最小点击劳动和叶片采集，按 SmallLeaf → TenderLeaf、LargeLeaf → ThickLeaf 的材料 identity 形成第一条可重复的可见闭环。
+8. 再接入元素球、`FruitElementAmount → FlavorRatio`、Growth=100 的母叶同步成熟、GreenFruit / Aquamelon 采摘与已确认的最小材料加工；绽放、六维 Taste 与料理扩展另开 Spec。
 9. 最后把各独立功能串成完整“培养 → 采集 → 制作 → 发现 → 再培养”闭环。
 
 这里描述的是实现依赖顺序，不额外增加新的玩法设计。
@@ -147,7 +155,7 @@ Green / Mature Fruit 均可采摘，并以物理形态提示阶段
 尤其需要注意：
 
 - 当前千星奇域 MVP 只有一棵长期培养、不会自然凋亡的水瓜树，不执行“留种 → 播种 → 再种植”循环；
-- 当前第一版料理只做水瓜汁混合，不要求旧加工设备链；
+- 当前千星奇域 MVP 的材料加工以本目录已确认的 GreenFruit / Aquamelon 路线为准，不要求旧加工设备链；后续水瓜汁混合建立在 `AquamelonJuice` 材料之上；
 - 顾客经营、积分扩张和生产压力都不是当前第一版完成条件。
 
 ## 尚未设计、不要自行补全
@@ -161,6 +169,8 @@ Green / Mature Fruit 均可采摘，并以物理形态提示阶段
 - 叶片进入料理后的口味和用途；
 - 草种子性状体作为独立材料的玩法；
 - 更复杂的料理加工和配料；
+- Processing 产物之间的 `ElementAmount` 分配、`Affinity` 继承 / 变化、yield / mass conservation 公式；
+- 传统 inventory slot、stack size、container、pickup capacity 与 generic item/component framework；
 - 顾客评价生成；
 - 多人访问、材料交换和互动对树体的隐藏影响。
 
