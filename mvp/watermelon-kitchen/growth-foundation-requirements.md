@@ -42,7 +42,7 @@ Debug 生成元素球
 ### 已明确确认
 
 - [x] 本轮围绕基础生长链：浇水 → 土壤元素 → 树体吸收 / 累积 → Growth → Seedling → Sapling 长期器官循环 → Debug 查看修改。
-- [x] 本轮实体固定为 4 类：Soil、AquamelonTree、Level、Player。
+- [x] 生长结算层当前固定 4 个状态所有者：Soil、AquamelonTree、Level、Player；采摘后的 world Material 是下游世界对象，不作为第五个 Growth Tick 状态所有者。
 - [x] CFG 不再使用结构体，恢复为普通变量和 `float[7]` 列表，命名继续采用 `CFG_xxx`。
 - [x] Level 保存 Tree / Leaf / Fruit 等器官的基础亲和模板。
 - [x] Tree / Leaf / Fruit 将来各自拥有个体亲和，不只永久读取全局 CFG。
@@ -76,6 +76,13 @@ Debug 生成元素球
 - [x] Fruit 形成后不再塑形 Affinity，改为累计 `FruitElementAmount[7]`；`FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`，总量为 0 时尚未形成 Flavor。FlavorRatio 为派生值，不额外持久化重复向量。
 - [x] Fruit 形成后即可采摘；Green Fruit 是独立料理材料而非失败状态。Growth=100 只表示物理成熟，不锁 Flavor、不停止元素累计、不自动采摘。
 - [x] Mature Fruit 达到 100 后仍可从所属母叶当次预算中按约 20% 的低 sink 继续富集，所以 `FruitElementAmount` / `FlavorRatio` 仍可变化；未来催化 / 精炼 / 老种子只保留语义插口，不定义规则。
+- [x] 叶片采摘 identity 已确认：SmallLeaf -> `TenderLeaf` / 嫩叶；LargeLeaf -> `ThickLeaf` / 肥厚的叶片。
+- [x] Fruit Growth 达到 100 时，Green Fruit -> Mature Fruit 与 parent Leaf -> fibrous Aquamelon Leaf 同步发生；该叶采摘后为 `AquamelonLeaf` / 水瓜树叶，不是叶片自身按时间自然成熟。
+- [x] 果实采摘 identity 已确认：Green Fruit -> `GreenFruit` / 青果；Mature Fruit -> `Aquamelon` / 水瓜。采摘后 world Material 退出 Tree / Leaf nutrient allocation、organ Growth 与 on-tree enrichment。
+- [x] 当前具体材料保持独立 MaterialType；每个材料至少携带 `MaterialType`、`ElementAmount[7]`、`Affinity[7]` 语义，`FlavorRatio` 继续从 ElementAmount 比例派生，不重复持久化。
+- [x] GreenFruit 加工已确认：`GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；Aquamelon 加工已确认：`Aquamelon -> AquamelonShell x2 + AquamelonJuice x1`；`AquamelonShell` 可继续处理出 `AquamelonFlesh` + remaining shell material。
+- [x] `GreenFruitFlesh != AquamelonFlesh`，`GreenFruitPeel != AquamelonShell`；不建立同时覆盖两者的 generic `AquamelonPeel`，`AquamelonPulpMembrane` 当前也不是锁定的独立拾取材料。
+- [x] Processing 产物拥有独立元素数据的能力已保留，但 ElementAmount / Affinity 如何在产物间分配、yield / mass conservation 等公式本轮保持未定义。
 - [x] 离线恢复按事件边界回放：连续 Growth 区间用真实 dt 批算；跨过 04:00 时先结算此前 Growth，再用当时真实 LeafCount / Bud 状态投一次出芽；SmallLeaf / LargeLeaf / FlowerBud 边界与 Flower/Fruit 的 30 / 100 也进入同一集中 settlement，首次跨 bloom boundary 时遵守可见花期停点。
 - [x] Debug UI 必须能够立即推进下一次 Growth Tick；调试推进使用一个标准在线更新步长，不需要真实等待下一次调度。
 
@@ -102,9 +109,9 @@ Debug 生成元素球
 
 ---
 
-## 1. 实体边界
+## 1. 生长结算状态所有者边界
 
-当前先固定 4 个实体 / 状态所有者：
+当前先固定 4 个 Growth Tick 状态所有者。采摘后生成的 world Material 属于下游世界对象，不改变这里的生长结算所有权划分：
 
 ### Level
 
@@ -934,7 +941,66 @@ Debug UI 状态归 Player 所有。
 
 ---
 
-## 7. 讨论顺序
+## 7. 活体器官、世界材料与最小加工 —— 已确认
+
+当前材料身份合同只回答“什么活体阶段采摘成什么材料、已确认的最小加工会产出什么”。它不建立背包、堆叠、容器或通用 Item / Processing framework。
+
+~~~text
+SmallLeaf -> TenderLeaf / 嫩叶
+LargeLeaf -> ThickLeaf / 肥厚的叶片
+
+Fruit Growth reaches 100:
+Green Fruit -> Mature Fruit
+parent Leaf -> fibrous Aquamelon Leaf
+
+fibrous parent Leaf -> harvest -> AquamelonLeaf / 水瓜树叶
+
+Green Fruit -> harvest -> GreenFruit / 青果
+Mature Fruit -> harvest -> Aquamelon / 水瓜
+~~~
+
+`AquamelonLeaf` 的成熟与所属 Fruit 的 `Growth = 100` 是同一个事件，不新增 Leaf timer，也不改 Flower / Fruit 的 0 -> 30 -> 100 时间线。
+
+采摘后的材料退出植物 Growth 模拟。材料实例至少保留：
+
+~~~text
+MaterialType
+ElementAmount[7]
+Affinity[7]
+~~~
+
+`FlavorRatio` 继续由 `ElementAmount` 的比例派生；是否最终采用统一数据结构，本轮不决定。
+
+当前 Processing 只锁定三条关系：
+
+~~~text
+GreenFruit
+-> GreenFruitPeel
+ + GreenFruitFlesh
+
+Aquamelon
+-> AquamelonShell x2
+ + AquamelonJuice x1
+
+AquamelonShell
+-> AquamelonFlesh
+ + remaining shell material
+~~~
+
+`GreenFruitFlesh` 与 `AquamelonFlesh` 是不同材料；`GreenFruitPeel` 与 `AquamelonShell` 也是不同材料。成熟果的“果肉膜”仍可作为解剖描述存在，但当前不强制变成独立拾取 Material。
+
+本轮明确不定义：
+
+- inventory / stack / container；
+- generic material / item component framework；
+- generic processing graph / recipe engine；
+- Processing 时 `ElementAmount` 的产物分配；
+- Processing 时 `Affinity` 的继承 / 变化；
+- yield / mass conservation / quality / durability / freshness / spoilage。
+
+---
+
+## 8. 讨论顺序
 
 后续按以下顺序逐条确认，不一次展开多个主题：
 
