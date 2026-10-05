@@ -23,7 +23,7 @@ Tree 先向各 Leaf 做第一层预算分流；每片 Leaf 再只在自己的预
 ↓
 Growth / Affinity 决定颜色与形态
 ↓
-果实成熟后进入料理链
+采摘后的活体器官先转换为独立 world Material，再由已确认的材料加工关系进入料理链
 ↓
 玩家根据结果反向调整下一轮培养
 ```
@@ -584,21 +584,19 @@ BloomConfig.TasteModifier
 
 ## 延后草稿：果实与水瓜汁
 
-第一版料理前处理只有：
+下面“果实直接取汁 / 水瓜汁继承果实快照”的旧写法已经被当前材料身份合同覆盖，不再作为 v0 Processing source of truth。
+
+当前已确认的 Mature Aquamelon 路线是：
 
 ```text
-水瓜果实
-↓
-取汁
-↓
-水瓜汁
+Aquamelon
+-> AquamelonShell x2
+ + AquamelonJuice x1
 ```
 
-暂不模拟出汁率、损耗和不同榨取方式。
+`AquamelonJuice` 是独立 world Material。Processing 时 `ElementAmount` 如何从 Aquamelon 分配到两个 Shell 与一份 Juice、`Affinity` 如何继承 / 变化，本轮明确不定义；因此不得直接把旧“整份七元素快照复制给水瓜汁”的规则接回当前实现。
 
-水瓜汁继承果实的七元素快照。
-
-颜色、口味和元素反应根据这份元素数据重新计算，不依赖固定料理 ID。
+后续如果重新启用水瓜汁颜色、味道和元素反应，应读取当时对应 Material Spec 已锁定的数据语义，而不是恢复旧的固定料理 ID 或快照复制规则。
 
 ## 延后草稿：混合水瓜汁
 
