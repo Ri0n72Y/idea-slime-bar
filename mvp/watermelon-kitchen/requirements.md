@@ -44,25 +44,69 @@
 
 ### 素材与不同形态
 
-水瓜厨房需要让同一种植物产生足够丰富的素材变化。
+水瓜厨房需要让同一种植物产生足够丰富、且彼此有明确 identity 的世界材料。当前不使用“同一个 Item + stage 字段”表示嫩叶、肥厚叶、青果和成熟果。
 
-素材来源至少包括水瓜树的不同部位，以及这些部位经过采集和处理后的不同形态。
+当前已经确认的活体器官 -> world Material：
 
-现有水瓜已经提供了可继续使用的基础材料方向，例如：
+| 活体状态 | Material | 中文 |
+| --- | --- | --- |
+| SmallLeaf | `TenderLeaf` | 嫩叶 |
+| LargeLeaf | `ThickLeaf` | 肥厚的叶片 |
+| 所属 Fruit Growth=100 后同步纤维化的 parent Leaf | `AquamelonLeaf` | 水瓜树叶 |
+| Green Fruit，30<=Growth<100 | `GreenFruit` | 青果 |
+| Mature Fruit，Growth>=100 | `Aquamelon` | 水瓜 |
 
-- 水瓜果实
-- 叶片
-- 水瓜茎
-- 水瓜鬃
-- 果壳
-- 果肉
-- 水瓜水
+`AquamelonLeaf` 不是叶片单纯放久后的时间成熟结果。Fruit Growth 达到 100 时：
 
-千星奇域版本还会让这些材料携带不同程度的元素特征。
+```text
+Green Fruit -> Mature Fruit
+parent Leaf -> fibrous Aquamelon Leaf
+```
 
-素材之间不建立简单的品质高低关系。不同部位、元素倾向和处理形态应当各有用途。
+二者在同一个成熟事件中发生。
 
-现有 [加工](../../docs/gameplay/processing.md) 中的材料拆分关系可以作为参考，但机器周转、设备堵塞和生产线节奏不属于第一版核心验证目标。
+采摘后：
+
+```text
+Living Organ
+-> world Material
+```
+
+材料退出植物生长模拟，不再参与 Tree / Leaf nutrient allocation、organ Growth 或 on-tree enrichment。材料作为场景中的实际独立对象存在，可以直接放在地面；当前不设计传统背包、stack size、容器和拾取容量。
+
+当前每个材料实例至少保留以下元素相关语义：
+
+```text
+MaterialType
+ElementAmount[7]
+Affinity[7]
+```
+
+`FlavorRatio[e] = ElementAmount[e] / sum(ElementAmount)`，仍是派生值而不是需要重复持久化的数据。不同材料可以拥有自己的元素属性、Affinity 和未来确有必要的特有数据；本轮不建立 generic material / item component framework。
+
+当前已确认的最小加工关系：
+
+```text
+GreenFruit / 青果
+-> GreenFruitPeel / 青果皮
+ + GreenFruitFlesh / 青果肉
+
+Aquamelon / 水瓜
+-> AquamelonShell x2 / 水瓜壳
+ + AquamelonJuice x1 / 水瓜汁
+
+AquamelonShell
+-> AquamelonFlesh / 水瓜肉
+ + remaining shell material
+```
+
+`GreenFruitPeel` 有弹性；`GreenFruitFlesh` 为胶冻 / 凝胶质地，可表现青果内部混沌且尚未稳定分层的元素形态。`AquamelonShell` 是木质 / 硬壳的两个半球形独立材料；`AquamelonJuice` 是成熟水瓜的稳定液体产物；`AquamelonFlesh` 从成熟水瓜壳内侧剥出，有弹性、口感类似椰果。
+
+`GreenFruitFlesh` 与 `AquamelonFlesh` 是不同材料；`GreenFruitPeel` 与 `AquamelonShell` 也是不同材料。成熟水瓜的“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”仍可作为生物形态描述，但不要求每个解剖层都成为可拾取 Material；当前不建立 generic `AquamelonPeel`，也不把 `AquamelonPulpMembrane` 锁成独立掉落。
+
+加工会生成新的独立材料实体，但本轮不定义多个产物之间如何分配 `ElementAmount`、如何继承 / 改变 `Affinity`，也不定义加工 yield、质量守恒、品质、耐久、新鲜度或腐败。
+
+水瓜茎、水瓜鬃等仍可作为原世界的长期材料背景，但不在这轮千星奇域 MVP 材料 identity 合同中重新定义。
 
 ### 自由组合料理
 
