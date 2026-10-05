@@ -1100,11 +1100,14 @@ FruitElementAmount[7]
 Reproductive Growth >= 100
 ```
 
-Fruit 只跨过物理成熟边界：
+Fruit 跨过物理成熟边界，同时触发所属母叶的同步成熟：
 
 ```text
 Green Fruit -> Mature Fruit
+parent Leaf -> fibrous Aquamelon Leaf state
 ```
+
+这是同一个 `Growth = 100` 成熟事件的两个结果。`AquamelonLeaf` 不是“叶片单独放久以后按时间自然成熟”的阶段；在 Fruit 达到 100 之前，母叶仍保持肥厚 / fleshy 的叶片形态，Fruit 达到 100 时才同步转为纤维质更强的成熟叶形态。
 
 `100` 当前**不表示**：
 
@@ -1194,26 +1197,131 @@ Mature Fruit
 
 当前只记录“这里存在未来扩展可能”。不定义阈值、公式、状态名、接口，也不建立 catalyst / refinement / old-seed framework。
 
-## 9. 采摘与上游养分回流
+## 9. 采摘、世界材料与上游养分回流
 
-Fruit 从形成后即可采摘：
+### 9.1 活体器官 -> 世界材料
+
+当前不使用“同一个 Item + stage 字段”来覆盖不同采摘阶段。已经确认的每一种采摘结果都保持独立 material identity：
+
+| 活体状态 | 采摘后的 Material | 中文 |
+| --- | --- | --- |
+| SmallLeaf | `TenderLeaf` | 嫩叶 |
+| LargeLeaf | `ThickLeaf` | 肥厚的叶片 |
+| Fruit Growth = 100 后同步纤维化的 parent Leaf | `AquamelonLeaf` | 水瓜树叶 |
+| Green Fruit，`30 <= Growth < 100` | `GreenFruit` | 青果 |
+| Mature Fruit，`Growth >= 100` | `Aquamelon` | 水瓜 |
+
+其中：
 
 ```text
+before Fruit Growth 100:
 Green Fruit
-→ 可主动早摘，获得特殊未稳定整合的料理材料
++ Thick / fleshy parent Leaf
 
-Mature Fruit
-→ 可采摘，获得结构稳定、以水瓜水为核心的成熟材料
+Fruit Growth reaches 100:
+Green Fruit -> Mature Fruit
+parent Leaf -> fibrous Aquamelon Leaf
 ```
 
-Green Fruit 不作为惩罚、失败或“没等够”的低级成果。
+因此 `AquamelonLeaf` 的形成由所属 Fruit 的成熟事件触发，不由叶片自身额外计时。
+
+采摘执行的是：
+
+```text
+Living Organ
+-> harvest
+-> world Material
+```
+
+转换完成后，该材料退出植物生长模拟，不再继续运行：
+
+- Tree / Leaf nutrient allocation；
+- organ Growth；
+- on-tree enrichment。
+
+世界材料作为场景中的独立对象存在，可以被搬运或直接放在地面；本轮不设计 inventory slot、stack size、container、pickup capacity 等系统。
+
+### 9.2 材料的最小元素数据语义
+
+当前每个具体材料实例至少具有以下元素相关语义：
+
+```text
+MaterialType
+ElementAmount[7]
+Affinity[7]
+```
+
+`FlavorRatio` 仍然只由元素量比例派生：
+
+```text
+FlavorRatio[e]
+= ElementAmount[e] / sum(ElementAmount)
+```
+
+总元素量为 0 时视为尚未形成 Flavor。当前只锁定这些语义，不提前设计统一的 generic material / item / component framework，也不把上述具体材料压缩为 `Material(type, stage)`。
+
+活体器官转换为世界材料时如何把其当前 Growth / FruitElementAmount 等运行态映射到材料的 `ElementAmount`，留到对应实现 Spec；本轮不额外发明转换公式。
+
+### 9.3 已确认的最小加工路线
+
+Processing 把一个世界材料转换为一个或多个新的世界材料实体。产物不是原材料上的 component / tag，而是新的独立 material identity，并拥有自己的 `ElementAmount[7]` / `Affinity[7]` 语义。
+
+Green Fruit 路线：
+
+```text
+GreenFruit / 青果
+-> 剥开
+-> GreenFruitPeel / 青果皮
+ + GreenFruitFlesh / 青果肉
+```
+
+- `GreenFruitPeel`：有弹性的独立材料；
+- `GreenFruitFlesh`：胶冻 / 凝胶质地，承接青果内部混沌、尚未稳定分层的元素形态；不同元素可以形成明显不同质感，未来允许出现结晶、颗粒等表现。
+
+Mature Aquamelon 路线：
+
+```text
+Aquamelon / 水瓜
+-> 破开
+-> AquamelonShell x2
+ + AquamelonJuice x1
+```
+
+- `AquamelonShell`：两个半球形、木质 / 硬壳的独立材料实体；
+- `AquamelonJuice`：一份稳定的成熟水瓜液体产物。
+
+水瓜壳还确认存在一次继续处理：
+
+```text
+AquamelonShell
+-> 进一步处理 / 剥取
+-> AquamelonFlesh
+ + remaining shell material
+```
+
+`AquamelonFlesh` / 水瓜肉从成熟水瓜壳内侧剥出，有弹性、口感类似椰果。当前只确认“可以从水瓜壳剥出一份水瓜肉”；剩余壳是否改名、质量、单果总产量、工具、耗时和损耗均不在本轮定义。
+
+以下 identity 必须保持区分：
+
+```text
+GreenFruitFlesh != AquamelonFlesh
+GreenFruitPeel  != AquamelonShell
+```
+
+当前不保留一个同时覆盖青果皮与成熟果壳的 generic `AquamelonPeel`。成熟果内部仍可在生物形态描述中存在“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”，但这些解剖层不自动等于可拾取 Material；`AquamelonPulpMembrane` 当前不是已经锁定的独立掉落材料。
+
+本轮也不定义 Processing 时 `ElementAmount` 如何在多个产物之间分配、`Affinity` 如何继承 / 改变、yield / mass conservation / quality / freshness 等公式。
+
+### 9.4 采摘后的 leaf-local sink
+
+Fruit 从形成后即可采摘；Green Fruit 不作为惩罚、失败或“没等够”的低级成果。
 
 如果玩家移除 Flower 或采摘 Fruit：
 
 ```text
 当前生殖器官的 leaf-local nutrient sink 消失
-→ 所属母叶重新获得完整的自身 Leaf budget
-→ 其它叶片与 Tree 的第一层预算保持不变
+-> 所属母叶重新获得完整的自身 Leaf budget
+-> 其它叶片与 Tree 的第一层预算保持不变
 ```
 
 未来是否由此形成多汁叶、再次开花或其它分支，仍留给后续 Spec；当前不额外定义触发阈值或状态。
