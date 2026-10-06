@@ -41,7 +41,7 @@ export const FLOWER_BUD_AT_HOURS = 24
 export const FLOWER_AT_HOURS = 48
 
 export const BUD_CHANCE_BY_LEAF_COUNT = [0.8, 0.4, 0.01, 0] as const
-export const SETTLEMENT_SLICE_HOURS = 0.25
+// Match the documented v0 online settlement cadence; debug time controls replay this real path.\nexport const SETTLEMENT_SLICE_HOURS = 1 / 60
 
 export const PROTOTYPE_GAPS = [
   'Absorption fallback: BaseAffinity caps + RootPreference weighted simultaneous normalization; Base vs Effective and final redistribution are not locked.',

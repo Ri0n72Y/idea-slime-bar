@@ -20,7 +20,7 @@ function tintFor(vector: ElementVector) {
   return index === null ? undefined : ELEMENT_COLORS[index]
 }
 
-export function WorldField({ world, selected, onSelect, onCaptureBall }: Props) {
+export function WorldField({ world, selected, onSelect, onPlaceSoil, onCaptureBall }: Props) {
   const tree = world.tree
 
   return (
@@ -33,7 +33,7 @@ export function WorldField({ world, selected, onSelect, onCaptureBall }: Props) 
       <div className="field">
         <button
           className={'soil-patch ' + (selected.kind === 'soil' || selected.kind === 'plot' ? 'selected' : '')}
-          onClick={() => onSelect(world.soil ? { kind: 'soil' } : { kind: 'plot' })}
+          onClick={() => world.soil ? onSelect({ kind: 'soil' }) : onPlaceSoil()}
         >
           <span className="soil-icon">{world.soil ? '🟫' : '▫️'}</span>
           <span>{world.soil ? 'Soil' : 'Empty field'}</span>
@@ -42,7 +42,7 @@ export function WorldField({ world, selected, onSelect, onCaptureBall }: Props) 
         {tree && (
           <button
             className={'tree-object ' + (selected.kind === 'tree' ? 'selected' : '')}
-            style={{ '--object-tint': tintFor(tree.reserve) } as CSSProperties}
+            style={{ '--object-tint': tintFor(tree.stage === 'Sapling' ? tree.reserve : tree.growth) } as CSSProperties}
             onClick={() => onSelect({ kind: 'tree' })}
           >
             <span className="tree-crown">{tree.stage === 'Seed' ? '🌰' : tree.stage === 'Seedling' ? '🌱' : '🌳'}</span>
