@@ -1,55 +1,68 @@
-import { Context } from '@deepseek-ai/cordis'
-import { WebProbeService } from '@idea-slime-bar/plugins'
+import {
+  type WorldTarget
+} from '@idea-slime-bar/plugins'
 import { useEffect, useState } from 'react'
 
-type ProbeState = {
-  cordis: 'starting' | 'ready' | 'error'
-  probe: string
-}
+import { ActionPanel } from './ActionPanel'
+import { DebugPanel } from './DebugPanel'
+import { useWatermelonGame } from './useWatermelonGame'
+import { WorldField } from './WorldField'
+import './styles.css'
 
 export function App() {
-  const [state, setState] = useState<ProbeState>({
-    cordis: 'starting',
-    probe: 'pending'
-  })
+  const runtime = useWatermelonGame()
+  const [selected, setSelected] = useState<WorldTarget>({ kind: 'plot' })
 
   useEffect(() => {
-    const ctx = new Context()
-    let active = true
-
-    async function start() {
-      try {
-        await ctx.plugin(WebProbeService)
-
-        if (active) {
-          setState({
-            cordis: 'ready',
-            probe: ctx.webProbe.status
-          })
-        }
-      } catch (error) {
-        if (active) {
-          setState({
-            cordis: 'error',
-            probe: error instanceof Error ? error.message : 'unknown error'
-          })
-        }
-      }
+    const world = runtime.world
+    if (!world) return
+    if (world.soil && selected.kind === 'plot') setSelected({ kind: 'soil' })
+    if (!world.materials.some((item) => selected.kind === 'material' && item.id === selected.id)) {
+      if (selected.kind === 'material') setSelected({ kind: 'tree' })
     }
+  }, [runtime.world, selected])
 
-    void start()
+  if (runtime.status === 'starting') {
+    return <main className="loading">Starting Cordis gameplay service…</main>
+  }
 
-    return () => {
-      active = false
-      void ctx.fiber.dispose()
-    }
-  }, [])
+  if (runtime.status === 'error' || !runtime.game || !runtime.world) {
+    return <main className="loading error">Runtime error: {runtime.error}</main>
+  }
+
+  const { game, world } = runtime
 
   return (
-    <main>
-      <h1>Watermelon Kitchen Web Prototype</h1>
-      <p>Cordis: {state.cordis}</p>
-      <p>Probe: {state.probe}</p>
+    <main className="app-shell">
+      <header className="hero">
+        <div>
+          <span className="eyebrow">Cordis browser playable v0</span>
+          <h1>Watermelon Kitchen</h1>
+          <p>Grow one strange tree, watch its elements learn, then harvest and process what it becomes.</p>
+        </div>
+        <div className="time-controls">
+          <button onClick={() => game.advance(1)}>+1h</button>
+          <button onClick={() => game.advance(12)}>+12h</button>
+          <button onClick={() => game.advance(24)}>+1d</button>
+          <button className="danger" onClick={() => {
+            game.reset()
+            setSelected({ kind: 'plot' })
+          }}>Reset World</button>
+        </div>
+      </header>
+
+      <div className="game-layout">
+        <div className="play-column">
+          <WorldField
+            world={world}
+            selected={selected}
+            onSelect={setSelected}
+            onCaptureBall={(id) => game.captureBall(id)}
+          />
+          <ActionPanel game={game} world={world} selected={selected} onSelect={setSelected} />
+        </div>
+        <DebugPanel world={world} />
+      </div>
     </main>
   )
 }
