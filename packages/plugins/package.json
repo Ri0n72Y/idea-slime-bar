@@ -8,7 +8,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:domain": "node -e \"require('fs').rmSync('.domain-check',{recursive:true,force:true})\" && tsc --target ES2022 --module CommonJS --moduleResolution Node --strict --skipLibCheck --outDir .domain-check --rootDir . tests/watermelon-domain-check.ts src/watermelon/types.ts src/watermelon/config.ts src/watermelon/vector.ts src/watermelon/state.ts src/watermelon/settlement.ts src/watermelon/materials.ts && node -e \"require('fs').writeFileSync('.domain-check/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node .domain-check/tests/watermelon-domain-check.js && node -e \"require('fs').rmSync('.domain-check',{recursive:true,force:true})\""
   },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.4"
