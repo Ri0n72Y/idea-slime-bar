@@ -1310,7 +1310,15 @@ GreenFruitPeel  != AquamelonShell
 
 当前不保留一个同时覆盖青果皮与成熟果壳的 generic `AquamelonPeel`。成熟果内部仍可在生物形态描述中存在“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”，但这些解剖层不自动等于可拾取 Material；`AquamelonPulpMembrane` 当前不是已经锁定的独立掉落材料。
 
-本轮也不定义 Processing 时 `ElementAmount` 如何在多个产物之间分配、`Affinity` 如何继承 / 改变、yield / mass conservation / quality / freshness 等公式。
+当前 Processing 应用 [植物材料设计原则](../../docs/plants/material-design-principles.md) 的 v0 边界：
+
+- 每个 Processing 产物都完整继承其来源材料的 `Affinity[7]`。Affinity 表达材料 / 组织的元素倾向，当前不按质量拆分、不做组织衰减，也不作为守恒数量重新计算。
+- `GreenFruitFlesh` 是 Green Fruit 的 growth accumulation carrier：Green Fruit 形成后在树上持续累计的 `FruitElementAmount[7]` / growth accumulation 由它承载；`GreenFruitPeel` 是已经形成的结构组织，不承载这部分持续生长累积。
+- `AquamelonJuice` 是 Mature Aquamelon 的 growth accumulation carrier：成熟果继续挂树富集形成的 `FruitElementAmount[7]` / growth accumulation 由它承载；`AquamelonShell` 是已经形成的结构组织，不承载这部分继续增长的累积。
+- `AquamelonShell -> AquamelonFlesh + remaining shell material` 中，`AquamelonFlesh` 与 remaining shell 都是从已经形成的成熟组织中取得的结构材料，不作为 on-tree growth accumulation carrier；二者仍完整继承来源 `AquamelonShell` 的 Affinity。
+- “结构组织不承载持续生长累积”不等于“结构材料没有元素”。这些材料仍可拥有自己的 `ElementAmount[7]`；其基础来源与数值当前未定义。
+
+这里锁定的是生长累积的**承载语义**，不是 Processing 数值分配公式。当前仍不设计固定比例拆分、mass conservation、yield、quality、freshness 或 generic processing engine。
 
 ### 9.4 采摘后的 leaf-local sink
 

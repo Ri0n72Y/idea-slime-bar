@@ -104,7 +104,9 @@ AquamelonShell
 
 `GreenFruitFlesh` 与 `AquamelonFlesh` 是不同材料；`GreenFruitPeel` 与 `AquamelonShell` 也是不同材料。成熟水瓜的“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”仍可作为生物形态描述，但不要求每个解剖层都成为可拾取 Material；当前不建立 generic `AquamelonPeel`，也不把 `AquamelonPulpMembrane` 锁成独立掉落。
 
-加工会生成新的独立材料实体，但本轮不定义多个产物之间如何分配 `ElementAmount`、如何继承 / 改变 `Affinity`，也不定义加工 yield、质量守恒、品质、耐久、新鲜度或腐败。
+加工产物当前默认完整继承来源材料的 `Affinity[7]`；这不是需要守恒拆分的数量语义。Fruit 在树上持续增加的 `FruitElementAmount` / growth accumulation 则只落到实际承载富集结果的组织：`GreenFruitFlesh` 承载 Green Fruit 的持续生长累积，`AquamelonJuice` 承载 Mature Aquamelon 的持续生长累积；`GreenFruitPeel`、`AquamelonShell`、`AquamelonFlesh` 与 remaining shell 属于已经形成的结构材料，不承载这部分继续增长的累积。结构材料仍可拥有自己的 `ElementAmount`，其基础来源和数值当前不定义。通用判断方法见 [植物材料设计原则](../../docs/plants/material-design-principles.md)。
+
+当前仍不设计 Processing 的 `ElementAmount` 分配公式、固定比例、质量守恒、yield、品质、耐久、新鲜度或腐败。
 
 水瓜茎、水瓜鬃等仍可作为原世界的长期材料背景，但不在这轮千星奇域 MVP 材料 identity 合同中重新定义。
 
