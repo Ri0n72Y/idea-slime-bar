@@ -132,6 +132,7 @@ function makeLeaf(state: WorldState, tree: AquamelonTree): Leaf {
     growth: zeroVector(),
     baseAffinity,
     effectiveAffinity: cloneVector(baseAffinity),
+    reproductionStarted: false,
     reproductive: null
   }
 }
@@ -164,7 +165,8 @@ function updateElapsedLifecycle(state: WorldState, tree: AquamelonTree) {
       leaf.stage = 'LargeLeaf'
       appendLog(state, leaf.id + ' -> LargeLeaf at 12h.')
     }
-    if (!leaf.reproductive && ageHours >= FLOWER_BUD_AT_HOURS) {
+    if (!leaf.reproductionStarted && ageHours >= FLOWER_BUD_AT_HOURS) {
+      leaf.reproductionStarted = true
       leaf.reproductive = makeFlowerBud(leaf, leaf.bornAtMs + FLOWER_BUD_AT_HOURS * HOUR_MS)
       appendLog(state, leaf.id + ' formed FlowerBud at 24h.')
     }

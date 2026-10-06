@@ -52,6 +52,7 @@ export interface Leaf {
   growth: ElementVector
   baseAffinity: ElementVector
   effectiveAffinity: ElementVector
+  reproductionStarted: boolean
   reproductive: ReproductiveOrgan | null
 }
 
