@@ -2,9 +2,11 @@ import {
   ELEMENT_COLORS,
   ELEMENTS,
   dominantElement,
+  type ElementVector,
   type WorldState,
   type WorldTarget
 } from '@idea-slime-bar/plugins'
+import type { CSSProperties } from 'react'
 
 type Props = {
   world: WorldState
@@ -13,8 +15,8 @@ type Props = {
   onCaptureBall: (id: string) => void
 }
 
-function tintFor(vector: number[]) {
-  const index = dominantElement(vector as never)
+function tintFor(vector: ElementVector) {
+  const index = dominantElement(vector)
   return index === null ? undefined : ELEMENT_COLORS[index]
 }
 
@@ -40,7 +42,7 @@ export function WorldField({ world, selected, onSelect, onCaptureBall }: Props) 
         {tree && (
           <button
             className={'tree-object ' + (selected.kind === 'tree' ? 'selected' : '')}
-            style={{ '--object-tint': tintFor(tree.reserve) } as React.CSSProperties}
+            style={{ '--object-tint': tintFor(tree.reserve) } as CSSProperties}
             onClick={() => onSelect({ kind: 'tree' })}
           >
             <span className="tree-crown">{tree.stage === 'Seed' ? '🌰' : tree.stage === 'Seedling' ? '🌱' : '🌳'}</span>
@@ -54,7 +56,7 @@ export function WorldField({ world, selected, onSelect, onCaptureBall }: Props) 
             <button
               key={leaf.id}
               className={'leaf-object ' + (selected.kind === 'leaf' && selected.id === leaf.id ? 'selected' : '')}
-              style={{ '--object-tint': tintFor(leaf.growth) } as React.CSSProperties}
+              style={{ '--object-tint': tintFor(leaf.growth) } as CSSProperties}
               onClick={() => onSelect({ kind: 'leaf', id: leaf.id })}
             >
               <span>{leaf.stage === 'AquamelonLeaf' ? '🍂' : '🍃'}</span>
@@ -78,7 +80,7 @@ export function WorldField({ world, selected, onSelect, onCaptureBall }: Props) 
               <button
                 key={ball.id}
                 className="element-ball"
-                style={{ '--ball-color': index === null ? '#fff' : ELEMENT_COLORS[index] } as React.CSSProperties}
+                style={{ '--ball-color': index === null ? '#fff' : ELEMENT_COLORS[index] } as CSSProperties}
                 title="Only available action: guide into Soil"
                 onClick={() => onCaptureBall(ball.id)}
               >

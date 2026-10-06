@@ -46,6 +46,7 @@ export const SETTLEMENT_SLICE_HOURS = 0.25
 export const PROTOTYPE_GAPS = [
   'Absorption fallback: BaseAffinity caps + RootPreference weighted simultaneous normalization; Base vs Effective and final redistribution are not locked.',
   'Green Fruit sink fallback: 0.85 midpoint inside the documented 0.80-0.90 range.',
+  'Sapling Reserve cap and final reproductive Growth-rate calibration are still open; v0 keeps Reserve uncapped and uses the documented 0.99/h metabolism directly.',
   'Post-harvest re-flowering is not designed; harvested fruit leaves do not automatically start another flower cycle.',
   'Structural Material ElementAmount is undefined until a source formula is designed.'
 ] as const

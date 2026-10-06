@@ -168,10 +168,7 @@ function updateElapsedLifecycle(state: WorldState, tree: AquamelonTree) {
       leaf.reproductive = makeFlowerBud(leaf, leaf.bornAtMs + FLOWER_BUD_AT_HOURS * HOUR_MS)
       appendLog(state, leaf.id + ' formed FlowerBud at 24h.')
     }
-    if (
-      leaf.reproductive?.stage === 'FlowerBud' &&
-      ageHours >= FLOWER_AT_HOURS
-    ) {
+    if (leaf.reproductive?.stage === 'FlowerBud' && ageHours >= FLOWER_AT_HOURS) {
       leaf.reproductive.stage = 'Flower'
       leaf.reproductive.stageStartedAtMs = leaf.bornAtMs + FLOWER_AT_HOURS * HOUR_MS
       appendLog(state, leaf.id + ' FlowerBud reached bloom boundary -> Flower.')
@@ -190,8 +187,7 @@ function growReproductive(state: WorldState, leaf: Leaf, nutrient: ElementVector
   const organ = leaf.reproductive
   if (!organ || organ.stage === 'FlowerBud') return
   const affinity = organ.lockedAffinity ?? organ.effectiveAffinity
-  const growthGain = multiplyVectors(nutrient, affinity)
-  addVector(organ.growth, growthGain)
+  addVector(organ.growth, multiplyVectors(nutrient, affinity))
 
   if (organ.stage === 'Flower') {
     organ.effectiveAffinity = effectiveAffinity(organ.baseAffinity, organ.growth)
@@ -213,11 +209,7 @@ function growReproductive(state: WorldState, leaf: Leaf, nutrient: ElementVector
   }
 }
 
-function growLeafAndReproduction(
-  state: WorldState,
-  leaf: Leaf,
-  leafBudget: ElementVector
-) {
+function growLeafAndReproduction(state: WorldState, leaf: Leaf, leafBudget: ElementVector) {
   const sink = leaf.reproductive ? reproductiveSink(leaf.reproductive.stage) : 0
   const reproductiveBudget = scaleVector(leafBudget, sink)
   const ownBudget = scaleVector(leafBudget, 1 - sink)
@@ -231,7 +223,7 @@ function growLeafAndReproduction(
 
 function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: ElementVector, dtHours: number) {
   addVector(tree.reserve, absorbed)
-  const reserveTotal = sumVector(tree.reserve)
+  let reserveTotal = sumVector(tree.reserve)
 
   if (tree.activity === 'Dormant' && reserveTotal >= 80) {
     tree.activity = 'Growing'
@@ -267,6 +259,12 @@ function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: Element
     addVector(tree.growth, ownGrowthGain)
     tree.effectiveAffinity = effectiveAffinity(tree.baseAffinity, tree.growth)
     updateTreeGrowthCycle(state, tree)
+  }
+
+  reserveTotal = sumVector(tree.reserve)
+  if (tree.activity === 'Growing' && reserveTotal < 30) {
+    tree.activity = 'Dormant'
+    appendLog(state, 'Sapling Reserve dropped below 30 -> Dormant.')
   }
 }
 
@@ -330,9 +328,7 @@ export function advanceWorld(state: WorldState, hours: number) {
       settleContinuous(state, step)
       state.nowMs += step * HOUR_MS
       remaining -= step
-      updateElapsedLifecycle(state, state.tree ?? ({
-        leaves: []
-      } as AquamelonTree))
+      if (state.tree) updateElapsedLifecycle(state, state.tree)
     }
 
     if (Math.abs(state.nowMs - nextBud) < 2) runBudCheck(state)
