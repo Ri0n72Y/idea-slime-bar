@@ -1,5 +1,4 @@
 export {
-  ELEMENT_COLORS,
   PROTOTYPE_GAPS
 } from './config'
 export { WatermelonGameService } from './game-service'
@@ -12,8 +11,7 @@ export type {
   MaterialType,
   ReproductiveOrgan,
   WorldMaterial,
-  WorldState,
-  WorldTarget
+  WorldState
 } from './types'
 export {
   ELEMENTS
