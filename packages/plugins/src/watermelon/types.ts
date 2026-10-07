@@ -96,11 +96,3 @@ export interface WorldState {
   nextId: number
   logs: WorldLog[]
 }
-
-export type WorldTarget =
-  | { kind: 'plot' }
-  | { kind: 'soil' }
-  | { kind: 'tree' }
-  | { kind: 'ball'; id: string }
-  | { kind: 'leaf'; id: string }
-  | { kind: 'material'; id: string }

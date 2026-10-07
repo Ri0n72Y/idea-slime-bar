@@ -1,15 +1,5 @@
 import type { ElementVector } from './types'
 
-export const ELEMENT_COLORS = [
-  '#EC4923',
-  '#00BFFF',
-  '#359697',
-  '#945DC4',
-  '#66AD16',
-  '#4682B4',
-  '#DEBD6C'
-] as const
-
 export const TREE_ROOT_PREFERENCE: ElementVector = [0.8, 1, 0.85, 0.75, 1, 0.7, 0.9]
 export const TREE_AFFINITY: ElementVector = [0.85, 1.15, 0.9, 0.75, 1.2, 0.7, 0.95]
 export const LEAF_AFFINITY: ElementVector = [0.75, 1.1, 1, 0.85, 1.3, 0.9, 0.8]
