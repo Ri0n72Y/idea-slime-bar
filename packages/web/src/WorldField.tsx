@@ -12,6 +12,7 @@ type Props = {
   world: WorldState
   selected: WorldTarget
   onSelect: (target: WorldTarget) => void
+  onPlaceSoil: () => void
   onCaptureBall: (id: string) => void
 }
 
