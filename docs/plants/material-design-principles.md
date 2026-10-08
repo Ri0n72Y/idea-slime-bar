@@ -100,4 +100,4 @@ Processing 可以把一个来源材料转换成多个独立 Material。
 
 这些产物当前都完整继承各自来源材料的 Affinity。结构材料“不承载 Fruit 在树上持续增加的那份 growth accumulation”，不代表它们没有 ElementAmount。
 
-水瓜生命周期、`FruitElementAmount[7]` 与实际 Processing 路线的 source of truth 见 [水瓜厨房：七元素养分与生长系统](../../mvp/watermelon-kitchen/growth-system.md)。
+水瓜生命周期、`FruitElementAmount[7]` 与实际 Processing 路线的 source of truth 见 [水瓜厨房：七元素养分与生长系统](../../mvp/aquamelon-kitchen/growth-system.md)。

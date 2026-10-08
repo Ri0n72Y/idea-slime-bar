@@ -128,7 +128,7 @@ flowchart TD
 - [ ] 状态初始化、读取、保存边界。
 - [ ] Debug UI 可直接观察和修改上述关键状态。
 
-**预期实体：Soil / Plot、Watermelon Tree、Level / Stage Config。**
+**预期实体：Soil / Plot、Aquamelon Tree、Level / Stage Config。**
 
 ---
 
