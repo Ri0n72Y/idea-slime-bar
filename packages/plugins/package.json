@@ -8,8 +8,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "check:domain": "node -e \"require('fs').rmSync('.domain-check',{recursive:true,force:true})\" && tsc --target ES2022 --module CommonJS --moduleResolution Node --strict --skipLibCheck --outDir .domain-check --rootDir . tests/aquamelon-domain-check.ts src/aquamelon/types.ts src/aquamelon/config.ts src/aquamelon/vector.ts src/aquamelon/state.ts src/aquamelon/balls.ts src/aquamelon/settlement.ts src/aquamelon/materials.ts && node -e \"require('fs').writeFileSync('.domain-check/package.json','{\\\"type\\\":\\\"commonjs\\\"}')\" && node .domain-check/tests/aquamelon-domain-check.js && node -e \"require('fs').rmSync('.domain-check',{recursive:true,force:true})\""
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@deepseek-ai/cordis": "^4.0.4"

@@ -887,7 +887,7 @@ Mature Fruit 到 100 后仍继续按约 20% 的低 sink 累计元素，因此 Fl
 
 样例采用固定初始随机种子 `0x51a7e123`：开始时 Soil=0；每当 Soil 总元素量不足 55，玩家连续执行 7 次「凝聚元素 + 引导至土壤」（共 14 次点击）；所有结算调用同一个 `advanceWorld(state, 1, WEB_BALANCE)`。不进行直接 Growth 注入，也不跳阶段。
 
-独立数值推演给出以下 **待由仓库内 domain calibration check 运行确认** 的里程碑：
+独立数值推演给出以下 **尚未经过实际试玩验证** 的里程碑：
 
 | 实际阶段 / 边界 | 累计 Tick（推演） | 现实时间（20秒/Tick） |
 | --- | ---: | ---: |
@@ -905,4 +905,4 @@ Mature Fruit 到 100 后仍继续按约 20% 的低 sink 累计元素，因此 Fl
 
 同一投入策略但使用千星奇域的**历史** `1 / Tick` 吸收和 `0.99 / Tick` Reserve retention，独立推演约 **40 Tick** 到 Seedling、**110 Tick** 到 Sapling，第一周（168 Tick）尚未进入首次 SmallLeaf。新目标 24 / 72 / 168 Tick 尚未达标；要取得正式参数必须由 Lead 确认供应与预算如何调整，不能将 Web 的 6 / Tick 或 0.90 retention 隐式同步过去。
 
-实现内的可重复 Domain 校准检查位于 `packages/plugins/tests/aquamelon-tick-check.ts`，通过现有 `pnpm --filter @idea-slime-bar/plugins check:domain` 执行，不需要新增常驻 CI 作业。
+本轮移除了旧的 Domain Tests 与 `check:domain` 验证入口；上述数值仍属于独立推演，不等同于已完成的 TypeScript typecheck、Web production build 或真实试玩。

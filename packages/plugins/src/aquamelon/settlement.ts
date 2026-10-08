@@ -139,8 +139,9 @@ export function advanceWorld(state: WorldState, dtTick: number, balance: Aquamel
   const gameMsPerTick = minutes * 60_000
   for (let tick = 0; tick < dtTick; tick += 1) {
     const nextBud = nextBudBoundaryMs(state.nowMs)
-    settleContinuous(state, 1, balance)
+    // Timestamp all settlements and newborn organs at the completed Tick boundary.
     state.nowMs += gameMsPerTick
+    settleContinuous(state, 1, balance)
     state.tickCount += 1
     if (state.tree) updateElapsedLifecycle(state, state.tree)
     if (state.nowMs >= nextBud) runBudCheck(state)
