@@ -1,8 +1,9 @@
 import { WEB_BALANCE, GENSHIN_BALANCE } from '../src/watermelon/config'
 import { captureBall, clearBalls, condenseBall } from '../src/watermelon/balls'
+import { harvestFruit, harvestLeaf } from '../src/watermelon/materials'
 import { advanceWorld } from '../src/watermelon/settlement'
 import { createInitialWorld, createTree } from '../src/watermelon/state'
-import { cloneVector, sumVector, zeroVector } from '../src/watermelon/vector'
+import { sumVector, zeroVector } from '../src/watermelon/vector'
 import { assert, near, makeMatureLeaf } from './watermelon-fixtures'
 
 // These checks test the authoritative domain path rather than UI behavior.
