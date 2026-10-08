@@ -45,6 +45,8 @@ function checkRefowering() {
   world.tree.stage = 'Sapling'
   world.tree.activity = 'Dormant'
   world.tree.leaves = [makeMatureLeaf(world.nowMs)]
+  world.tree.leaves[0].growth = [0, 5, 5, 0, 0, 0, 0]
+  world.tree.leaves[0].effectiveAffinity = [1, 1.7, 1.5, 1, 1, 1, 1]
   const original = structuredClone(world.tree.leaves[0])
   assert(harvestFruit(world, 'leaf-test'), 'fruit harvest must succeed')
   advanceWorld(world, 23)
@@ -52,7 +54,8 @@ function checkRefowering() {
   advanceWorld(world, 1)
   const leaf = world.tree.leaves[0]
   assert(leaf.reproductive?.stage === 'FlowerBud', 'FlowerBud must form after one game day')
-  assert(near(leaf.reproductive.baseAffinity[1], 1), 'FlowerBud must inherit current leaf offset')
+  assert(near(leaf.reproductive.baseAffinity[1], 1.25),
+    'FlowerBud must inherit half the current Leaf Hydro affinity offset')
   assert(JSON.stringify(leaf.growth) === JSON.stringify(original.growth),
     're-flowering must not reset mother Leaf Growth')
   assert(JSON.stringify(leaf.effectiveAffinity) === JSON.stringify(original.effectiveAffinity),
