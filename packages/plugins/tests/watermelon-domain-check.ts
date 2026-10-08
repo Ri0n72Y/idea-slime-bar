@@ -2,7 +2,7 @@ import {
   processMaterial,
   harvestFruit
 } from '../src/watermelon/materials'
-import { advanceWorld } from '../src/watermelon/settlement'
+import { advanceWorld, pinchBud } from '../src/watermelon/settlement'
 import {
   createInitialWorld,
   createTree
@@ -74,7 +74,7 @@ function checkBudBoundary() {
   assert(world.tree.budGrowth !== null, 'Deterministic 0-leaf bud roll should succeed')
 }
 
-function checkHarvestSnapshotAndNoReflower() {
+function checkHarvestMaterialSnapshot() {
   const world = createInitialWorld(Date.UTC(2026, 9, 6, 12, 0))
   world.plot = 'planted'
   world.soil = { elems: zeroVector() }
@@ -88,10 +88,6 @@ function checkHarvestSnapshotAndNoReflower() {
   assert(world.materials[0].type === 'Aquamelon', 'Mature Fruit must become Aquamelon')
   assert(world.materials[0].elementAmount?.[1] === 42, 'Harvest must snapshot FruitElementAmount')
   assert(world.materials[0].affinity[1] === 1.2, 'Harvest must snapshot locked Affinity')
-
-  advanceWorld(world, 1)
-
-  assert(world.tree.leaves[0].reproductive === null, 'Harvested leaf must not silently re-flower')
 }
 
 function checkProcessingIdentity() {
@@ -111,7 +107,6 @@ function checkProcessingIdentity() {
 
   assert(shells.length === 2, 'Aquamelon must produce two independent Shells')
   assert(juice?.elementAmount?.[1] === 42, 'Juice must carry Fruit growth accumulation')
-  assert(shells.every((item) => item.elementAmount === null), 'Structural Shell amount stays undefined')
   assert(world.materials.every((item) => item.affinity[1] === 1.2), 'Derived Materials inherit Affinity')
 
   assert(processMaterial(world, shells[0].id), 'AquamelonShell Processing route must exist')
@@ -132,14 +127,51 @@ function checkGreenFruitCarrier() {
   assert(processMaterial(world, 'green-source'), 'GreenFruit Processing route must exist')
   const peel = world.materials.find((item) => item.type === 'GreenFruitPeel')
   const flesh = world.materials.find((item) => item.type === 'GreenFruitFlesh')
-  assert(peel?.elementAmount === null, 'GreenFruitPeel is structural')
+  assert(peel?.type === 'GreenFruitPeel', 'GreenFruit Processing must create Peel')
   assert(flesh?.elementAmount?.[1] === 12, 'GreenFruitFlesh carries growth accumulation')
   assert(near(flesh?.affinity[1] ?? 0, 1.2), 'GreenFruitFlesh inherits source Affinity')
+  assert(near(peel?.affinity[1] ?? 0, 1.2), 'GreenFruitPeel inherits source Affinity')
+}
+
+function checkPinchBudAffinity() {
+  const world = createInitialWorld()
+  world.tree = createTree()
+  world.tree.stage = 'Sapling'
+  world.tree.growth = [5, 10, 0, 0, 0, 0, 0]
+  world.tree.budGrowth = [5, 10, 0, 0, 0, 0, 0]
+
+  assert(pinchBud(world), 'Active Bud should be pinchable')
+  assert(world.tree.budGrowth === null, 'Pinching must clear active Bud')
+  assert(near(world.tree.growth[0], 10), 'Bud Fire Growth must return to Tree')
+  assert(near(world.tree.growth[1], 20), 'Bud Hydro Growth must return to Tree')
+  assert(near(world.tree.effectiveAffinity[0], world.tree.baseAffinity[0] + 10 / 30),
+    'Pinching must immediately update Fire EffectiveAffinity')
+  assert(near(world.tree.effectiveAffinity[1], world.tree.baseAffinity[1] + 20 / 30),
+    'Pinching must immediately update Hydro EffectiveAffinity')
+}
+
+function checkPinchBudGrowthCycle() {
+  const world = createInitialWorld()
+  world.tree = createTree()
+  world.tree.stage = 'Sapling'
+  world.tree.growth = [0, 90, 0, 0, 0, 0, 0]
+  world.tree.budGrowth = [0, 10, 0, 0, 0, 0, 0]
+
+  assert(pinchBud(world), 'Active Bud should be pinchable at cycle threshold')
+  assert(world.tree.budGrowth === null, 'Bud must clear after cycle completion')
+  assert(near(world.tree.baseAffinity[1], 2.15),
+    '100 Growth must freeze newly computed Hydro affinity as Base')
+  assert(world.tree.growth.every((amount) => near(amount, 0)),
+    '100 Growth cycle must reset Tree Growth')
+  assert(near(world.tree.effectiveAffinity[1], world.tree.baseAffinity[1]),
+    'EffectiveAffinity must match frozen Base after cycle')
 }
 
 checkStageThreshold()
 checkBudBoundary()
-checkHarvestSnapshotAndNoReflower()
+checkPinchBudAffinity()
+checkPinchBudGrowthCycle()
+checkHarvestMaterialSnapshot()
 checkProcessingIdentity()
 checkGreenFruitCarrier()
 

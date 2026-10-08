@@ -110,12 +110,23 @@ function updateTreeStage(state: WorldState, tree: AquamelonTree) {
   }
 }
 
-function updateTreeGrowthCycle(state: WorldState, tree: AquamelonTree) {
+export function updateTreeGrowthCycle(state: WorldState, tree: AquamelonTree) {
+  tree.effectiveAffinity = effectiveAffinity(tree.baseAffinity, tree.growth)
   if (sumVector(tree.growth) < SAPLING_GROWTH_CYCLE) return
   tree.baseAffinity = cloneVector(tree.effectiveAffinity)
   tree.effectiveAffinity = cloneVector(tree.baseAffinity)
   tree.growth = zeroVector()
   appendLog(state, 'Sapling completed a 100 Growth affinity cycle.')
+}
+
+export function pinchBud(state: WorldState) {
+  const tree = state.tree
+  if (!tree?.budGrowth) return false
+  addVector(tree.growth, tree.budGrowth)
+  tree.budGrowth = null
+  updateTreeGrowthCycle(state, tree)
+  appendLog(state, 'Active Bud pinched; Bud Growth returned to TREE_Growth.')
+  return true
 }
 
 function makeLeaf(state: WorldState, tree: AquamelonTree): Leaf {
@@ -259,7 +270,6 @@ function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: Element
     }
   } else {
     addVector(tree.growth, ownGrowthGain)
-    tree.effectiveAffinity = effectiveAffinity(tree.baseAffinity, tree.growth)
     updateTreeGrowthCycle(state, tree)
   }
 

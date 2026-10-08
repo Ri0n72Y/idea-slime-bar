@@ -103,13 +103,15 @@ export function App() {
           <>
             <p>{vectorText(world.soil.elems)}</p>
             {!tree && <button onClick={() => game.plantSeed()}>Plant Aquamelon Seed</button>}
+            <h3>Debug · Element Ball Injection</h3>
+            <p>Test-only injection. Natural elemental-ball spawning and its distribution are not defined yet.</p>
             <div className="actions">
               {ELEMENTS.map((element) => (
                 <button key={element} onClick={() => game.spawnElementBall(element)}>
-                  Spawn {element} Element Ball
+                  Debug: Spawn {element} Element Ball
                 </button>
               ))}
-              <button onClick={() => game.spawnAllElementBalls()}>Spawn one of each</button>
+              <button onClick={() => game.spawnAllElementBalls()}>Debug: Spawn one of each</button>
             </div>
           </>
         ) : (
@@ -163,7 +165,7 @@ export function App() {
       </section>
 
       <section>
-        <h2>Time Controls</h2>
+        <h2>Debug · Time Controls</h2>
         <div className="actions">
           <button onClick={() => game.advance(1)}>+1h</button>
           <button onClick={() => game.advance(12)}>+12h</button>

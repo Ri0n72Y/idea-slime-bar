@@ -1,6 +1,6 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 
-import { advanceWorld } from './settlement'
+import { advanceWorld, pinchBud as pinchBudInDomain } from './settlement'
 import {
   canProcessMaterial,
   harvestFruit,
@@ -114,13 +114,9 @@ export class WatermelonGameService extends Service {
   }
 
   pinchBud() {
-    const tree = this.state.tree
-    if (!tree?.budGrowth) return false
-    addVector(tree.growth, tree.budGrowth)
-    tree.budGrowth = null
-    appendLog(this.state, 'Active Bud pinched; Bud Growth returned to TREE_Growth.')
-    this.emit()
-    return true
+    const changed = pinchBudInDomain(this.state)
+    if (changed) this.emit()
+    return changed
   }
 
   harvestLeaf(leafId: string) {
