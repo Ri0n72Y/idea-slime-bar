@@ -8,6 +8,9 @@ const debugWrite = defineSignal('WK_Debug_Write', [
   ['Value', 'float']
 ])
 const debugRefresh = defineSignal('WK_Debug_Refresh', [])
+// F1 only: protocol endpoint, NOT a Growth Tick implementation.
+// Replace this guarded response with canonical F2 settlement when implemented.
+const debugNextTick = defineSignal('WK_Debug_NextTick', [])
 
 g.server({ id: GRAPH_ID, name: 'WK_Tree_State' })
   .on('whenEntityIsCreated', (_evt, f) => {
@@ -18,6 +21,8 @@ g.server({ id: GRAPH_ID, name: 'WK_Tree_State' })
     stage.set('WK_DBG_TREE_EffectiveAffinity', self.get('TREE_EffectiveAffinity').asType('float_list'))
     stage.set('WK_DBG_TREE_RootPreference', self.get('TREE_RootPreference').asType('float_list'))
     stage.set('WK_DBG_LastGrowthTickAt', self.get('LastGrowthTickAt').asType('float'))
+    stage.set('WK_DBG_NextTickRequests', 0n)
+    stage.set('WK_DBG_NextTickResult', 'F2_NOT_CONNECTED')
     f.printString('WK_Tree_State F1 ready')
   })
   .onSignal(debugWrite, (evt, f) => {
@@ -58,6 +63,13 @@ g.server({ id: GRAPH_ID, name: 'WK_Tree_State' })
     stage.set('WK_DBG_TREE_EffectiveAffinity', self.get('TREE_EffectiveAffinity').asType('float_list'))
     stage.set('WK_DBG_TREE_RootPreference', self.get('TREE_RootPreference').asType('float_list'))
     f.printString('WK_Debug_Write Tree state readback')
+  })
+  .onSignal(debugNextTick, (_evt, f) => {
+    // Do not synthesize elapsed time or alter Growth/Reserve/LastGrowthTickAt.
+    const count = stage.get('WK_DBG_NextTickRequests').asType('int')
+    stage.set('WK_DBG_NextTickRequests', count + 1n)
+    stage.set('WK_DBG_NextTickResult', 'NOT_EXECUTED_F2_MISSING')
+    f.printString('WK_Debug_NextTick rejected: F2 Growth Tick not implemented')
   })
   .onSignal(debugRefresh, () => {
     stage.set('WK_DBG_TREE_Stage', self.get('TREE_Stage').asType('int'))

@@ -15,6 +15,7 @@ local fields = {
 local root, snapshot, editorText, statusText
 local selectedField, selectedElement, draft = 1, 1, 0
 local elapsed = 0
+local tickRequestsSent = 0
 local steps, stepIndex = { 0.01, 0.1, 1, 10, 100 }, 3
 
 local function readField(field)
@@ -54,6 +55,13 @@ local function display()
             lines[#lines + 1] = field[1] .. ': ' .. tostring(value or '?')
         end
     end
+    local ack = game.GetGlobalCustomVariableValue(
+        Enum.CustomVariableEntityType.Level, 'WK_DBG_NextTickRequests')
+    local result = game.GetGlobalCustomVariableValue(
+        Enum.CustomVariableEntityType.Level, 'WK_DBG_NextTickResult')
+    lines[#lines + 1] = 'Next Tick: server ACK=' .. tostring(ack or '?')
+        .. ' / sent=' .. tostring(tickRequestsSent)
+    lines[#lines + 1] = 'Next Tick result: ' .. tostring(result or '?')
     snapshot.text = table.concat(lines, '\n')
     local f = fields[selectedField]
     local part = f[4] and (' / ' .. names[selectedElement]) or ''
@@ -143,6 +151,12 @@ function OnStart()
         if fields[selectedField][3] >= 0 then draft = 0; display() end
     end)
     bind('Apply', apply)
+    bind('NextTick', function()
+        tickRequestsSent = tickRequestsSent + 1
+        game.ServerSignal('WK_Debug_NextTick'):SendSignal()
+        statusText.text = 'Next Tick requested; check server ACK and result'
+        display()
+    end)
     bind('ReloadDraft', function() draft = current() or 0; display() end)
     bind('Refresh', function()
         requestRefresh()
