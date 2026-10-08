@@ -1,6 +1,6 @@
 # 水瓜厨房：基础生长数值速查
 
-> **2026-10-08 新目标及单位优先声明**：此文下方按 `RatePerHour / dtHours` 推算的数值与新目标冲突，是历史参考而非现行目标或自动批准的参数。正式单位是 `dtTick`，千星奇域默认每 Tick 对应 1 游戏小时。新的积极玩家目标是约 **24 Tick** 到 Seedling、**72 Tick** 到 Sapling 并开始开花结果，**168 Tick** 内获得至少一个果实。Seed 45 / Seedling 90 / Bud 20 / Flower 30 / Fruit 100 等阶段阈值暂不随之更改。当前历史吞吐上限 1/Tick 与 Reserve retention 0.99/Tick 仍不足以完成该目标；需单独校准千星奇域供应/吸收/Reserve 消耗等参数，**不可**直接复制 Web 的快速数值。Web 正在使用独立的 `tick:time`、吸收与代谢配置进行试玩校准。参见 [Growth Tick](../../docs/plants/growth-tick.md) 与 `packages/plugins/src/watermelon/config.ts`。
+> **2026-10-08 新目标及单位优先声明**：此文下方按 `RatePerHour / dtHours` 推算的数值与新目标冲突，是历史参考而非现行目标或自动批准的参数。正式单位是 `dtTick`，千星奇域默认每 Tick 对应 1 游戏小时。新的积极玩家目标是约 **24 Tick** 到 Seedling、**72 Tick** 到 Sapling 并开始开花结果，**168 Tick** 内获得至少一个果实。Seed 45 / Seedling 90 / Bud 20 / Flower 30 / Fruit 100 等阶段阈值暂不随之更改。当前历史吞吐上限 1/Tick 与 Reserve retention 0.99/Tick 仍不足以完成该目标；需单独校准千星奇域供应/吸收/Reserve 消耗等参数，**不可**直接复制 Web 的快速数值。Web 正在使用独立的 `tick:time`、吸收与代谢配置进行试玩校准。参见 [Growth Tick](../../docs/plants/growth-tick.md) 与 `packages/plugins/src/aquamelon/config.ts`。
 
 
 本文汇总当前已经确认的基础生长数值、对应体验目标，以及基于这些数值做出的第一轮推算。它用于快速校准后续设计，不替代 `growth-system.md` 的机制定义。
@@ -905,4 +905,4 @@ Mature Fruit 到 100 后仍继续按约 20% 的低 sink 累计元素，因此 Fl
 
 同一投入策略但使用千星奇域的**历史** `1 / Tick` 吸收和 `0.99 / Tick` Reserve retention，独立推演约 **40 Tick** 到 Seedling、**110 Tick** 到 Sapling，第一周（168 Tick）尚未进入首次 SmallLeaf。新目标 24 / 72 / 168 Tick 尚未达标；要取得正式参数必须由 Lead 确认供应与预算如何调整，不能将 Web 的 6 / Tick 或 0.90 retention 隐式同步过去。
 
-实现内的可重复 Domain 校准检查位于 `packages/plugins/tests/watermelon-tick-check.ts`，通过现有 `pnpm --filter @idea-slime-bar/plugins check:domain` 执行，不需要新增常驻 CI 作业。
+实现内的可重复 Domain 校准检查位于 `packages/plugins/tests/aquamelon-tick-check.ts`，通过现有 `pnpm --filter @idea-slime-bar/plugins check:domain` 执行，不需要新增常驻 CI 作业。
