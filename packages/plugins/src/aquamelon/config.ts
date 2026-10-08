@@ -18,6 +18,7 @@ export interface AquamelonBalance {
   ballHalfLifeTicks: number
   ballMinAmount: number
   ballMaxAmount: number
+  budCheckMode: 'perTick' | 'daily04'
 }
 
 // Genshin's confirmed historic numeric baseline, now expressed in 1-hour Ticks.
@@ -27,6 +28,7 @@ export const GENSHIN_BALANCE: AquamelonBalance = {
   soilRetentionPerTick: 0.99,
   treeRetentionPerTick: 0.99,
   maxTotalAbsorbPerTick: 1,
+  budCheckMode: 'daily04',
   ballHalfLifeTicks: 0.25,
   ballMinAmount: 8,
   ballMaxAmount: 10
@@ -38,6 +40,7 @@ export const WEB_BALANCE: AquamelonBalance = {
   soilRetentionPerTick: 0.99,
   treeRetentionPerTick: 0.9,
   maxTotalAbsorbPerTick: 6,
+  budCheckMode: 'perTick',
   ballHalfLifeTicks: 8,
   ballMinAmount: 8,
   ballMaxAmount: 10

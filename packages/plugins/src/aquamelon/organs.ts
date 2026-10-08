@@ -9,7 +9,8 @@ import {
   MATURE_FRUIT_SINK_SHARE,
   PROTOTYPE_GREEN_FRUIT_SINK_SHARE,
   REPRODUCTIVE_AFFINITY,
-  SMALL_LEAF_HOURS
+  SMALL_LEAF_HOURS,
+  type AquamelonBalance
 } from './config'
 import { appendLog, effectiveAffinity, inheritAffinity, nextId, nextRandom } from './state'
 import type { AquamelonTree, ElementVector, Leaf, ReproductiveOrgan, WorldState } from './types'
@@ -147,19 +148,22 @@ export function nextBudBoundaryMs(nowMs: number) {
   return boundary > nowMs + 1 ? boundary : boundary + 24 * HOUR_MS
 }
 
-export function runBudCheck(state: WorldState) {
+export function runBudCheck(state: WorldState, mode: AquamelonBalance['budCheckMode']) {
   const tree = state.tree
   if (!tree || tree.stage !== 'Sapling' || tree.budGrowth || tree.leaves.length >= 3) return
-  const day = new Date(state.nowMs).toISOString().slice(0, 10)
-  if (tree.lastBudCheckDay === day) return
-  tree.lastBudCheckDay = day
+  if (mode === 'daily04') {
+    const day = new Date(state.nowMs).toISOString().slice(0, 10)
+    if (tree.lastBudCheckDay === day) return
+    tree.lastBudCheckDay = day
+  }
   const chance = BUD_CHANCE_BY_LEAF_COUNT[tree.leaves.length] ?? 0
   const roll = nextRandom(state)
+  const label = mode === 'daily04' ? '04:00' : 'Tick'
   if (roll < chance) {
     tree.budGrowth = zeroVector()
-    appendLog(state, '04:00 bud check succeeded (' + Math.round(chance * 100) + '%).')
+    appendLog(state, label + ' bud check succeeded (' + Math.round(chance * 100) + '%).')
   } else {
-    appendLog(state, '04:00 bud check failed (' + Math.round(chance * 100) + '%).')
+    appendLog(state, label + ' bud check failed (' + Math.round(chance * 100) + '%).')
   }
 }
 

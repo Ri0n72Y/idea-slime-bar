@@ -41,7 +41,7 @@ export function createTree(): AquamelonTree {
   }
 }
 
-// Fixed game epoch: browser wall-clock time must not determine the game's 04:00/day.
+// Fixed game epoch: organ ages use simulated game time, not the browser wall clock.
 export function createInitialWorld(nowMs = Date.UTC(2026, 0, 1, 0, 0)): WorldState {
   return {
     nowMs,

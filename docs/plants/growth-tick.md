@@ -7,7 +7,7 @@
 - 唯一计算步长是 `dtTick`，为非负整数。一次 Tick 执行一轮 Soil → Tree → Reserve → Growth → Leaf → Flower/Fruit 的权威结算。
 - 所有速率、上限、衰减、代谢均定义为 **per Tick**；连续 `N` Tick 是 `N` 次真实结算，不允许把 `N` 当作一次跨阶段的捷径。
 - `tick:time` 单独定义 Tick 和游戏时间的映射以及在线触发间隔。修改映射不重算单 Tick 吸收上限，也不放大本 Tick Growth Budget。
-- 每日 04:00、器官年龄、采果后一个游戏日重新开花读取游戏时间，**不**直接读取浏览器墙钟作为游戏日期。
+- 器官年龄、采果后一个游戏日重新开花都读取模拟游戏时间，**不**直接读取浏览器墙钟作为游戏日期。出芽检查分两种配置：**Web 每 Tick 结束立即检查**；千星奇域按服务器时间每日 04:00 检查。
 - 自动 Tick 与 Debug 强制 Tick 都调用同一个 settlement；Debug 的一次点击立即推进一次真正的 Tick。
 
 配置概念：
@@ -20,9 +20,12 @@
   },
   maxTotalAbsorbPerTick: 6,
   soilRetentionPerTick: 0.99,
-  treeRetentionPerTick: 0.9
+  treeRetentionPerTick: 0.9,
+  budCheckMode: 'perTick' // Web；千星奇域使用 'daily04'
 }
 ```
+
+出芽概率表（无叶 80%、一叶 40%、二叶 1%）共享，但检查频率按运行环境区分；已有 Active Bud 或三片叶时跳过。Web 的自动 Tick 和 Debug Tick 同样在每次结算后立即检查，不进行日期去重，也不等待 04:00。
 
 其中游戏分钟数与现实触发间隔仅决定 **时间推进/调用频率**。吸收、衰减和预算是独立、需要分别调平衡的数值。当前 Web 支持整除 60 的游戏分钟映射，以保持整点事件不跨 Tick 被跳过。
 
@@ -37,7 +40,7 @@
 5. Sapling 吸收进 Reserve，满足激活条件后按每 Tick retention 消耗 Reserve；从该 Tick 的 Growth Nutrient Budget 向叶分流，Tree 自己的份额用于主干塑形或 Active Bud。
 6. 每片 Leaf 只从自己分到的 Leaf Nutrient Budget 中继续给附属 Flower / Fruit 分流；Flower / Fruit 不单独向整株 Tree 索取预算。
 7. 更新器官 Growth / EffectiveAffinity，检查阶段阈值。芽期转叶、Flower 30、Fruit 100 等必须经过真实阶段。
-8. 推进该 Tick 对应的游戏时间，按跨过的游戏时间边界处理每日 04:00 出芽和器官年龄/复花。
+8. 本 Tick 的结算和新器官出生事件采用 **Tick 结束时的游戏时刻**；完成结算后检查器官年龄/复花，再按运行环境处理出芽（Web 立即；千星奇域每日 04:00）。
 
 比例类参数按 `RetentionPerTick ** dtTick` 结算（若批量计算没有跨越阶段才可数学合并）；线性上限是 `MaxAmountPerTick × dtTick`，但跨阶段推进仍必须逐 Tick 走 canonical settlement。
 
