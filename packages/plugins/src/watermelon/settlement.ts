@@ -145,5 +145,4 @@ export function advanceWorld(state: WorldState, dtTick: number, balance: Waterme
     if (state.tree) updateElapsedLifecycle(state, state.tree)
     if (state.nowMs >= nextBud) runBudCheck(state)
   }
-  if (dtTick > 0) appendLog(state, 'Advanced ' + dtTick + ' real settlement Tick(s).')
 }

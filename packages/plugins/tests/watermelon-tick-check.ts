@@ -31,8 +31,6 @@ function checkAutoManualTickEquivalence() {
   const other = structuredClone(world)
   advanceWorld(world, 3)
   for (let i = 0; i < 3; i += 1) advanceWorld(other, 1)
-  world.logs = []
-  other.logs = []
   assert(JSON.stringify(world) === JSON.stringify(other),
     'auto/manual Ticks must produce the same canonical state')
 }
