@@ -16,14 +16,17 @@ const staticLogs: Record<string, string> = {
   'Bud reached 20 Growth -> SmallLeaf.': '嫩芽长成嫩叶。'
 }
 
-export function logText(message: string) {
+export function logText(message: string, debug = false) {
   if (message in staticLogs) return staticLogs[message]
   const ball = /^(Fire|Hydro|Anemo|Electro|Dendro|Cryo|Geo) ball spawned \(([\d.]+)\)\.$/.exec(message)
   if (ball) return '富集得到' + ELEMENT_NAMES[ball[1] as ElementName] + '元素球（' + ball[2] + '）。'
   const captured = /^(ball-\d+) captured by Soil;/.exec(message)
   if (captured) return entityName(captured[1]) + '已收集，元素量已进入土壤。'
   const check = /^(Tick|04:00) bud check (succeeded|failed) \((\d+)%\)\.$/.exec(message)
-  if (check) return '出芽判定' + (check[2] === 'succeeded' ? '成功' : '未成功') + '（概率 ' + check[3] + '%）。'
+  if (check) {
+    const result = check[2] === 'succeeded' ? '成功出芽。' : '本次没有出芽。'
+    return debug ? result + '（概率 ' + check[3] + '%）' : result
+  }
   const leaf = /^(leaf-\d+) (.+)$/.exec(message)
   if (leaf) {
     const name = entityName(leaf[1]), event = leaf[2]

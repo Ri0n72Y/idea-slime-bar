@@ -55,7 +55,7 @@ export function App() {
         <div className="events">
           {[...world.logs].reverse().slice(0, 18).map((entry, index) => (
             <p key={entry.atMs + '-' + index}>
-              <time>{timeText(entry.atMs)}</time> · {logText(entry.message)}
+              <time>{timeText(entry.atMs)}</time> · {logText(entry.message, debug)}
             </p>
           ))}
         </div>
