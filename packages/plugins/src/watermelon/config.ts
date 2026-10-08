@@ -66,7 +66,6 @@ export const FLOWER_AT_HOURS = 48
 export const BUD_CHANCE_BY_LEAF_COUNT = [0.8, 0.4, 0.01, 0] as const
 
 export const PROTOTYPE_GAPS = [
-  'Absorption fallback: BaseAffinity caps + RootPreference weighted simultaneous normalization; Base vs Effective and final redistribution are not locked.',
   'Green Fruit sink fallback: 0.85 midpoint inside the documented 0.80-0.90 range.',
   'Sapling Reserve cap and final reproductive Growth-rate calibration are still open; browser uses a separate faster per-Tick metabolism.',
   'Genshin 1/3/7-day rhythm is a new target, not yet validated against the historically confirmed per-Tick amounts.',

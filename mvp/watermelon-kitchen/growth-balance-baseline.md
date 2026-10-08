@@ -880,3 +880,29 @@ Mature Fruit 到 100 后仍继续按约 20% 的低 sink 累计元素，因此 Fl
 - 多元素吸收预算的最终重分配算法。
 
 已经确认的 SmallLeaf / LargeLeaf / FlowerBud 时间边界、Flower 0->30、Fruit 30->100、Affinity 锁定点、FruitElementAmount / FlavorRatio 与三档 nutrient sink 不再作为“待实现者自行补全”的开放问题。
+
+### 2026-10-08 Web 可重复校准场景（非千星奇域正式数值）
+
+当前 `WEB_BALANCE`：1 Tick = 1 游戏小时；每 **20 秒现实时间**自动执行一个 Tick；`maxTotalAbsorbPerTick=6`；土壤每 Tick 保留 `0.99`；Sapling Reserve 每 Tick 保留 `0.90`；随机元素球每次约 8–10，半衰期 8 Tick。
+
+样例采用固定初始随机种子 `0x51a7e123`：开始时 Soil=0；每当 Soil 总元素量不足 55，玩家连续执行 7 次「凝聚元素 + 引导至土壤」（共 14 次点击）；所有结算调用同一个 `advanceWorld(state, 1, WEB_BALANCE)`。不进行直接 Growth 注入，也不跳阶段。
+
+独立数值推演给出以下 **待由仓库内 domain calibration check 运行确认** 的里程碑：
+
+| 实际阶段 / 边界 | 累计 Tick（推演） | 现实时间（20秒/Tick） |
+| --- | ---: | ---: |
+| Seedling | 7 | 2分20秒 |
+| Sapling | 19 | 6分20秒 |
+| 首次 Active Bud | 28 | 9分20秒 |
+| SmallLeaf | 34 | 11分20秒 |
+| LargeLeaf | 46 | 15分20秒 |
+| FlowerBud | 58 | 19分20秒 |
+| Flower | 82 | 27分20秒 |
+| GreenFruit | 110 | 36分40秒 |
+| MatureFruit | 147 | 49分钟 |
+
+这一强投入场景到首个 MatureFruit 预计凝聚/引导 **154 个球、308 次按钮操作**，约 6.3 次操作/分钟。不是每个随机种子、投入习惯或离线节奏都能复现此时间；实际操作校准仍应观察玩家行为。
+
+同一投入策略但使用千星奇域的**历史** `1 / Tick` 吸收和 `0.99 / Tick` Reserve retention，独立推演约 **40 Tick** 到 Seedling、**110 Tick** 到 Sapling，第一周（168 Tick）尚未进入首次 SmallLeaf。新目标 24 / 72 / 168 Tick 尚未达标；要取得正式参数必须由 Lead 确认供应与预算如何调整，不能将 Web 的 6 / Tick 或 0.90 retention 隐式同步过去。
+
+实现内的可重复 Domain 校准检查位于 `packages/plugins/tests/watermelon-tick-check.ts`，通过现有 `pnpm --filter @idea-slime-bar/plugins check:domain` 执行，不需要新增常驻 CI 作业。

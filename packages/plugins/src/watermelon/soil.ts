@@ -27,7 +27,7 @@ export function decayBalls(state: WorldState, dtTick: number, balance: Watermelo
   state.balls = state.balls.filter((ball) => sumVector(ball.elems) >= 1)
 }
 
-// Explicit v0 fallback for the two absorption choices that current docs leave open.
+// Lead-confirmed Web v0: BaseAffinity cap, RootPreference weighting, proportional total normalization.
 function calculateAbsorption(
   soil: ElementVector,
   baseAffinity: ElementVector,
