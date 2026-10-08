@@ -905,4 +905,4 @@ Mature Fruit 到 100 后仍继续按约 20% 的低 sink 累计元素，因此 Fl
 
 同一投入策略但使用千星奇域的**历史** `1 / Tick` 吸收和 `0.99 / Tick` Reserve retention，独立推演约 **40 Tick** 到 Seedling、**110 Tick** 到 Sapling，第一周（168 Tick）尚未进入首次 SmallLeaf。新目标 24 / 72 / 168 Tick 尚未达标；要取得正式参数必须由 Lead 确认供应与预算如何调整，不能将 Web 的 6 / Tick 或 0.90 retention 隐式同步过去。
 
-本轮移除了旧的 Domain Tests 与 `check:domain` 验证入口；上述数值仍属于独立推演，不等同于已完成的 TypeScript typecheck、Web production build 或真实试玩。
+上述数值仍属于独立推演，不等同于已完成的 TypeScript typecheck、Web production build 或真实试玩。
