@@ -1,5 +1,8 @@
 # 水瓜厨房 MVP：开发约定
 
+> 2026-10-08 时间修订：本文遗留的 `dtHours` / 每小时速率 / 每分钟在线结算及「约一周 Sapling」是历史实现口径；统一改按 `dtTick`、per-Tick 数值与独立 `tick:time` 映射。千星奇域 1 Tick = 1 游戏小时，新目标约 1 天 Seedling、3 天 Sapling、第一周至少一果。Web 快速参数不作为千星奇域正式平衡。详见 [Growth Tick](../../docs/plants/growth-tick.md)。
+
+
 本文件记录千星奇域“水瓜厨房”MVP 的实现层约定。它不新增玩法规则，只约束数据结构、字段组织和七元素向量的索引方式。
 
 生长语义以 [七元素养分与生长系统](growth-system.md) 为准；通用养分模型与 Growth Tick 见根目录 `docs/plants/`。

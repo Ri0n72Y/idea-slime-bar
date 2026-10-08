@@ -1,5 +1,10 @@
 # 水瓜厨房 MVP：七元素养分与生长系统
 
+> **Web 出芽检查补充（2026-10-08）**：Web 每次 Growth Tick 后立即检查出芽条件并按当前叶数投概率，不等待每日 04:00；千星奇域的每日 04:00 规则仍保留，以下每日出芽章节专指该客户端设计。
+
+> **2026-10-08 生效的节奏/时间修订**：本页下方的 `dtHours`、`RatePerHour`、`0.99/h`、每 60 秒结算及「约一周到 Sapling」属于旧版分析记录，**不再作为当前时间或成长目标合同**。权威计算合同改为 [Growth Tick](../../docs/plants/growth-tick.md) 的 `dtTick`。一次 Tick 使用独立的 per-Tick 吸收/代谢参数；`tick:time` 只控制 Tick 与游戏时间及现实触发间隔的映射。千星奇域默认 1 Tick = 1 游戏小时；Web 允许更快的现实 Tick。新目标：积极玩家约 1 游戏日 Seedling、约 3 游戏日 Sapling 并开始花果流程，第一周至少一个果实。Web 目标是积极操作约一小时现实时间内触及 Sapling / Flower / Fruit。千星奇域旧数值目前尚**不能达成**新节奏，参数校准仍待 Lead 决策，不能把 Web 数值覆盖给千星奇域。采果后一游戏日，仍在树上的母叶重新形成 FlowerBud，继承当时的 EffectiveAffinity；后续只用本叶分到的预算。叶片材料的 ElementAmount 是采摘时 Leaf Growth[7] 快照。
+
+
 本文件把根目录通用的 [植物养分—生长系统](../../docs/plants/nutrient-growth-system.md) 映射到千星奇域水瓜树。
 
 本版本中：
