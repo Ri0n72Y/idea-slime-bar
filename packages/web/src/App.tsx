@@ -47,7 +47,7 @@ export function App() {
 
   return (
     <main>
-      <h1>Watermelon Kitchen Web Prototype</h1>
+      <h1>Aquamelon Kitchen Web Prototype</h1>
       <p>Cordis: {state.cordis}</p>
       <p>Probe: {state.probe}</p>
     </main>

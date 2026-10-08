@@ -1,6 +1,6 @@
 # 加工
 
-> **历史方案说明：** 本页的去鬃机 / 带壳水瓜 / 操作台流程属于早期 MVP，不覆盖当前 `mvp/watermelon-kitchen/` 的材料 identity。现行千星奇域最小路线是：`GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；`Aquamelon -> AquamelonShell x2 + AquamelonJuice x1`；`AquamelonShell -> AquamelonFlesh + remaining shell material`。当前没有同时覆盖青果皮与成熟果壳的 generic `AquamelonPeel`，解剖学“果肉膜”也不自动成为独立拾取 Material。以下设备节奏仅保留为历史参考。
+> **历史方案说明：** 本页的去鬃机 / 带壳水瓜 / 操作台流程属于早期 MVP，不覆盖当前 `mvp/aquamelon-kitchen/` 的材料 identity。现行千星奇域最小路线是：`GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；`Aquamelon -> AquamelonShell x2 + AquamelonJuice x1`；`AquamelonShell -> AquamelonFlesh + remaining shell material`。当前没有同时覆盖青果皮与成熟果壳的 generic `AquamelonPeel`，解剖学“果肉膜”也不自动成为独立拾取 Material。以下设备节奏仅保留为历史参考。
 MVP 中的加工以场景中的实体设备为中心。玩家需要实际搬运原料、放入设备、等待加工并清理产物，而不是通过统一制作菜单直接获得结果。
 
 设备加工通常拥有短时读条。启动设备后，如果该加工不要求史莱姆持续参与，史莱姆可以离开并处理其他劳动。
