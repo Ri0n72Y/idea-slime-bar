@@ -1,12 +1,11 @@
 import { Context } from '@deepseek-ai/cordis'
 import {
   WatermelonGameService,
+  WEB_BALANCE,
   type WorldState
 } from '@idea-slime-bar/plugins'
 import { useEffect, useState } from 'react'
 
-const ONLINE_TICK_MS = 60_000
-const HOUR_MS = 60 * 60 * 1000
 
 type RuntimeState = {
   status: 'starting' | 'ready' | 'error'
@@ -47,14 +46,9 @@ export function useWatermelonGame() {
         unsubscribe = game.subscribe(update)
         update()
 
-        let lastWallMs = Date.now()
         timer = setInterval(() => {
-          const nowMs = Date.now()
-          const elapsedMs = nowMs - lastWallMs
-          if (elapsedMs <= 0) return
-          lastWallMs = nowMs
-          game.advance(elapsedMs / HOUR_MS)
-        }, ONLINE_TICK_MS)
+          game.advance(1)
+        }, WEB_BALANCE['tick:time'].realMillisecondsPerTick)
       } catch (error) {
         if (active) {
           setRuntime({

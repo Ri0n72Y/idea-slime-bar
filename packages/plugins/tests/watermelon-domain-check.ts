@@ -1,8 +1,10 @@
 import {
   processMaterial,
+  harvestLeaf,
   harvestFruit
 } from '../src/watermelon/materials'
 import { advanceWorld, pinchBud } from '../src/watermelon/settlement'
+import { WEB_BALANCE } from '../src/watermelon/config'
 import {
   createInitialWorld,
   createTree
@@ -34,6 +36,7 @@ function makeMatureLeaf(nowMs: number): Leaf {
     baseAffinity: cloneVector(AFFINITY),
     effectiveAffinity: cloneVector(AFFINITY),
     reproductionStarted: true,
+    fruitHarvestedAtMs: null,
     reproductive: {
       stage: 'MatureFruit',
       stageStartedAtMs: nowMs,
@@ -54,21 +57,21 @@ function checkStageThreshold() {
   world.tree.growth = [0, 44.99, 0, 0, 0, 0, 0]
   world.tree.effectiveAffinity = cloneVector(world.tree.baseAffinity)
 
-  advanceWorld(world, 0.25)
+  advanceWorld(world, 1)
 
   assert(world.tree.stage === 'Seedling', 'Seed must cross 45 Growth into Seedling')
   assert(world.tree.growth[1] < 1, 'Stage transition must reset Seed Growth before continuing')
 }
 
 function checkBudBoundary() {
-  const world = createInitialWorld(Date.UTC(2026, 9, 6, 3, 59))
+  const world = createInitialWorld(Date.UTC(2026, 9, 6, 3, 0))
   world.plot = 'planted'
   world.soil = { elems: zeroVector() }
   world.tree = createTree()
   world.tree.stage = 'Sapling'
   world.tree.activity = 'Dormant'
 
-  advanceWorld(world, 2 / 60)
+  advanceWorld(world, 1)
 
   assert(world.tree.lastBudCheckDay === '2026-10-06', '04:00 boundary must be processed once')
   assert(world.tree.budGrowth !== null, 'Deterministic 0-leaf bud roll should succeed')
@@ -167,6 +170,80 @@ function checkPinchBudGrowthCycle() {
     'EffectiveAffinity must match frozen Base after cycle')
 }
 
+// These checks test the authoritative domain path rather than UI behavior.
+function checkTickTimeIndependentBudget() {
+  const world = createInitialWorld()
+  world.plot = 'planted'
+  world.soil = { elems: [12, 12, 12, 12, 12, 12, 12] }
+  world.tree = createTree()
+  const other = structuredClone(world)
+  advanceWorld(world, 1, WEB_BALANCE)
+  advanceWorld(other, 1, {
+    ...WEB_BALANCE,
+    'tick:time': { ...WEB_BALANCE['tick:time'], gameMinutesPerTick: 30 }
+  })
+  assert(near(world.tree!.growth.reduce((sum, x) => sum + x, 0),
+    other.tree!.growth.reduce((sum, x) => sum + x, 0)),
+    'tick:time must not change one-Tick growth budget')
+  assert(world.nowMs - other.nowMs === 30 * 60_000, 'game time mapping must still advance differently')
+}
+
+function checkAutoManualTickEquivalence() {
+  const world = createInitialWorld()
+  world.plot = 'planted'
+  world.soil = { elems: [12, 12, 12, 12, 12, 12, 12] }
+  world.tree = createTree()
+  const other = structuredClone(world)
+  advanceWorld(world, 3)
+  for (let i = 0; i < 3; i += 1) advanceWorld(other, 1)
+  world.logs = []
+  other.logs = []
+  assert(JSON.stringify(world) === JSON.stringify(other),
+    'auto/manual Ticks must produce the same canonical state')
+}
+
+function checkRefowering() {
+  const world = createInitialWorld(Date.UTC(2026, 9, 6, 12))
+  world.plot = 'planted'
+  world.soil = { elems: zeroVector() }
+  world.tree = createTree()
+  world.tree.stage = 'Sapling'
+  world.tree.activity = 'Dormant'
+  world.tree.leaves = [makeMatureLeaf(world.nowMs)]
+  const original = structuredClone(world.tree.leaves[0])
+  assert(harvestFruit(world, 'leaf-test'), 'fruit harvest must succeed')
+  advanceWorld(world, 23)
+  assert(world.tree.leaves[0].reproductive === null, 'no early FlowerBud')
+  advanceWorld(world, 1)
+  const leaf = world.tree.leaves[0]
+  assert(leaf.reproductive?.stage === 'FlowerBud', 'FlowerBud must form after one game day')
+  assert(near(leaf.reproductive.baseAffinity[1], 1), 'FlowerBud must inherit current leaf offset')
+  assert(JSON.stringify(leaf.growth) === JSON.stringify(original.growth),
+    're-flowering must not reset mother Leaf Growth')
+  assert(JSON.stringify(leaf.effectiveAffinity) === JSON.stringify(original.effectiveAffinity),
+    're-flowering must not rewrite mother Leaf Affinity')
+  advanceWorld(world, 24)
+  assert(world.tree.leaves[0].reproductive?.stage === 'Flower',
+    're-flowering bloom starts 24 game-hours after new bud, not immediately')
+}
+
+function checkLeafAccumulationMaterial() {
+  const world = createInitialWorld()
+  world.tree = createTree()
+  world.tree.stage = 'Sapling'
+  const leaf = makeMatureLeaf(world.nowMs)
+  leaf.reproductive = null
+  leaf.growth = [3, 8, 1, 0, 0, 0, 0]
+  world.tree.leaves = [leaf]
+  assert(harvestLeaf(world, leaf.id), 'leaf must be harvestable')
+  assert(JSON.stringify(world.materials[0].elementAmount) === JSON.stringify([3,8,1,0,0,0,0]),
+    'leaf Material ElementAmount must snapshot Growth[7]')
+}
+
+checkTickTimeIndependentBudget()
+checkAutoManualTickEquivalence()
+checkRefowering()
+checkLeafAccumulationMaterial()
 checkStageThreshold()
 checkBudBoundary()
 checkPinchBudAffinity()

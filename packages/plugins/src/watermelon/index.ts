@@ -1,5 +1,8 @@
 export {
-  PROTOTYPE_GAPS
+  PROTOTYPE_GAPS,
+  WEB_BALANCE,
+  GENSHIN_BALANCE,
+  type WatermelonBalance
 } from './config'
 export { WatermelonGameService } from './game-service'
 export type {

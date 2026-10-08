@@ -67,6 +67,7 @@ export function harvestFruit(state: WorldState, leafId: string) {
     leaf.id + ' fruit snapshot'
   )
   leaf.reproductive = null
+  leaf.fruitHarvestedAtMs = state.nowMs
   appendLog(state, leaf.id + ' fruit harvested -> ' + type + '.')
   return true
 }

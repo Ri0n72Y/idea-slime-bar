@@ -53,6 +53,7 @@ export interface Leaf {
   baseAffinity: ElementVector
   effectiveAffinity: ElementVector
   reproductionStarted: boolean
+  fruitHarvestedAtMs: number | null
   reproductive: ReproductiveOrgan | null
 }
 
@@ -87,6 +88,7 @@ export interface WorldLog {
 
 export interface WorldState {
   nowMs: number
+  tickCount: number
   plot: 'empty' | 'soil' | 'planted'
   soil: Soil | null
   tree: AquamelonTree | null

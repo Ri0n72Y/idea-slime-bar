@@ -94,7 +94,7 @@ export function App() {
     <main className="app-shell">
       <header>
         <h1>Watermelon Kitchen</h1>
-        <p>Current time: {timeText(world.nowMs)}</p>
+        <p>Game time: {timeText(world.nowMs)} · Tick {world.tickCount}</p>
       </header>
 
       <section>
@@ -103,8 +103,12 @@ export function App() {
           <>
             <p>{vectorText(world.soil.elems)}</p>
             {!tree && <button onClick={() => game.plantSeed()}>Plant Aquamelon Seed</button>}
+            <div className="actions">
+              <button onClick={() => game.condenseElement()}>凝聚元素</button>
+              <button onClick={() => game.clearField()}>清空场地</button>
+            </div>
             <h3>Debug · Element Ball Injection</h3>
-            <p>Test-only injection. Natural elemental-ball spawning and its distribution are not defined yet.</p>
+            <p>Manual element selection is debug-only; normal balls are seven-way uniform random.</p>
             <div className="actions">
               {ELEMENTS.map((element) => (
                 <button key={element} onClick={() => game.spawnElementBall(element)}>
@@ -167,9 +171,9 @@ export function App() {
       <section>
         <h2>Debug · Time Controls</h2>
         <div className="actions">
-          <button onClick={() => game.advance(1)}>+1h</button>
-          <button onClick={() => game.advance(12)}>+12h</button>
-          <button onClick={() => game.advance(24)}>+1d</button>
+          <button onClick={() => game.advance(1)}>+1 Tick</button>
+          <button onClick={() => game.advance(12)}>+12 Ticks</button>
+          <button onClick={() => game.advance(24)}>+24 Ticks</button>
         </div>
       </section>
 

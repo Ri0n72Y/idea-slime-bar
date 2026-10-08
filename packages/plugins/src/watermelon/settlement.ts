@@ -9,19 +9,17 @@ import {
   LEAF_AFFINITY,
   LEAF_BUDGET_SHARE,
   MATURE_FRUIT_SINK_SHARE,
-  MAX_TOTAL_ABSORB_PER_HOUR,
   PROTOTYPE_GREEN_FRUIT_SINK_SHARE,
   REPRODUCTIVE_AFFINITY,
   SAPLING_GROWTH_CYCLE,
   SEED_GROWTH_THRESHOLD,
   SEEDLING_GROWTH_THRESHOLD,
-  SETTLEMENT_SLICE_HOURS,
   SINGLE_ELEMENT_CAP_SHARE,
   SMALL_LEAF_HOURS,
   SOIL_CAPACITY,
-  SOIL_RETENTION_PER_HOUR,
-  TREE_RETENTION_PER_HOUR,
-  TREE_ROOT_PREFERENCE
+  TREE_ROOT_PREFERENCE,
+  WEB_BALANCE,
+  type WatermelonBalance
 } from './config'
 import {
   appendLog,
@@ -48,7 +46,7 @@ import {
 } from './vector'
 
 const HOUR_MS = 60 * 60 * 1000
-const EPSILON = 1e-8
+const DAY_MS = 24 * HOUR_MS
 
 function normalizeSoil(state: WorldState) {
   if (!state.soil) return
@@ -58,13 +56,13 @@ function normalizeSoil(state: WorldState) {
   appendLog(state, 'Soil normalized to capacity 100.')
 }
 
-function decaySoil(state: WorldState, dtHours: number) {
+function decaySoil(state: WorldState, dtTick: number, balance: WatermelonBalance) {
   if (!state.soil) return
-  state.soil.elems = scaleVector(state.soil.elems, SOIL_RETENTION_PER_HOUR ** dtHours)
+  state.soil.elems = scaleVector(state.soil.elems, balance.soilRetentionPerTick ** dtTick)
 }
 
-function decayBalls(state: WorldState, dtHours: number) {
-  const factor = 0.5 ** ((dtHours * 60) / 15)
+function decayBalls(state: WorldState, dtTick: number, balance: WatermelonBalance) {
+  const factor = 0.5 ** (dtTick / balance.ballHalfLifeTicks)
   for (const ball of state.balls) ball.elems = scaleVector(ball.elems, factor)
   state.balls = state.balls.filter((ball) => sumVector(ball.elems) >= 1)
 }
@@ -73,20 +71,21 @@ function decayBalls(state: WorldState, dtHours: number) {
 function calculateAbsorption(
   soil: ElementVector,
   baseAffinity: ElementVector,
-  dtHours: number
+  dtTick: number,
+  balance: WatermelonBalance
 ): ElementVector {
-  const maxTotal = MAX_TOTAL_ABSORB_PER_HOUR * dtHours
+  const maxTotal = balance.maxTotalAbsorbPerTick * dtTick
   const candidate = soil.map((supply, index) => {
-    const cap = MAX_TOTAL_ABSORB_PER_HOUR * SINGLE_ELEMENT_CAP_SHARE * baseAffinity[index] * dtHours
+    const cap = balance.maxTotalAbsorbPerTick * SINGLE_ELEMENT_CAP_SHARE * baseAffinity[index] * dtTick
     return Math.min(supply * TREE_ROOT_PREFERENCE[index], cap)
   }) as ElementVector
   const total = sumVector(candidate)
   return total > maxTotal ? scaleVector(candidate, maxTotal / total) : candidate
 }
 
-function absorbFromSoil(state: WorldState, tree: AquamelonTree, dtHours: number) {
+function absorbFromSoil(state: WorldState, tree: AquamelonTree, dtTick: number, balance: WatermelonBalance) {
   if (!state.soil) return zeroVector()
-  const absorbed = calculateAbsorption(state.soil.elems, tree.baseAffinity, dtHours)
+  const absorbed = calculateAbsorption(state.soil.elems, tree.baseAffinity, dtTick, balance)
   subtractVector(state.soil.elems, absorbed)
   return absorbed
 }
@@ -144,6 +143,7 @@ function makeLeaf(state: WorldState, tree: AquamelonTree): Leaf {
     baseAffinity,
     effectiveAffinity: cloneVector(baseAffinity),
     reproductionStarted: false,
+    fruitHarvestedAtMs: null,
     reproductive: null
   }
 }
@@ -181,9 +181,16 @@ function updateElapsedLifecycle(state: WorldState, tree: AquamelonTree) {
       leaf.reproductive = makeFlowerBud(leaf, leaf.bornAtMs + FLOWER_BUD_AT_HOURS * HOUR_MS)
       appendLog(state, leaf.id + ' formed FlowerBud at 24h.')
     }
-    if (leaf.reproductive?.stage === 'FlowerBud' && ageHours >= FLOWER_AT_HOURS) {
+    if (!leaf.reproductive && leaf.fruitHarvestedAtMs !== null &&
+      state.nowMs - leaf.fruitHarvestedAtMs >= DAY_MS) {
+      leaf.reproductive = makeFlowerBud(leaf, leaf.fruitHarvestedAtMs + DAY_MS)
+      leaf.fruitHarvestedAtMs = null
+      appendLog(state, leaf.id + ' formed a new FlowerBud one game day after harvest.')
+    }
+    if (leaf.reproductive?.stage === 'FlowerBud' &&
+      state.nowMs - leaf.reproductive.stageStartedAtMs >= (FLOWER_AT_HOURS - FLOWER_BUD_AT_HOURS) * HOUR_MS) {
       leaf.reproductive.stage = 'Flower'
-      leaf.reproductive.stageStartedAtMs = leaf.bornAtMs + FLOWER_AT_HOURS * HOUR_MS
+      leaf.reproductive.stageStartedAtMs += (FLOWER_AT_HOURS - FLOWER_BUD_AT_HOURS) * HOUR_MS
       appendLog(state, leaf.id + ' FlowerBud reached bloom boundary -> Flower.')
     }
   }
@@ -234,7 +241,7 @@ function growLeafAndReproduction(state: WorldState, leaf: Leaf, leafBudget: Elem
   leaf.effectiveAffinity = effectiveAffinity(leaf.baseAffinity, leaf.growth)
 }
 
-function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: ElementVector, dtHours: number) {
+function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: ElementVector, dtTick: number, balance: WatermelonBalance) {
   addVector(tree.reserve, absorbed)
   let reserveTotal = sumVector(tree.reserve)
 
@@ -249,7 +256,7 @@ function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: Element
   if (tree.activity === 'Dormant') return
 
   const consumed = tree.reserve.map(
-    (value) => value * (1 - TREE_RETENTION_PER_HOUR ** dtHours)
+    (value) => value * (1 - balance.treeRetentionPerTick ** dtTick)
   ) as ElementVector
   subtractVector(tree.reserve, consumed)
 
@@ -280,14 +287,14 @@ function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: Element
   }
 }
 
-function settleContinuous(state: WorldState, dtHours: number) {
+function settleContinuous(state: WorldState, dtTick: number, balance: WatermelonBalance) {
   normalizeSoil(state)
-  decayBalls(state, dtHours)
-  decaySoil(state, dtHours)
+  decayBalls(state, dtTick, balance)
+  decaySoil(state, dtTick, balance)
 
   const tree = state.tree
   if (!tree || !state.soil) return
-  const absorbed = absorbFromSoil(state, tree, dtHours)
+  const absorbed = absorbFromSoil(state, tree, dtTick, balance)
 
   if (tree.stage === 'Seed' || tree.stage === 'Seedling') {
     addVector(tree.growth, multiplyVectors(absorbed, tree.effectiveAffinity))
@@ -296,7 +303,7 @@ function settleContinuous(state: WorldState, dtHours: number) {
     return
   }
 
-  settleSapling(state, tree, absorbed, dtHours)
+  settleSapling(state, tree, absorbed, dtTick, balance)
 }
 
 function nextBudBoundaryMs(nowMs: number) {
@@ -329,21 +336,20 @@ function runBudCheck(state: WorldState) {
   }
 }
 
-export function advanceWorld(state: WorldState, hours: number) {
-  let remaining = Math.max(0, hours)
-  while (remaining > EPSILON) {
-    const nextBud = nextBudBoundaryMs(state.nowMs)
-    const toBud = (nextBud - state.nowMs) / HOUR_MS
-    const step = Math.min(SETTLEMENT_SLICE_HOURS, remaining, toBud)
-
-    if (step > EPSILON) {
-      settleContinuous(state, step)
-      state.nowMs += step * HOUR_MS
-      remaining -= step
-      if (state.tree) updateElapsedLifecycle(state, state.tree)
-    }
-
-    if (Math.abs(state.nowMs - nextBud) < 2) runBudCheck(state)
+export function advanceWorld(state: WorldState, dtTick: number, balance: WatermelonBalance = WEB_BALANCE) {
+  if (!Number.isSafeInteger(dtTick) || dtTick < 0) throw new Error('dtTick must be a nonnegative integer')
+  const minutes = balance['tick:time'].gameMinutesPerTick
+  if (!Number.isSafeInteger(minutes) || minutes <= 0 || 60 % minutes !== 0) {
+    throw new Error('tick:time gameMinutesPerTick must divide 60')
   }
-  appendLog(state, 'Advanced time by ' + hours + 'h using real settlement.')
+  const gameMsPerTick = minutes * 60_000
+  for (let tick = 0; tick < dtTick; tick += 1) {
+    const nextBud = nextBudBoundaryMs(state.nowMs)
+    settleContinuous(state, 1, balance)
+    state.nowMs += gameMsPerTick
+    state.tickCount += 1
+    if (state.tree) updateElapsedLifecycle(state, state.tree)
+    if (state.nowMs >= nextBud) runBudCheck(state)
+  }
+  if (dtTick > 0) appendLog(state, 'Advanced ' + dtTick + ' real settlement Tick(s).')
 }

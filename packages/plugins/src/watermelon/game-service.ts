@@ -1,5 +1,7 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 
+import { WEB_BALANCE } from './config'
+
 import { advanceWorld, pinchBud as pinchBudInDomain } from './settlement'
 import {
   canProcessMaterial,
@@ -78,7 +80,8 @@ export class WatermelonGameService extends Service {
     if (!this.state.soil) return false
     const index = ELEMENTS.indexOf(element)
     if (index < 0) return false
-    const amount = 8 + nextRandom(this.state) * 2
+    const amount = WEB_BALANCE.ballMinAmount +
+      nextRandom(this.state) * (WEB_BALANCE.ballMaxAmount - WEB_BALANCE.ballMinAmount)
     const elems = zeroVector()
     elems[index] = amount
     this.state.balls.push({
@@ -86,7 +89,21 @@ export class WatermelonGameService extends Service {
       elems,
       spawnedAtMs: this.state.nowMs
     })
-    appendLog(this.state, element + ' test ball spawned (' + amount.toFixed(2) + ').')
+    appendLog(this.state, element + ' ball spawned (' + amount.toFixed(2) + ').')
+    this.emit()
+    return true
+  }
+
+  condenseElement() {
+    if (!this.state.soil) return false
+    const index = Math.floor(nextRandom(this.state) * ELEMENTS.length)
+    return this.spawnElementBall(ELEMENTS[index])
+  }
+
+  clearField() {
+    if (!this.state.balls.length) return false
+    this.state.balls = []
+    appendLog(this.state, 'Uncollected field Element Balls cleared.')
     this.emit()
     return true
   }
@@ -107,9 +124,9 @@ export class WatermelonGameService extends Service {
     return true
   }
 
-  advance(hours: number) {
-    if (hours <= 0) return
-    advanceWorld(this.state, hours)
+  advance(dtTick: number) {
+    if (dtTick <= 0) return
+    advanceWorld(this.state, dtTick, WEB_BALANCE)
     this.emit()
   }
 
