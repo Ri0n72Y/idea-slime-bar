@@ -1,68 +1,117 @@
-# 千星奇域 F1：Soil / Tree 服务端状态与首次编辑器验收
+# 千星奇域 F1：Soil / Tree + Lua Debug Panel 实机安装指南
 
-对应 [Issue #8](https://github.com/Ri0n72Y/idea-slime-bar/issues/8)。本手册针对 **第一版 F1**，假设编辑器里没有任何水瓜资源。源码位于 `packages/genshin/src/aquamelon-kitchen/`。
+适用：[Issue #8](https://github.com/Ri0n72Y/idea-slime-bar/issues/8)、PR #9。手动建立资源，不假定编辑器里已有 Soil/Tree/UI/信号。当前版本 **F1 only**，Lua 负责显示和编辑输入，**服务器节点图是唯一状态写入者**。
 
-## 1. 边界与资源清单
+本次交付：
+- `packages/genshin/src/aquamelon-kitchen/WK_Soil_Water.ts` → 服务器实体图 `WK_Soil_Water.gia`，编译 ID `1073741830`（延续旧 ID）。
+- `packages/genshin/src/aquamelon-kitchen/WK_Tree_State.ts` → 服务器实体图 `WK_Tree_State.gia`，编译 ID `1073741831`。
+- `packages/genshin/src/aquamelon-kitchen/WK_F1_DebugPanel.lua` → **客户端 Lua 源码**，不是 `.gia`；手动映射并挂载到客户端控件。
+- `packages/genshin/gsts.config.ts` 只编译上面两张 F1 服务器图；不导入旧 `WK_Element_ApplyInput.ts` 衰减实验图。
 
-- **WK_Soil_Plot**：场景中的普通物件（Soil / Plot），拥有 `SOIL_Elems` 和测试浇水变量；挂载服务器实体节点图 `WK_Soil_Water`。
-- **WK_Aquamelon_Tree**：场景中的普通物件（Aquamelon Tree），拥有 Tree 变量；挂载只读服务器实体节点图 `WK_Tree_State`。
-- **Level / Stage Config**：使用编辑器**已有的关卡实体**即可；F1 没有读取 CFG 的执行逻辑，因此不新建配置元件、GUID、信号或独立物件。日后的 F2 才决定 CFG 变量绑定。
-- 两个物件都可以先使用编辑器现有的基础占位模型，不需要自建元件、模型、复合节点或树木表现。
-- **仅 Soil 需要「选项卡」通用组件**，用于手动触发测试输入。两者均需「自定义变量」组件。没有脚本自动创建这些组件。
-- 所有状态都由服务器实体自定义变量持有。**这里的“状态”只保证实体在本局存在时可读写，不等于跨关卡、退出重进或离线持久化**；后者仍待对应 Feature 实机确认。
+## 1. 创建场景实体与原始自定义变量
 
-七元素列表固定索引：`0 Fire / 1 Hydro / 2 Anemo / 3 Electro / 4 Dendro / 5 Cryo / 6 Geo`。所有完整向量必须含 **7 个浮点值**。
+在测试关卡「实体摆放」中创建两个可持续存在的普通物件，分别命名：
+- `WK_Soil_Plot`（Soil 自身保存 Soil 向量）
+- `WK_Aquamelon_Tree`（Tree 自身保存 Tree 阶段、Reserve、Growth、Affinity 等）
 
-## 2. 新建 Soil、Tree 物件
+选中每个物件 →「组件」→「自定义变量」（若没有则「添加通用组件」）→「详细编辑」。按下表逐条添加**强类型**自定义变量。
 
-1. 打开一个用于开发的空关卡；在编辑器「实体摆放」选择可用的普通**物件**，摆放两个不同的物件。将其分别命名为 `WK_Soil_Plot` 和 `WK_Aquamelon_Tree`；确保二者在游戏开始时被创建并且不会立刻销毁。
-2. 选中 `WK_Soil_Plot` →「组件」页签 → 查找「自定义变量」。若缺失，使用「添加通用组件」新增「自定义变量」→「详细编辑」。
-3. 在 Soil 的自定义变量组件中逐条添加（名字区分大小写）：
+| 实体 | 变量名 | 类型 | 默认值 |
+| --- | --- | --- | --- |
+| Soil | `SOIL_Elems` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
+| Soil | `SOIL_WaterTabId` | 整数 | `-1`（未配置旧版选项卡时） |
+| Soil | `SOIL_WaterElementIndex` | 整数 | `1` |
+| Soil | `SOIL_WaterAmount` | 浮点数 | `10` |
+| Tree | `TREE_Stage` | 整数 | `0`（0=Seed / 1=Seedling / 2=Sapling） |
+| Tree | `TREE_Elems` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
+| Tree | `TREE_Growth` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
+| Tree | `TREE_BaseAffinity` | 浮点数列表 | `[0.85,1.15,0.90,0.75,1.20,0.70,0.95]` |
+| Tree | `TREE_EffectiveAffinity` | 浮点数列表 | 同 `TREE_BaseAffinity` |
+| Tree | `TREE_RootPreference` | 浮点数列表 | `[0.80,1.00,0.85,0.75,1.00,0.70,0.90]` |
+| Tree | `LastGrowthTickAt` | 浮点数 | `0`（预留、不执行 Tick） |
 
-   | 名称 | 编辑器类型 | 初始值 | 作用 |
-   | --- | --- | --- | --- |
-   | `SOIL_Elems` | 浮点数列表 | `[0,0,0,0,0,0,0]` | 唯一 Soil 元素事实源 |
-   | `SOIL_WaterTabId` | 整数 | **步骤 4 读取的真实选项卡 ID** | 事件过滤 |
-   | `SOIL_WaterElementIndex` | 整数 | `1` | 测试 Hydro 输入 |
-   | `SOIL_WaterAmount` | 浮点数 | `10` | 单次测试输入量，非玩法默认值 |
+七元素列表固定顺序：`0 Fire / 1 Hydro / 2 Anemo / 3 Electro / 4 Dendro / 5 Cryo / 6 Geo`。所有列表恰好 7 个**浮点**值，索引 0..6（Lua 数组显示时使用 1..7）。F1 Seed/Seedling 不消耗 Tree Reserve。
 
-4. Soil →「组件」→「添加通用组件」→「选项卡」。在组件中至少配置「测试浇水」和一个用于重新切换的「空/等待」选项；记录**测试浇水选项的编辑器真实选项卡 ID**，回填 `SOIL_WaterTabId`。不要把 NodeGraph 的 `1073741830` 当成选项卡 ID。若界面没有显示可取得的选项卡 ID，先停止绑定，保留组件截图/字段名交给 Mate，不要猜常量。
-5. 选中 `WK_Aquamelon_Tree` →「组件」→「自定义变量」→「详细编辑」，逐条添加：
+可选：继续使用旧版 Soil 选项卡测试浇水时，再给 Soil 添加「选项卡」组件，将真实测试浇水选项 ID 填入 `SOIL_WaterTabId`；**Lua Debug Panel 方案不需要选项卡**。
 
-   | 名称 | 编辑器类型 | 初始值 |
+## 2. 创建关卡调试镜像变量（只给 Lua 读，不是事实源）
+
+选中**已有的关卡实体** →「组件」→「自定义变量」→「详细编辑」；添加如下 8 个变量，它们必须提前以组件默认值形式创建，以保证客户端可同步读取。不要把它们定义在 Soil/Tree 上，也不要把它们用于真正的 Growth 计算。
+
+| 关卡变量 | 类型 | 默认值 |
+| --- | --- | --- |
+| `WK_DBG_SOIL_Elems` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
+| `WK_DBG_TREE_Stage` | 整数 | `0` |
+| `WK_DBG_TREE_Elems` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
+| `WK_DBG_TREE_Growth` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
+| `WK_DBG_TREE_BaseAffinity` | 浮点数列表 | `[0.85,1.15,0.90,0.75,1.20,0.70,0.95]` |
+| `WK_DBG_TREE_EffectiveAffinity` | 浮点数列表 | 同上 |
+| `WK_DBG_TREE_RootPreference` | 浮点数列表 | `[0.80,1.00,0.85,0.75,1.00,0.70,0.90]` |
+| `WK_DBG_LastGrowthTickAt` | 浮点数 | `0` |
+
+服务端 F1 图在实体创建、收到 Debug 写入或刷新信号时，将原始变量写入对应关卡镜像。**不要在编辑器中直接编辑镜像来模拟 Soil 输入**；那只是改了副本，不会改变原始实体。
+
+## 3. 在千星沙箱的信号管理器中创建两个信号
+
+1. 打开「千星沙箱」→「信号管理器」。
+2. 新建 `WK_Debug_Refresh`，**没有参数**。
+3. 新建 `WK_Debug_Write`，严格按以下顺序创建三个参数（包括大小写和类型）：
+
+   | 参数名 | 类型 | 语义 |
    | --- | --- | --- |
-   | `TREE_Stage` | 整数 | `0`（F1 Seed；1=Seedling、2=Sapling） |
-   | `TREE_Elems` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
-   | `TREE_Growth` | 浮点数列表 | `[0,0,0,0,0,0,0]` |
-   | `TREE_BaseAffinity` | 浮点数列表 | `[0.85,1.15,0.90,0.75,1.20,0.70,0.95]` |
-   | `TREE_EffectiveAffinity` | 浮点数列表 | `[0.85,1.15,0.90,0.75,1.20,0.70,0.95]` |
-   | `TREE_RootPreference` | 浮点数列表 | `[0.80,1.00,0.85,0.75,1.00,0.70,0.90]` |
-   | `LastGrowthTickAt` | 浮点数 | `0`（未运行 Tick；本轮不读写） |
+   | `Field` | 整数 | `0` Soil，`1` Tree Stage，`2` Tree Reserve，`3` Tree Growth，`4` Base Affinity，`5` Effective Affinity，`6` RootPreference |
+   | `Index` | 整数 | 七元素索引 0..6；Stage 不使用索引 |
+   | `Value` | 浮点数 | 该分量的**新绝对值**，不是增量 |
 
-6. 逐项确认名字、类型、**列表长度 7**及数值顺序正确。Seed / Seedling 没有 Reserve：`TREE_Elems` 预留为全 0，不在此阶段读取用于生长。此处只初始化阶段，不自动推进阶段。保存关卡。
+4. 保存关卡。信号名称和参数顺序必须与源码中 `defineSignal(...)` 相同；信号不存在、类型或顺序不符会阻断正确的节点图事件连接。不要凭空编造信号 ID。
 
-## 3. 生成、导入并挂载 `.gia`
+服务端约束：Soil/Reserve/Growth 非负且不高于 100000；Affinity 非负且不高于 10；RootPreference 0..1；Tree Stage 限 0..2；`LastGrowthTickAt` 只读。不执行 F2 容量归一化或任何自动生长。两张实体图通过接收同一信号并按 `Field` 分类处理输入；仅支持 F1 单 Soil、单 Tree。
 
-1. 获取包含本 F1 PR 分支的代码，根目录安装仓库锁定依赖：`pnpm install --frozen-lockfile`。已有依赖则不用重复安装。
-2. 在仓库根目录执行 **`pnpm --filter @idea-slime-bar/genshin build`**，对应 `packages/genshin/package.json` 的 `gsts`。当前 `gsts.config.ts` 只编译两个 F1 入口，**不会**编译旧 `WK_Element_ApplyInput` 连续衰减图及模板 `main.ts`。
-3. 预期在 `packages/genshin/dist/` 下生成 **`WK_Soil_Water.gia`**、**`WK_Tree_State.gia`**（并有同名 `.gs.ts`/`.json` 中间产物）。这是**预期文件名与产物根目录**，具体是否保留 `src/aquamelon-kitchen/` 子目录以及编译成功与否尚待实际 build 输出核验；以编译器报告的实际路径为准，不能把尚未执行的 build 视为已生成。
-4. 在编辑器打开「千星沙箱」→「服务器节点图」资源管理器。使用编辑器提供的节点图 / 资产导入入口，手动选择真实生成的 `WK_Soil_Water.gia` 和 `WK_Tree_State.gia`，检查图类型为**服务器／实体节点图**。请勿使用自动 map 注入。
-5. 将 `WK_Soil_Water` 挂载到 **WK_Soil_Plot**；将 `WK_Tree_State` 挂载到 **WK_Aquamelon_Tree**。图中的 `self` 必须分别指向自己所属的物件，不能互换；如导入后显示 `_GSTS_` 前缀，请按原始图名确认。
-6. 在导入图内检查事件入口分别是「**选项卡被选中时**」与「**实体创建时**」；前者与 Soil 选项卡事件关联，检查三个输入变量和 `SOIL_Elems` 读取名；后者检查 Tree 自定义变量名。组件里的变量名是运行时绑定，不需要填固定实体 GUID；如果导入器保留了未绑定的泛型或引用引脚，按「整数/浮点/浮点数列表」和当前实体完成绑定后保存。**不需要编辑器复合节点**。
-7. 保存地图再进入试玩。若当前编辑器版本没有上述导入/挂载入口，请记录实际显示的菜单或截图，不以猜测的资源 ID 或替代节点绕过。
+## 4. 生成和导入两张服务器 `.gia`
 
-## 4. 实机测试与回传
+1. 获取 PR #9 最新提交，使用已有 pnpm 安装依赖后运行：
+   ```sh
+   pnpm --filter @idea-slime-bar/genshin build
+   ```
+2. 预期产生 `WK_Soil_Water.gia`、`WK_Tree_State.gia`，根目录在 `packages/genshin/dist/`；若输出保留源文件的子目录，使用真实输出路径，**不要在未运行时把预期文件视为已生成**。
+3. 打开「千星沙箱」→「服务器节点图资源管理器」→导入真实生成的两张 `.gia`，确认它们是**服务器实体节点图**，不是客户端节点图。
+4. 将 `WK_Soil_Water` 挂载到 `WK_Soil_Plot`，将 `WK_Tree_State` 挂载到 `WK_Aquamelon_Tree`。检查图内 `self` 指向挂载物件，`stage` 对应关卡实体。检查监听事件中 `WK_Debug_Write` 三个参数和 `WK_Debug_Refresh`，若导入后信号脚位缺失则在编辑器中按同名信号重新绑定。
+5. 保存地图。不需要地图自动注入、不需要复合节点、不需要额外编辑器元件。
 
-1. 进入试玩，打开**服务器节点图日志**；应看到 `WK_Tree_State F1 stage / reserve total / growth total:`，随后 `0 / 0 / 0`。若静态摆放的物件没有触发「实体创建时」，记录是否出现日志；不要直接判定状态已成功加载。
-2. 与 Soil 物件交互，选择「测试浇水」。应有 `WK_Soil_Water F1 element index / current amount:`，随后 `1 / 10`。用运行时实体自定义变量检查 `SOIL_Elems = [0,10,0,0,0,0,0]`；只看到日志不等于已证明持久写回。
-3. 切换到「空/等待」选项，再次选择「测试浇水」；期望读回 `1 / 20` 且 Soil Hydro=20。两次操作都不能改变其它六个元素、Tree Reserve 或 Growth。
-4. 结束试玩，在编辑器修改测试输入索引为 `4`、数量为 `5`，保存并重新试玩；验证只增加 Dendro。测试大于 100 的总量时也**不应立即压缩**，因为容量归一化属于后续 F3/F2。
-5. 退出、重开试玩后检查：若恢复为组件默认值，记录为「本局内状态」，不要宣称具备离线持久化；若发生其它行为，记录实际数据由 Lead 在未来持久化 Spec 中处理。
+## 5. 手动创建客户端 Debug Panel
 
-请回传：编辑器版本、两个导入图的实际文件路径/挂载对象、选项卡真实 ID、服务器日志、Soil 初始及两次点击后的七元素值、Tree 阶段/Reserve/Growth 值，以及退出重进观察。截图即可。**只有拿到这些实机证据才能勾选 imported/user-tested**。
+**7.1 正式入口：**「界面控件组管理 → 界面布局 → 添加界面控件 → 客户端控件容器 → 画布设置 → 前往编辑」。
 
-## 5. 当前明确不做
+1. 在当前测试布局中创建一个**专用于开发的**客户端控件容器，设为「初始可见」及运行时激活。进入容器画布，在其默认根容器节点设置名称 `WK_DebugRoot`。这要与 Lua 的 `game.FindClientUIRoot('WK_DebugRoot')` 精确对应。
+2. 在根容器下面直接添加这些**客户端**控件（不要用旧版服务器 UI 按钮）：
+   - `Snapshot`：**文本视窗**，尽可能占据上部，用于 8 行变量读回。
+   - `EditorValue`：**文本框**，显示当前编辑的字段、元素、草稿值及步长。
+   - `Status`：**文本框**，显示「已发送 / 等待刷新」。
+   - 以下 **12 个预设按钮**，其根级子控件名称严格为：
+     `FieldPrev`、`FieldNext`、`ElementPrev`、`ElementNext`、`StepPrev`、`StepNext`、`Decrease`、`Increase`、`Zero`、`Apply`、`ReloadDraft`、`Refresh`。
+3. 给按钮设置可辨认的静态文本（字段←/→、元素←/→、步长−/+、数值−/+、归零、应用、重载草稿、刷新），并启用按钮「可交互 / 光标检测」。按钮尺寸、位置在画布中手动布局即可，Lua 不创建编辑器资产。
+4. 打开「千星沙箱 → 客户端脚本资源管理器」。在任意客户端脚本文件夹右键「**新建脚本映射**」，将映射指向仓库内 `packages/genshin/src/aquamelon-kitchen/WK_F1_DebugPanel.lua` 的真实本地路径。
+5. 选择 `WK_DebugRoot` 客户端控件 →「脚本」页签 →「添加脚本」→选中刚刚的映射。**仅保存 Lua 源文件不足以加载脚本，必须建立映射并挂载。**
+6. 保存布局与关卡。该面板仅在 `game.IsTestPlay()` 时显示；正式局中 Lua 会隐藏 `WK_DebugRoot`。调试信号及写入图仍是**仅开发关卡使用的入口**，正式发布前须从正式地图移除；不能把客户端的 `IsTestPlay` 当成服务器访问控制。
 
-本图只增加一维测试元素量，**不做容量挤出、归一化、蒸发或吸收**。旧 `WK_Element_ApplyInput.ts` 保留为历史实验源码，但不再参与本 F1 编译；不可导入为正式运行图。没有 Growth Tick、04:00、离线结算、叶/花/果、Lua 或多人机制，也没有新增 CI 工作流。F1 的 `SOIL_WaterAmount=10` 仅是方便验收的输入，不是 F3 水球配方。
+官方说明入口：[客户端控件和客户端脚本](https://act.mihoyo.com/ys/ugc/tutorial/detail/mhbgxf0nynww) / [客户端控件 API](https://act.mihoyo.com/ys/ugc/tutorial/detail/mhtakr07vej4)。
 
-证据状态：**source 提交后可审查；CI 类型检查需见对应 PR HEAD 结果；`.gia` generated、editor imported、user-tested 均不能由源码或 CI 自动推断**。
+## 6. 首次实机验收
+
+1. 在编辑器选择「节点图日志 → 服务器节点图」和「客户端脚本日志」，启动**试玩**。若客户端脚本报「Missing debug control」，对照第 5 步检查根控件名称及各个子控件。
+2. 面板 `Snapshot` 应显示 Soil/Tree 8 项（原始默认均如第 1、2 步）。若为 `?`，按 **Refresh**，观察 Level 镜像是否同步；同时检查两张服务器图是否挂载及关卡镜像变量是否已经声明。
+3. 默认选中 Soil 和 Fire；使用 FieldNext/Prev 与 ElementNext/Prev 将选择切换到 Soil/Hydro。选择步长为 `10`，将草稿从 `0` 改到 `10`，按 **Apply** 后 **Refresh**；应读回 Soil: `[0,10,0,0,0,0,0]`。
+4. 将 Hydro 调成 20，按 Apply/Refresh，确认变成 `[0,20,0,0,0,0,0]`；不要把「已发送」文本当成已确认写回。
+5. 切到 Tree Reserve → Dendro，设置 5；Tree Growth → Hydro，设置 12；Tree Stage 设置 2。每次 Apply/Refresh 后核对 Mirror 与**原始 Tree 实体**的自定义变量都变化；Soil 保持不变。
+6. Affinity/RootPreference 使用 0.01 或 0.1 步长修改并确认精度和合法范围。检查根系偏好不会超过 1；检查 `LastGrowthTickAt` 为只读。
+7. Soil Hydro 改成 150，确认本 F1 不会立即压到 100。因为容量规范化只会在将来的 F2/F3 Soil Tick 时执行。
+8. 退出试玩、重新开始，记录状态是否恢复组件默认值；这不代表离线保存或跨局持久化已实现。验证截图、信号定义、客户端脚本日志、服务器日志、两个实体及关卡镜像的读回值后再推进下一轮。
+
+如编辑器版本缺少所述入口、某一官方 API 报错或列表同步语义不同，请保留**实际菜单/错误截图**，不要替换成猜测的 API、GUID 或自动注入流程。当前仅交付源代码与绑定说明，`.gia` 是否实际生成、导入成功和 Lua 是否实际运行，必须由编译结果与实机验证确认。
+
+## 7. 状态和不包含的功能
+
+- **已提交源码**：server TS + Lua Debug Panel + 手动编辑器指南。
+- **现有 CI**：`pnpm typecheck` 与 Web build；**没有** `gsts` build 或 Lua 集成测试，绿灯不等于可导入。
+- **仍待用户实机**：真实 `.gia`、自定义变量与信号定义、控制容器、脚本映射、状态写入回读、重进表现。
+- 不做完整 Growth Tick、04:00 出芽、离线结算、花果、多人玩法、生产用 Lua 计算或新 CI workflow。
