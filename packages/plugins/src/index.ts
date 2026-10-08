@@ -1,2 +1,2 @@
 export { WebProbeService } from './probe-service'
-export * from './watermelon'
+export * from './aquamelon'

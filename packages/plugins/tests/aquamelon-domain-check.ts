@@ -2,18 +2,18 @@ import {
   processMaterial,
   harvestLeaf,
   harvestFruit
-} from '../src/watermelon/materials'
-import { advanceWorld, pinchBud } from '../src/watermelon/settlement'
+} from '../src/aquamelon/materials'
+import { advanceWorld, pinchBud } from '../src/aquamelon/settlement'
 import {
   createInitialWorld,
   createTree
-} from '../src/watermelon/state'
+} from '../src/aquamelon/state'
 import type {
   WorldMaterial
-} from '../src/watermelon/types'
-import { cloneVector, zeroVector } from '../src/watermelon/vector'
-import { AFFINITY, assert, near, makeMatureLeaf } from './watermelon-fixtures'
-import './watermelon-tick-check'
+} from '../src/aquamelon/types'
+import { cloneVector, zeroVector } from '../src/aquamelon/vector'
+import { AFFINITY, assert, near, makeMatureLeaf } from './aquamelon-fixtures'
+import './aquamelon-tick-check'
 
 function checkStageThreshold() {
   const world = createInitialWorld(Date.UTC(2026, 9, 6, 0, 0))
@@ -145,4 +145,4 @@ checkHarvestMaterialSnapshot()
 checkProcessingIdentity()
 checkGreenFruitCarrier()
 
-console.log('Watermelon domain checks passed')
+console.log('Aquamelon domain checks passed')

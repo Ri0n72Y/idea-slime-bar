@@ -7,7 +7,7 @@ export const REPRODUCTIVE_AFFINITY: ElementVector = [1, 1, 1, 1, 1, 1, 1]
 
 export const SOIL_CAPACITY = 100
 // Rate and time are independent: changing tick:time never rescales per-Tick absorption.
-export interface WatermelonBalance {
+export interface AquamelonBalance {
   'tick:time': {
     gameMinutesPerTick: number
     realMillisecondsPerTick: number
@@ -22,7 +22,7 @@ export interface WatermelonBalance {
 
 // Genshin's confirmed historic numeric baseline, now expressed in 1-hour Ticks.
 // The new 1/3/7-day targets still require gameplay calibration (not silently locked here).
-export const GENSHIN_BALANCE: WatermelonBalance = {
+export const GENSHIN_BALANCE: AquamelonBalance = {
   'tick:time': { gameMinutesPerTick: 60, realMillisecondsPerTick: 3_600_000 },
   soilRetentionPerTick: 0.99,
   treeRetentionPerTick: 0.99,
@@ -33,7 +33,7 @@ export const GENSHIN_BALANCE: WatermelonBalance = {
 }
 
 // Browser-only accelerated trial profile; all stage thresholds and affinities are shared.
-export const WEB_BALANCE: WatermelonBalance = {
+export const WEB_BALANCE: AquamelonBalance = {
   'tick:time': { gameMinutesPerTick: 60, realMillisecondsPerTick: 20_000 },
   soilRetentionPerTick: 0.99,
   treeRetentionPerTick: 0.9,

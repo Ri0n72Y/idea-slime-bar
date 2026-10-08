@@ -5,7 +5,7 @@ import {
   SEED_GROWTH_THRESHOLD,
   SEEDLING_GROWTH_THRESHOLD,
   WEB_BALANCE,
-  type WatermelonBalance
+  type AquamelonBalance
 } from './config'
 import { appendLog, effectiveAffinity } from './state'
 import { absorbFromSoil, decayBalls, decaySoil, normalizeSoil } from './soil'
@@ -65,7 +65,7 @@ export function pinchBud(state: WorldState) {
   return true
 }
 
-function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: ElementVector, dtTick: number, balance: WatermelonBalance) {
+function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: ElementVector, dtTick: number, balance: AquamelonBalance) {
   addVector(tree.reserve, absorbed)
   let reserveTotal = sumVector(tree.reserve)
 
@@ -111,7 +111,7 @@ function settleSapling(state: WorldState, tree: AquamelonTree, absorbed: Element
   }
 }
 
-function settleContinuous(state: WorldState, dtTick: number, balance: WatermelonBalance) {
+function settleContinuous(state: WorldState, dtTick: number, balance: AquamelonBalance) {
   normalizeSoil(state)
   decayBalls(state, dtTick, balance)
   decaySoil(state, dtTick, balance)
@@ -130,7 +130,7 @@ function settleContinuous(state: WorldState, dtTick: number, balance: Watermelon
   settleSapling(state, tree, absorbed, dtTick, balance)
 }
 
-export function advanceWorld(state: WorldState, dtTick: number, balance: WatermelonBalance = WEB_BALANCE) {
+export function advanceWorld(state: WorldState, dtTick: number, balance: AquamelonBalance = WEB_BALANCE) {
   if (!Number.isSafeInteger(dtTick) || dtTick < 0) throw new Error('dtTick must be a nonnegative integer')
   const minutes = balance['tick:time'].gameMinutesPerTick
   if (!Number.isSafeInteger(minutes) || minutes <= 0 || 60 % minutes !== 0) {

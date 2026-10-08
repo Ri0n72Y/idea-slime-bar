@@ -1,5 +1,5 @@
-import type { ElementVector, Leaf } from '../src/watermelon/types'
-import { cloneVector, zeroVector } from '../src/watermelon/vector'
+import type { ElementVector, Leaf } from '../src/aquamelon/types'
+import { cloneVector, zeroVector } from '../src/aquamelon/vector'
 
 export const AFFINITY: ElementVector = [1, 1.2, 1, 1, 1, 1, 1]
 

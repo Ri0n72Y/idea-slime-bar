@@ -1,4 +1,4 @@
-import { WEB_BALANCE, type WatermelonBalance } from './config'
+import { WEB_BALANCE, type AquamelonBalance } from './config'
 import { appendLog, nextId, nextRandom } from './state'
 import { ELEMENTS, type ElementName, type WorldState } from './types'
 import { addVector, zeroVector } from './vector'
@@ -6,7 +6,7 @@ import { addVector, zeroVector } from './vector'
 export function spawnBall(
   state: WorldState,
   element: ElementName,
-  balance: WatermelonBalance = WEB_BALANCE
+  balance: AquamelonBalance = WEB_BALANCE
 ) {
   if (!state.soil) return false
   const index = ELEMENTS.indexOf(element)
@@ -20,7 +20,7 @@ export function spawnBall(
   return true
 }
 
-export function condenseBall(state: WorldState, balance: WatermelonBalance = WEB_BALANCE) {
+export function condenseBall(state: WorldState, balance: AquamelonBalance = WEB_BALANCE) {
   if (!state.soil) return false
   const index = Math.floor(nextRandom(state) * ELEMENTS.length)
   return spawnBall(state, ELEMENTS[index], balance)

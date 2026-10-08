@@ -1,10 +1,10 @@
-import { WEB_BALANCE, GENSHIN_BALANCE } from '../src/watermelon/config'
-import { captureBall, clearBalls, condenseBall } from '../src/watermelon/balls'
-import { harvestFruit, harvestLeaf } from '../src/watermelon/materials'
-import { advanceWorld } from '../src/watermelon/settlement'
-import { createInitialWorld, createTree } from '../src/watermelon/state'
-import { sumVector, zeroVector } from '../src/watermelon/vector'
-import { assert, near, makeMatureLeaf } from './watermelon-fixtures'
+import { WEB_BALANCE, GENSHIN_BALANCE } from '../src/aquamelon/config'
+import { captureBall, clearBalls, condenseBall } from '../src/aquamelon/balls'
+import { harvestFruit, harvestLeaf } from '../src/aquamelon/materials'
+import { advanceWorld } from '../src/aquamelon/settlement'
+import { createInitialWorld, createTree } from '../src/aquamelon/state'
+import { sumVector, zeroVector } from '../src/aquamelon/vector'
+import { assert, near, makeMatureLeaf } from './aquamelon-fixtures'
 
 // These checks test the authoritative domain path rather than UI behavior.
 function checkTickTimeIndependentBudget() {

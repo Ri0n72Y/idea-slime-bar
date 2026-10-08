@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import {
-  WatermelonGameService,
+  AquamelonGameService,
   WEB_BALANCE,
   type WorldState
 } from '@idea-slime-bar/plugins'
@@ -9,12 +9,12 @@ import { useEffect, useState } from 'react'
 
 type RuntimeState = {
   status: 'starting' | 'ready' | 'error'
-  game: WatermelonGameService | null
+  game: AquamelonGameService | null
   world: WorldState | null
   error: string
 }
 
-export function useWatermelonGame() {
+export function useAquamelonGame() {
   const [runtime, setRuntime] = useState<RuntimeState>({
     status: 'starting',
     game: null,
@@ -30,9 +30,9 @@ export function useWatermelonGame() {
 
     async function start() {
       try {
-        await ctx.plugin(WatermelonGameService)
+        await ctx.plugin(AquamelonGameService)
         if (!active) return
-        const game = ctx.watermelon
+        const game = ctx.aquamelon
         const update = () => {
           if (active) {
             setRuntime({

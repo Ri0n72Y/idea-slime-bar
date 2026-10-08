@@ -2,7 +2,7 @@ import {
   SINGLE_ELEMENT_CAP_SHARE,
   SOIL_CAPACITY,
   TREE_ROOT_PREFERENCE,
-  type WatermelonBalance
+  type AquamelonBalance
 } from './config'
 import { appendLog } from './state'
 import type { AquamelonTree, ElementVector, WorldState } from './types'
@@ -16,12 +16,12 @@ export function normalizeSoil(state: WorldState) {
   appendLog(state, 'Soil normalized to capacity 100.')
 }
 
-export function decaySoil(state: WorldState, dtTick: number, balance: WatermelonBalance) {
+export function decaySoil(state: WorldState, dtTick: number, balance: AquamelonBalance) {
   if (!state.soil) return
   state.soil.elems = scaleVector(state.soil.elems, balance.soilRetentionPerTick ** dtTick)
 }
 
-export function decayBalls(state: WorldState, dtTick: number, balance: WatermelonBalance) {
+export function decayBalls(state: WorldState, dtTick: number, balance: AquamelonBalance) {
   const factor = 0.5 ** (dtTick / balance.ballHalfLifeTicks)
   for (const ball of state.balls) ball.elems = scaleVector(ball.elems, factor)
   state.balls = state.balls.filter((ball) => sumVector(ball.elems) >= 1)
@@ -32,7 +32,7 @@ function calculateAbsorption(
   soil: ElementVector,
   baseAffinity: ElementVector,
   dtTick: number,
-  balance: WatermelonBalance
+  balance: AquamelonBalance
 ): ElementVector {
   const maxTotal = balance.maxTotalAbsorbPerTick * dtTick
   const candidate = soil.map((supply, index) => {
@@ -43,7 +43,7 @@ function calculateAbsorption(
   return total > maxTotal ? scaleVector(candidate, maxTotal / total) : candidate
 }
 
-export function absorbFromSoil(state: WorldState, tree: AquamelonTree, dtTick: number, balance: WatermelonBalance) {
+export function absorbFromSoil(state: WorldState, tree: AquamelonTree, dtTick: number, balance: AquamelonBalance) {
   if (!state.soil) return zeroVector()
   const absorbed = calculateAbsorption(state.soil.elems, tree.baseAffinity, dtTick, balance)
   subtractVector(state.soil.elems, absorbed)

@@ -30,16 +30,16 @@ import { sumVector, zeroVector } from './vector'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    watermelon: WatermelonGameService
+    aquamelon: AquamelonGameService
   }
 }
 
-export class WatermelonGameService extends Service {
+export class AquamelonGameService extends Service {
   private state: WorldState
   private listeners = new Set<() => void>()
 
   constructor(ctx: Context) {
-    super(ctx, 'watermelon')
+    super(ctx, 'aquamelon')
     this.state = createInitialWorld()
   }
 

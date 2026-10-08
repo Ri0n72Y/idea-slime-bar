@@ -2,9 +2,9 @@ export {
   PROTOTYPE_GAPS,
   WEB_BALANCE,
   GENSHIN_BALANCE,
-  type WatermelonBalance
+  type AquamelonBalance
 } from './config'
-export { WatermelonGameService } from './game-service'
+export { AquamelonGameService } from './game-service'
 export type {
   AquamelonTree,
   ElementBall,

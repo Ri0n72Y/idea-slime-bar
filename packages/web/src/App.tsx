@@ -9,7 +9,7 @@ import {
 } from '@idea-slime-bar/plugins'
 
 import { flavorText, timeText, vectorText } from './format'
-import { useWatermelonGame } from './useWatermelonGame'
+import { useAquamelonGame } from './useAquamelonGame'
 import './styles.css'
 
 function ballName(ball: ElementBall) {
@@ -77,10 +77,10 @@ function MaterialRow({
 }
 
 export function App() {
-  const runtime = useWatermelonGame()
+  const runtime = useAquamelonGame()
 
   if (runtime.status === 'starting') {
-    return <main className="app-shell"><p>Starting Watermelon Kitchen…</p></main>
+    return <main className="app-shell"><p>Starting Aquamelon Kitchen…</p></main>
   }
 
   if (runtime.status === 'error' || !runtime.game || !runtime.world) {
@@ -93,7 +93,7 @@ export function App() {
   return (
     <main className="app-shell">
       <header>
-        <h1>Watermelon Kitchen</h1>
+        <h1>Aquamelon Kitchen</h1>
         <p>Game time: {timeText(world.nowMs)} · Tick {world.tickCount}</p>
       </header>
 
