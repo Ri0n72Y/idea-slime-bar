@@ -34,7 +34,7 @@ export const GENSHIN_BALANCE: WatermelonBalance = {
 
 // Browser-only accelerated trial profile; all stage thresholds and affinities are shared.
 export const WEB_BALANCE: WatermelonBalance = {
-  'tick:time': { gameMinutesPerTick: 60, realMillisecondsPerTick: 5_000 },
+  'tick:time': { gameMinutesPerTick: 60, realMillisecondsPerTick: 20_000 },
   soilRetentionPerTick: 0.99,
   treeRetentionPerTick: 0.9,
   maxTotalAbsorbPerTick: 6,

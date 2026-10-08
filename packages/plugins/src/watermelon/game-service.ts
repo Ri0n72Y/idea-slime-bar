@@ -1,6 +1,12 @@
 import { Service, type Context } from '@deepseek-ai/cordis'
 
 import { WEB_BALANCE } from './config'
+import {
+  captureBall as captureInDomain,
+  clearBalls,
+  condenseBall,
+  spawnBall
+} from './balls'
 
 import { advanceWorld, pinchBud as pinchBudInDomain } from './settlement'
 import {
@@ -13,17 +19,14 @@ import {
   appendLog,
   createInitialWorld,
   createTree,
-  nextId,
-  nextRandom,
   snapshotWorld
 } from './state'
 import {
   ELEMENTS,
   type ElementName,
-  type ElementVector,
   type WorldState
 } from './types'
-import { addVector, sumVector, zeroVector } from './vector'
+import { sumVector, zeroVector } from './vector'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -77,35 +80,21 @@ export class WatermelonGameService extends Service {
   }
 
   spawnElementBall(element: ElementName) {
-    if (!this.state.soil) return false
-    const index = ELEMENTS.indexOf(element)
-    if (index < 0) return false
-    const amount = WEB_BALANCE.ballMinAmount +
-      nextRandom(this.state) * (WEB_BALANCE.ballMaxAmount - WEB_BALANCE.ballMinAmount)
-    const elems = zeroVector()
-    elems[index] = amount
-    this.state.balls.push({
-      id: nextId(this.state, 'ball'),
-      elems,
-      spawnedAtMs: this.state.nowMs
-    })
-    appendLog(this.state, element + ' ball spawned (' + amount.toFixed(2) + ').')
-    this.emit()
-    return true
+    const changed = spawnBall(this.state, element, WEB_BALANCE)
+    if (changed) this.emit()
+    return changed
   }
 
   condenseElement() {
-    if (!this.state.soil) return false
-    const index = Math.floor(nextRandom(this.state) * ELEMENTS.length)
-    return this.spawnElementBall(ELEMENTS[index])
+    const changed = condenseBall(this.state, WEB_BALANCE)
+    if (changed) this.emit()
+    return changed
   }
 
   clearField() {
-    if (!this.state.balls.length) return false
-    this.state.balls = []
-    appendLog(this.state, 'Uncollected field Element Balls cleared.')
-    this.emit()
-    return true
+    const changed = clearBalls(this.state)
+    if (changed) this.emit()
+    return changed
   }
 
   spawnAllElementBalls() {
@@ -113,15 +102,9 @@ export class WatermelonGameService extends Service {
   }
 
   captureBall(ballId: string) {
-    if (!this.state.soil) return false
-    const index = this.state.balls.findIndex((ball) => ball.id === ballId)
-    if (index < 0) return false
-    const ball = this.state.balls[index]
-    addVector(this.state.soil.elems, ball.elems)
-    this.state.balls.splice(index, 1)
-    appendLog(this.state, ball.id + ' captured by Soil; capacity normalizes on settlement.')
-    this.emit()
-    return true
+    const changed = captureInDomain(this.state, ballId)
+    if (changed) this.emit()
+    return changed
   }
 
   advance(dtTick: number) {
