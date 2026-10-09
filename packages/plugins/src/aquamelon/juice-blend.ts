@@ -1,5 +1,5 @@
 import type { ElementVector, WorldMaterial } from './types'
-import { dominantElement, normalizeVector, sumVector, zeroVector } from './vector'
+import { dominantElement, sumVector, zeroVector } from './vector'
 
 export interface JuiceBlendPreview {
   elementAmount: ElementVector
@@ -37,11 +37,16 @@ export function previewJuiceBlend(
       mixed[index] += amount[index] / selected.length
     }
   }
-  if (!Number.isFinite(sumVector(mixed))) return null
+  const total = sumVector(mixed)
+  if (!Number.isFinite(total)) return null
+  // Divide components directly: 1 / total can overflow for subnormal values.
+  const flavorRatio = total > 0
+    ? mixed.map(value => value / total) as ElementVector
+    : null
 
   return {
     elementAmount: mixed,
-    flavorRatio: normalizeVector(mixed),
+    flavorRatio,
     dominantElement: dominantElement(mixed)
   }
 }
