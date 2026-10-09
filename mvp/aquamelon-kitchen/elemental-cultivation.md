@@ -328,10 +328,10 @@ ColorStrength = 1
 当前 v0 已确认的 Fruit 数据边界是：
 
 ```text
-Flower Growth 0 -> 30
-→ Growth=30 形成 Fruit，并锁定当前 Affinity
-→ 30 <= Growth < 100：Green Fruit
-→ Growth >= 100：Mature Fruit
+FlowerBud 生殖 Growth 0→26 开花
+→ 生殖 Growth 40 结果并锁定 Affinity
+→ 40 <= Growth < 90：Green Fruit
+→ Growth >= 90：Mature Fruit
 ```
 
 Fruit 形成以后不再塑形 Affinity，而是累计：
@@ -351,7 +351,7 @@ FlavorRatio[e]
 
 总量为 0 时视为尚未形成 Flavor。`FruitElementAmount[7]` 是持久化事实，`FlavorRatio[7]` 是派生解释，不应无必要重复保存。
 
-Mature Fruit 到 Growth=100 后仍可以继续低效率累积元素，因此 FlavorRatio 仍会变化。100 只表示物理成熟，不表示 Flavor locked 或元素累计停止。
+Mature Fruit 到生殖 Growth=90 后仍可以继续低效率累积元素，因此 FlavorRatio 仍会变化。90 只表示物理成熟，不表示 Flavor locked 或元素累计停止。
 
 Green Fruit / Mature Fruit 的物理形态、采摘价值和生殖器官 nutrient sink 以 [七元素养分与生长系统](growth-system.md) 为准。
 
