@@ -1,50 +1,45 @@
-import { g } from 'genshin-ts/runtime/core'
+import { defineSignal, g } from 'genshin-ts/runtime/core'
 
+// Stable F1 manual-import ID. Lua only submits debug requests.
 const GRAPH_ID = 1073741830
+const debugWrite = defineSignal('WK_Debug_Write', [
+  ['Field', 'int'],
+  ['Index', 'int'],
+  ['Value', 'float']
+])
+const debugRefresh = defineSignal('WK_Debug_Refresh', [])
 
-/**
- * 测试浇水入口。
- *
- * 编辑器要求：
- * - 本节点图挂载到 Soil / Plot 实体。
- * - Soil 实体需要配置 Issue #2 中的 SOIL_* 自定义变量。
- * - 选项卡组件的 tabId 写入 SOIL_WaterTabId。
- *
- * 容量竞争：
- * 先按旧土壤组成同比例挤出 overflow，再加入完整的新输入。
- */
-g.server({
-  id: GRAPH_ID,
-  name: 'WK_Soil_Water'
-}).on('whenTabIsSelected', (evt, _f) => {
-  const waterTabId = self.get('SOIL_WaterTabId').asType('int')
+// Sole owner of SOIL_Elems is the Soil entity, not Lua or the Level mirror.
+g.server({ id: GRAPH_ID, name: 'WK_Soil_Water' })
+  .on('whenEntityIsCreated', () => {
+    stage.set('WK_DBG_SOIL_Elems', self.get('SOIL_Elems').asType('float_list'))
+  })
+  .on('whenTabIsSelected', (evt, f) => {
+    if (evt.tabId === self.get('SOIL_WaterTabId').asType('int')) {
+      const index = self.get('SOIL_WaterElementIndex').asType('int')
+      const amount = self.get('SOIL_WaterAmount').asType('float')
 
-  if (evt.tabId === waterTabId) {
-    const elems = self.get('SOIL_Elems').asType('float_list')
-    const maxLoad = Math.max(0, self.get('SOIL_MaxLoad').asType('float'))
-    const waterAmount = Math.max(0, self.get('SOIL_WaterAmount').asType('float'))
-    const targetIndex = self.get('SOIL_WaterElementIndex').asType('int')
-
-    if (targetIndex >= 0n && targetIndex < 7n && maxLoad > 0 && waterAmount > 0) {
-      let totalBefore = 0
-
-      for (let index = 0n; index < 7n; index++) {
-        totalBefore = totalBefore + Math.max(0, elems[idx(index)])
+      if (index >= 0n && index < 7n && amount > 0) {
+        const elems = self.get('SOIL_Elems').asType('float_list')
+        elems[idx(index)] = elems[idx(index)] + amount
+        stage.set('WK_DBG_SOIL_Elems', elems)
+        f.printString('WK_Soil_Water F1 input applied')
       }
-
-      const appliedInput = Math.min(waterAmount, maxLoad)
-      const overflow = Math.max(0, totalBefore + appliedInput - maxLoad)
-
-      if (overflow > 0 && totalBefore > 0) {
-        const remainingOldTotal = Math.max(0, totalBefore - overflow)
-        const oldScale = remainingOldTotal / totalBefore
-
-        for (let index = 0n; index < 7n; index++) {
-          elems[idx(index)] = Math.max(0, elems[idx(index)]) * oldScale
-        }
-      }
-
-      elems[idx(targetIndex)] = elems[idx(targetIndex)] + appliedInput
     }
-  }
-})
+  })
+  .onSignal(debugWrite, (evt, f) => {
+    const field = evt.params.Field
+    const index = evt.params.Index
+    const value = evt.params.Value
+
+    // F1 editor-only operation: SET one element, no capacity normalization.
+    if (field === 0n && index >= 0n && index < 7n && value >= 0 && value <= 100000) {
+      const elems = self.get('SOIL_Elems').asType('float_list')
+      elems[idx(index)] = value
+      stage.set('WK_DBG_SOIL_Elems', elems)
+      f.printString('WK_Debug_Write Soil accepted')
+    }
+  })
+  .onSignal(debugRefresh, () => {
+    stage.set('WK_DBG_SOIL_Elems', self.get('SOIL_Elems').asType('float_list'))
+  })
