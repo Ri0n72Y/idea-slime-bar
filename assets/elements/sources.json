@@ -1,0 +1,95 @@
+{
+  "description": "七元素视觉资源来源记录：图标来自 BWiki 元素反应页实际引用的 20px 卡牌 UI 缩略图；色码另取自萌娘百科 Genshincolor 模板。",
+  "elementOrder": [
+    "Fire",
+    "Hydro",
+    "Anemo",
+    "Electro",
+    "Dendro",
+    "Cryo",
+    "Geo"
+  ],
+  "iconSourcePage": "https://wiki.biligame.com/ys/元素反应",
+  "colorSourcePage": "https://moegirl.uk/Template:Genshincolor",
+  "iconProvenance": "BWiki article image link (20px thumbnail); not an icon-sampled or official HEX",
+  "colorProvenance": "Moegirl Genshincolor regular elemental colors; not numeric values published by the linked BWiki article",
+  "elements": [
+    {
+      "key": "Fire",
+      "zh": "火",
+      "hex": "#EC4923",
+      "icon": {
+        "filename": "pyro.png",
+        "wikiFileTitle": "卡牌UI-元素-火.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/c/c6/bj6s4no20w4btn8no6gze4sfejhl51b.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E7%81%AB.png",
+        "cachedLocally": false
+      }
+    },
+    {
+      "key": "Hydro",
+      "zh": "水",
+      "hex": "#498FCC",
+      "icon": {
+        "filename": "hydro.png",
+        "wikiFileTitle": "卡牌UI-元素-水.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/a/ab/6m3r7j2tmwx5x6zkvzs25davcm6add5.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E6%B0%B4.png",
+        "cachedLocally": false
+      }
+    },
+    {
+      "key": "Anemo",
+      "zh": "风",
+      "hex": "#359697",
+      "icon": {
+        "filename": "anemo.png",
+        "wikiFileTitle": "卡牌UI-元素-风.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/3/35/nbqoy2m63thzml89w159ini4yq8gi6w.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E9%A3%8E.png",
+        "cachedLocally": false
+      }
+    },
+    {
+      "key": "Electro",
+      "zh": "雷",
+      "hex": "#6957C2",
+      "icon": {
+        "filename": "electro.png",
+        "wikiFileTitle": "卡牌UI-元素-雷.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/0/06/c93s7x8gg5hn9u5htu1walapzte7nf1.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E9%9B%B7.png",
+        "cachedLocally": false
+      }
+    },
+    {
+      "key": "Dendro",
+      "zh": "草",
+      "hex": "#66AD16",
+      "icon": {
+        "filename": "dendro.png",
+        "wikiFileTitle": "卡牌UI-元素-草.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/8/8c/6fjk9iisffn0kaua98bodhn3j0igkdx.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E8%8D%89.png",
+        "cachedLocally": false
+      }
+    },
+    {
+      "key": "Cryo",
+      "zh": "冰",
+      "hex": "#35AACC",
+      "icon": {
+        "filename": "cryo.png",
+        "wikiFileTitle": "卡牌UI-元素-冰.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/4/44/ju6lyaklj98ichcjnlrg7268k1vsbif.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E5%86%B0.png",
+        "cachedLocally": false
+      }
+    },
+    {
+      "key": "Geo",
+      "zh": "岩",
+      "hex": "#CC9046",
+      "icon": {
+        "filename": "geo.png",
+        "wikiFileTitle": "卡牌UI-元素-岩.png",
+        "thumbnailUrl": "https://patchwiki.biligame.com/images/ys/thumb/1/1c/kf0eavezs5z89l82fxzon2dlnf3et05.png/20px-%E5%8D%A1%E7%89%8CUI-%E5%85%83%E7%B4%A0-%E5%B2%A9.png",
+        "cachedLocally": false
+      }
+    }
+  ]
+}
