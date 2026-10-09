@@ -170,7 +170,7 @@ flowchart TD
 ### F4 — 主动元素球富集、收集与衰减
 
 - [ ] F4.1 玩家按「富集」主动生成一个七元素等概率的纯元素球，数值范围按统一的材料参数。
-- [ ] F4.2 球以 `Δuh` 为年龄持续半衰，剩余总量低于销毁阈值则消失。
+- [ ] F4.2 纯元素球单次主动富集初始 **8～10 V**；以 `Δuh` 为年龄按半衰期 **0.25 uh** 衰减，剩余总量 **<1 V** 时消失。
 - [ ] F4.3 「收集」将当前球的剩余元素量立刻写入 Soil，球从场地移除；不能等下一次结算才接收。
 - [ ] F4.4 「清空场地」只影响未收集球，不回退已收集 Soil[7]。
 - [ ] F4.5 普通模式**不自动生成元素球**；不建立额外玩家在线刷新收益或离线补偿球。
@@ -193,8 +193,8 @@ flowchart TD
 #### F5-Leaf — 叶片与花苞
 
 - [ ] 每片叶第一层名义份额30%，Tree对应剩余100%/70%/40%/10%；叶片无法实际取用的额度返还 Tree。
-- [ ] SmallLeaf 自身 Growth 0→26形成 LargeLeaf，并固化当前亲和。
-- [ ] LargeLeaf 自身新的阶段 Growth 0→18生成附属 FlowerBud，母叶继续存活并按自己预算成长。
+- [ ] SmallLeaf 自身阶段 Growth 0→26 形成 LargeLeaf；将当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，并将**该叶自身阶段 Growth[7] 清零**，再开始下一段独立成长。
+- [ ] LargeLeaf 从清零后的本叶阶段 Growth 0→18 生成附属 FlowerBud；FlowerBud 新建独立 ReproductiveGrowth[7]，母叶继续存活并按自己的预算成长。
 - [ ] 嫩叶无额外组织损耗，肥厚叶自身 Growth 保留效率60%，与 Tree Reserve 取用无关。
 - [ ] FlowerBud从自身独立于母叶的生殖 Growth=0开始积累，与后续 Flower/GreenFruit/Aquamelon共享同一向量。
 - [ ] 典型嫩叶12 uh、肥厚叶12 uh、花苞24 uh只用于校准实际 Growth 速率，不做倒计时或年龄门槛。
@@ -445,9 +445,9 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
 - [ ] Sapling 当前最多出现 3 片叶；大多数长期处于2叶，少量进入3叶。
 - [ ] 每片叶获得约 0.3 的分流预算；3叶时 Tree 仅保留约0.1。
-- [ ] 叶片前半段按 SmallLeaf → LargeLeaf → FlowerBud 的已确认 elapsed-time boundary 推进；第一条切片仍可在进入 Flower runtime 前收口。
+- [ ] 叶片按 SmallLeaf Growth 26 → 固化本叶亲和并清零本叶阶段 Growth → LargeLeaf 新阶段 Growth 18 → 生成 FlowerBud 推进；不得改为固定等待 uh。第一条切片仍可在 Flower runtime 前收口。
 - [ ] 叶片 Effective Affinity 持续学习。
-- [ ] 按各阶段合同处理 Affinity：Leaf 学习阶段独立塑形；Flower→Fruit 在 Growth=30 锁定；不要用一个通用规则覆盖所有阶段。
+- [ ] 按各阶段合同处理 Affinity：SmallLeaf→LargeLeaf 固化本叶亲和并重置本叶阶段 Growth；Flower→GreenFruit 于**连续生殖 Growth 达到 40**时锁定生殖亲和；不能清零生殖 Growth 或用一个通用规则覆盖所有阶段。
 - [ ] 叶片表现可以随培养方向产生差异。
 - [ ] 玩家点击成熟可采叶片。
 - [ ] 史莱姆移动并完成摘叶。
@@ -591,7 +591,7 @@ Flow Block 应尽量满足：
 计算错过 Tick 数
 土壤蒸发
 树体按 RootPreference / Cap 吸收
-生成本 Tick 生长预算
+根据当前 Reserve 与 Tree Affinity 生成本次 `Δuh` 生长预算
 Tree / Leaf 第一层分流
 各 Leaf 内部的生殖器官第二层分流
 Growth Vector 转换
