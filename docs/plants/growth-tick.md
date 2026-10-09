@@ -1,62 +1,43 @@
-# Growth Tick — 统一离散结算语义
+# 生长结算：以 uh 积分
 
-## 优先适用的 V/hr 与 uh 时间合同（2026-10-09）
+模型唯一的数值时间单位是 [**uh（等效小时）**](uh-time-unit.md)。一次 Growth Tick 只是从某个世界状态推进 `Δuh` 的**结算事件**，不是新的时间单位。所有速率用 `V/uh`、`Growth/uh` 和 `Δuh` 描述。
 
-> [uh 等效小时定义与 V/hr 统一口径](uh-time-unit.md) **优先于下文 2026-10-08 的整数 dtTick / per Tick 原型记录**：1 uh 是模型等效小时，千星 1 uh=现实 1 小时，Web 当前 1 uh=现实 10 秒。模型速率仍以 V/hr（分析时等价写 V/uh）计；Tick 仅为可细分的结算步长，5 分钟对应 1/12 uh，1 分钟对应 1/60 uh。Web 只改变现实时间压缩比例，不应另设吸收/代谢/阈值数值。用户已纠正 Reserve→生长预算并非固定 0.9/0.99 retention，器官按 Growth 达标而非强制小时进阶。**以下旧文档中的相反句子只反映尚未迁移的旧原型，不能作新公式的权威依据。**
+## 统一权威状态
 
-
-> 2026-10-08 基线。此前的 `RatePerHour + dtHours` 和「在线结算读取真实墙钟时间」已被本规则取代。Tick 数量与 Tick 对应的游戏时间是两个不同参数。
-
-## 核心合同
-
-- 唯一计算步长是 `dtTick`，为非负整数。一次 Tick 执行一轮 Soil → Tree → Reserve → Growth → Leaf → Flower/Fruit 的权威结算。
-- 所有速率、上限、衰减、代谢均定义为 **per Tick**；连续 `N` Tick 是 `N` 次真实结算，不允许把 `N` 当作一次跨阶段的捷径。
-- `tick:time` 单独定义 Tick 和游戏时间的映射以及在线触发间隔。修改映射不重算单 Tick 吸收上限，也不放大本 Tick Growth Budget。
-- 器官年龄、采果后一个游戏日重新开花都读取模拟游戏时间，**不**直接读取浏览器墙钟作为游戏日期。出芽检查分两种配置：**Web 每 Tick 结束立即检查**；千星奇域按服务器时间每日 04:00 检查。
-- 自动 Tick 与 Debug 强制 Tick 都调用同一个 settlement；Debug 的一次点击立即推进一次真正的 Tick。
-
-配置概念：
-
-```ts
-{
-  'tick:time': {
-    gameMinutesPerTick: 60,
-    realMillisecondsPerTick: 20_000 // Web 试玩；客户端为 3_600_000
-  },
-  maxTotalAbsorbPerTick: 6,
-  soilRetentionPerTick: 0.99,
-  treeRetentionPerTick: 0.9,
-  budCheckMode: 'perTick' // Web；千星奇域使用 'daily04'
-}
+```text
+元素球 → Soil[7] → 根系吸收 → TreeReserve[7]
+                                 ↓
+                   Reserve × TreeAffinity
+                                 ↓
+                     GrowthNutrientBudget[7]
+                           ↓         ↓
+                叶片优先实际取用   Tree 剩余预算
+                     ↓              ↓
+              本叶的花/果       Tree / Active Bud
 ```
 
-出芽概率表（无叶 80%、一叶 40%、二叶 1%）共享，但检查频率按运行环境区分；已有 Active Bud 或三片叶时跳过。Web 的自动 Tick 和 Debug Tick 同样在每次结算后立即检查，不进行日期去重，也不等待 04:00。
+- Seed / Seedling 按现有设计直接从根系吸收形成自身 Growth，不建立 Reserve。
+- Sapling 起根系吸收才进入 Tree Reserve，动态生成预算；预算生成函数的系数待校准，不等于固定 Reserve 百分比消耗。
+- 叶片所获当次预算再在本叶和附属花果内部进行第二层分流；未实际取用的额度返回上游父器官，不能凭空丢弃或跨叶重分配。
+- 器官 Growth[7] 决定真实阶段转换；重要的阈值集中在 [uh 规范](uh-time-unit.md)，不以出生以来经过多少小时作为触发条件。
 
-其中游戏分钟数与现实触发间隔仅决定 **时间推进/调用频率**。吸收、衰减和预算是独立、需要分别调平衡的数值。当前 Web 支持整除 60 的游戏分钟映射，以保持整点事件不跨 Tick 被跳过。
+## 一次 `Δuh` 结算
 
-千星奇域的正式默认时间映射：**1 Tick = 1 游戏小时**。Web 也可以映射成 1 游戏小时，但把实时触发间隔缩短，从而加速玩家体验。千星奇域历史数值 `MaxAbsorbPerTick=1`、`SoilRetentionPerTick=0.99`、`TreeRetentionPerTick=0.99` 是旧参数换单位后的基线，**未被新体验目标自动重新批准**。
+1. 对土壤超额容量做七元素等比例归一化；自然蒸发使用 `SoilRetentionPerUH ** Δuh`。
+2. 元素球按其 **以 uh 计的半衰期**衰减；玩家的收集/清场是独立的即时操作。
+3. 计算 `MaxRootAbsorbVPerUH × Δuh` 对应的根系总上限，再受七元素偏好、通道上限与实际供应约束。
+4. Seed / Seedling 更新自身 Growth；Sapling 更新 Reserve，并根据 Reserve 与 Tree Affinity 生成有限 Growth Budget。
+5. 在同一预算内处理叶片优先取用和所属花果分流，把未使用份额归还树本次预算；更新 Tree/Bud 与各器官 Growth[7]、Effective Affinity。
+6. 按真实 Growth 门槛处理 Seed、Sapling、Bud、叶片、花苞、花、青果和成熟水瓜事件。
+7. 按**单独确认的概率频率合同**执行出芽检查；不能把提高结算频率等同于增加随机机会。
+8. 以一次结算后的权威状态通知 UI。页面显示频率不允许制造第二份游戏状态。
 
-## 最小结算顺序
+## 平台调度
 
-1. Soil 总量大于容量时整体等比例压缩，随后进行每 Tick 的蒸发。
-2. 世界元素球按每 Tick 的半衰期衰减；总元素量小于 1 时销毁。
-3. Tree 根据 BaseAffinity + RootPreference、单元素 Cap 和多元素总量归一化从 Soil 吸收；绝不因时间映射更改每 Tick 吸收量。
-4. Seed / Seedling 直接把吸收转成 Growth，并在达到阈值时固化 Affinity、清空当前 Growth、升级。
-5. Sapling 吸收进 Reserve，满足激活条件后按每 Tick retention 消耗 Reserve；从该 Tick 的 Growth Nutrient Budget 向叶分流，Tree 自己的份额用于主干塑形或 Active Bud。
-6. 每片 Leaf 只从自己分到的 Leaf Nutrient Budget 中继续给附属 Flower / Fruit 分流；Flower / Fruit 不单独向整株 Tree 索取预算。
-7. 更新器官 Growth / EffectiveAffinity，检查阶段阈值。芽期转叶、Flower 30、Fruit 100 等必须经过真实阶段。
-8. 本 Tick 的结算和新器官出生事件采用 **Tick 结束时的游戏时刻**；完成结算后检查器官年龄/复花，再按运行环境处理出芽（Web 立即；千星奇域每日 04:00）。
+千星奇域保持服务端权威节点图；1 uh 对应现实一小时。Web 使用 TypeScript + Cordis，默认 1 uh 对应现实 10 秒，可在 Debug 调节现实时间映射。两端共享完全相同的数值和语义，不共享运行代码。
 
-比例类参数按 `RetentionPerTick ** dtTick` 结算（若批量计算没有跨越阶段才可数学合并）；线性上限是 `MaxAmountPerTick × dtTick`，但跨阶段推进仍必须逐 Tick 走 canonical settlement。
+每分钟或每五分钟细算时，以 `Δuh=1/60` 或 `1/12` 取用本次预算。更细的结算须遵守状态守恒、阶段事件顺序和随机事件次数要求，不能把既定一 uh 的全部资源预算重复执行多次。
 
-## 调度与离线
+离线时从上一次持久化状态推进累计的 `Δuh`，在真正发生离散阶段变化的边界分段结算。是否在首次进入开花阶段时为玩家保留一次可见展示，属于独立的展示/恢复策略，不得修改已有 Growth 的数值总量。
 
-Web 原生浏览器在线只需定期调用 `advance(1)`；Debug 的 `advance(1)` 也是完全相同的计算。暂停页面造成的真实时间差，不直接作为 `dtHours` 补进 domain；未来如需要离线补算，应先明确应补的整数 `dtTick`，并按边界回放。当前未增加离线 scheduler。
-
-千星奇域服务器实际 Tick 调度由游戏节点图支持，本文只确定计算单位与时间映射，不推测客户端可以在服务端使用脚本。
-
-## 营养职责
-
-父级 Reserve 只承担该 Tick 的 nutrient budget；Growth 是已经转化成结构/亲和塑形的累计，不再作为可输送营养扣回。Leaf 的器官后代只共享本叶份额。FruitElementAmount 继续作为果实富集累计，材料加工不反向修改存活的器官。
-
-目前不定义通用植物 scheduler、结构组织的基础元素量、通用 item 框架或额外 Growth 奖励。
+实现中的旧定时/单位字段在迁移之前属于**尚未符合本规范的技术债**，不能用来推翻以上 uh 时间合同。
