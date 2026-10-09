@@ -26,7 +26,7 @@
 
 ## 3. 元素球与玩家动作
 
-- 「富集」由玩家主动生成等概率纯元素球，单球携带一种元素量；每球独立计量，随经过的 `Δuh` 衰减。
+- 「富集」由玩家主动生成等概率纯元素球，单球初始量 **8～10 V**；每球独立计量，按统一模型半衰期 **0.25 uh** 及本次 `Δuh` 衰减（`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`），总元素量 **<1 V** 时销毁。
 - 「收集」立即使元素球消失并将当前剩余元素量写入 Soil；「清空场地」只处理未收集元素球。
 - 土壤七元素存量和种子/树体 Growth 总进度可以作为普通 UI；亲和向量和七元素分项成长只向 Debug 开放。
 - Debug 强制推进 `Δuh` 与正常结算走同一个权威路径，所做的人工改值不污染普通模式。
@@ -45,7 +45,7 @@
 | Flower → GreenFruit | 生殖 Growth 40 |
 | GreenFruit → Aquamelon | 生殖 Growth 90 |
 
-花苞、花、青果和成熟水瓜沿同一条生殖 Growth[7] 累计。SmallLeaf 和 LargeLeaf 自己的 Growth 不等于生殖 Growth；阈值达成才转换阶段。所有阶段原本用来描述典型时长的 12 / 12 / 24 / 12 uh 仅用于拟合养分供给与阈值，**不是**强制等待时间。
+**SmallLeaf→LargeLeaf：** 本叶阶段 Growth[7] 达 26，先把本叶当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，再将**叶自身阶段 Growth[7] 清零**；LargeLeaf 从零另积累 18 Growth 才生成 FlowerBud。**FlowerBud 新生时另建生殖 Growth[7]=0**；此后 FlowerBud→Flower→GreenFruit→Aquamelon 沿同一条生殖向量持续累计，开花与结果时**不清零**。叶自身阶段 Growth 与生殖 Growth 是独立状态。所有 12 / 12 / 24 / 12 uh 时长只用于拟合养分供给与阈值，**不是**强制等待门槛。
 
 出生器官一次性继承父器官的亲和偏移，随后自成独立成长轴。花谢结果时锁定生殖器官亲和，结果后才统计 FruitElementAmount 与风味比例。熟果后元素积累仍可继续，Growth 达标不自动采摘。
 
