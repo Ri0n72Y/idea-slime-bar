@@ -127,6 +127,10 @@ AquamelonShell → AquamelonFlesh + remaining shell material
 
 这里描述的是实现依赖顺序，不额外增加新的玩法设计。
 
+## 新元素反应策划（尚未并入 MVP 实现合同）
+
+[果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md) 记录了后续策划讨论确认的 90G 初次成熟数值基线、1U=30G、严格 >1U 的主动触发条件、KQM 实验优先级作为默认触发方向、单次 1U 消耗及挂果富集／复合反应。**该稿不覆盖本目录现行 Fruit Growth=100、FruitElementAmount/FlavorRatio 的实现合同**；数值与语义冲突等待专门策划解决后再同步到 source of truth。
+
 ## 未来更新备忘
 
 [future-updates.md](future-updates.md) 记录当前已经出现、但明确不进入本轮 MVP 的设计方向。现阶段主要包括植物健康度：均衡培养最稳定、定向培养获得特色但增加生理压力、极端纯元素培养可能低产且更适合特殊加工。
