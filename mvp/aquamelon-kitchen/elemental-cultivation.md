@@ -392,11 +392,13 @@ Mature Fruit 到 Growth=100 后仍可以继续低效率累积元素，因此 Fla
 
 Green Fruit / Mature Fruit 的物理形态、采摘价值和生殖器官 nutrient sink 以 [七元素养分与生长系统](growth-system.md) 为准。
 
-## 延后设计草稿：六维 Taste、绽放与水瓜汁
+**下游感官设计共识：** 料理/材料未来以 [三阶段 Taste 与口腔感官模型](taste-model.md) 描述入口（Entry）、中段（Body）、回味（Finish）；每阶段包括五味（甜、酸、苦、咸、鲜，0～5）、四种口腔感官（涩、辣、麻、凉，0～5）及可选的特色标签。此模型**不等于**现行七元素 `FlavorRatio`，尚未制定转换公式，不授权修改运行时。
 
-以下内容来自更早的料理层设计。它们现在**不属于 v0 Fruit Flavor source of truth，也不进入本轮实现**。
+## 历史/延后草稿：旧六维 Taste、绽放与水瓜汁
 
-后续如果重新启用六维 Taste、绽放、取汁或混合，需要基于当时的 `FruitElementAmount / FlavorRatio` 重新形成独立 Spec；不得直接把下面旧公式接入当前 Growth Tick。
+以下内容来自更早的料理层设计。**旧六维 Taste 的结构已经被 [三阶段五味四感官共识](taste-model.md) 取代**；绽放修正与水瓜汁旧公式仍是延后草稿。它们均**不属于 v0 Fruit Flavor source of truth，也不进入本轮实现**。
+
+后续如果实现感官转换、绽放、取汁或混合，需要基于当时的 `FruitElementAmount / FlavorRatio` 和新三阶段语义形成独立 Spec；**不得恢复旧六维 Taste 作为正式字段**，也不得直接把下面旧公式接入当前 Growth Tick。
 
 尤其当前不存在：
 
@@ -429,9 +431,9 @@ Flower Stage
 
 在这些输入尚未重新锁定前，下面的数值公式保留，但**不要直接按旧 `OrganElement` 数据源实现。**
 
-## 延后草稿：果实基础六维 Taste
+## 历史草稿：果实基础六维 Taste（已被新结构取代）
 
-第一版只使用六个口味维度：
+以下是当时设计的六个旧口味维度，仅供比较：
 
 ```text
 Sweet       甜
