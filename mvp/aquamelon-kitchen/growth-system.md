@@ -42,7 +42,7 @@ Soil_Elems[i] *= SoilRetentionPerUH ** Δuh
 ## 3. 土壤与元素球
 
 - `SOIL_Elems[7]` 是元素存量，容量100 V。玩家点击「富集」生成等概率的一个纯净元素球，点击「收集」立即将球**当前剩余量**加入 Soil 并移除该球；「清空场地」不影响已经进入 Soil 的储备。
-- 元素球没有普通玩法的自动刷新。球的独立衰减以 uh 为时间尺度，具体初始量、半衰期仍按统一模型参数管理，不因 Web 加速而改数值。
+- 元素球没有普通玩法的自动刷新。每次「富集」生成等概率纯元素球，初始元素量 **8～10 V**；球按统一模型时间 **半衰期 0.25 uh**（对应千星的15分钟基线）衰减：`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`；总元素量 **<1 V** 时销毁。Web 时间压缩只改变这些 uh 在现实中经历多久，不改变球的生命周期数值。
 - Soil 若总量超过100，下一次结算开始时按 `100 / SoilTotal` 对七维存量等比例缩放；之后自然蒸发、再被植物吸收。超量直接损失，不设置隐藏回收池。
 - RootPreference = `[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
 - Tree 初始 Base Affinity = `[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]`。
@@ -201,7 +201,7 @@ Destroy Bud
 
 生殖器官是所属母叶的附属器官，**只取母叶本次获得的预算，不影响其他叶片，也不二次向 Tree 索要养分**。
 
-- SmallLeaf 出生时继承当前 Tree 的亲和偏移，之后按自己 Growth 塑形；成长到26成为 LargeLeaf 并固化当前亲和。LargeLeaf 自己继续累计达18后生成 FlowerBud。
+- SmallLeaf 出生时继承当前 Tree 的亲和偏移，之后按自己的 Leaf Growth[7] 塑形。**SmallLeaf 的阶段 Growth 达到 26 时，先将当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，再将该叶阶段 Growth[7] 清零**；LargeLeaf 从新的零基线累计 **18 Growth**，达标后生成附属 FlowerBud。这里清零的只是母叶自己的阶段 Growth；**FlowerBud 新建的 ReproductiveGrowth[7] 从零开始，此后开花、结果、成熟均不重置该生殖向量**。
 - FlowerBud 拥有独立于母叶的 `ReproductiveGrowth[7]`；**花苞 0→26、Flower 26→40、GreenFruit 40→90、成熟果 90+ 全程沿同一向量累计，开花和结果都不清零。**
 - FlowerBud / Flower 占母叶本次养分预算50%，GreenFruit 占85%（80%～90%校准区间的当前候选），成熟果占20%。LargeLeaf 自身组织的 Growth 保留效率为60%，SmallLeaf 没有同类损耗；这些不等于 Reserve 的抽取比例。
 - 花和果继续按自身 Growth 的元素组成塑形亲和；形成 GreenFruit 时锁定当前生殖亲和，并从此开始累计另外一份 `FruitElementAmount[7]`；之前用于器官形成的 Growth 不被复制成可食元素储备。
@@ -354,7 +354,7 @@ Fruit 从形成后即可采摘；Green Fruit 不作为惩罚、失败或“没�
 
 未来是否由此形成多汁叶、再次开花或其它分支，仍留给后续 Spec；当前不额外定义触发阈值或状态。
 
-## 10. 当前生命周期中的 Affinity 边界
+### 8.5 当前生命周期中的 Affinity 边界
 
 当前 Sapling 器官链只需要以下 Affinity 语义：
 
@@ -362,7 +362,7 @@ Fruit 从形成后即可采摘；Green Fruit 不作为惩罚、失败或“没�
 Tree 当前亲和
 → SmallLeaf 出生时一次性标准遗传
 → Leaf / Flower 根据自己的 Growth 独立塑形
-→ Flower Growth 到 30、形成 Fruit 时锁定
+→ 生殖 Growth 到 40、形成 GreenFruit 时锁定
 → Fruit 阶段不再塑形 Affinity
 ```
 
@@ -370,7 +370,6 @@ Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `Fl
 
 当前版本不实现重新播种、多代亲和遗传、成熟后精炼或“老种子”生命周期。成熟后持续富集只为这些未来方向保留语义插口，不提前建立框架。
 
-## 11. 当前体验目标
 ## 9. 体验与实施边界
 
 积极玩家的校准目标为24 uh见 Seedling、72 uh见 Sapling、168 uh内首果；每天维护的成熟生产目标约4–6果/168 uh，间歇维护2–4果/168 uh，每周一次约2果/168 uh。三个行为仅通过 Soil 的真实补给历史形成差异，不用不同的成长公式。
