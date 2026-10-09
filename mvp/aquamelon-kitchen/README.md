@@ -1,177 +1,85 @@
-# 水瓜厨房 MVP
+# 水瓜厨房 Aquamelon Kitchen — MVP
 
-本目录是“水瓜厨房”第一版 MVP 的开发入口，也是当前 MVP 的 source of truth。
+本目录维护 Aquamelon Kitchen 的**现行游戏设计**。千星奇域是服务端权威的正式玩法实现；Web 是同一套数值的快速时间实验，用 TypeScript + Cordis 和文字点击 UI 独立实现。两端不共享运行时代码、**不使用不同的玩法平衡**。
 
-目标平台是《原神·千星奇域》UGC。当前 MVP 不按照仓库根目录 `architecture/` 中的 Cordis + Godot 正式架构实现；这些架构文档属于独立的长期正式项目方向，不作为本轮千星奇域原型的开发约束。
+## 统一数值时间
 
-新上下文进入开发时，先读本文件，再按“必读顺序”读取其余文档。当前基础生长链仍在逐项收敛，不能仅凭旧 roadmap 直接跳过未完成设计。
+**[uh（等效小时）](../../docs/plants/uh-time-unit.md) 是唯一的模型时间单位**，元素流量统一写 `V/uh`，Growth 按当前七元素实际输入及亲和转换累计。其他单位体系已经由 uh 替代，不得在当前设计中并行使用。
 
-## 当前状态
+- 千星：1 uh = 现实3600秒。结算可以每1 uh、1/12 uh（5分钟）或1/60 uh（1分钟）进行。
+- Web：当前1 uh = 现实10秒，比例可在 Debug 调整；页面每秒刷新时只是推进约0.1 uh，不能把一 uh 的预算完整执行十次。
+- Tick 是**一次结算调用**，不是一个固定的模型时间单位；因此增减 Tick 频率不会改变每 uh 的 V、Affinity、Growth 或器官阈值。
 
-**设计状态：总体闭环与数据边界已收敛；Seed → Seedling → Sapling 的第一周数值基线已经锁定，Sapling 现作为当前版本主要长期玩法阶段，重点转向每日出芽、叶片分流、花果循环与产量。**
-
-当前已经固定：
-
-- 第一版 MVP 的目标、完成条件和明确不做内容；
-- 千星奇域水瓜树的世界设定；
-- 点击对象、史莱姆自动移动、劳动与搬运的基础交互；
-- 土壤 → 树体 → 子器官的七元素养分流模型；
-- 统一 Growth Tick、固定 1.0/h 总吸收上限、RootPreference、单元素 30%×Affinity Cap、内部储备与 Growth Vector；
-- Stage 升级时清空 Growth，并固定当前连续学习得到的亲和作为下一阶段基准；
-- Sapling 每日服务器时间 04:00 的出芽检查、0/1/2/3叶概率 0.80 / 0.40 / 0.01 / 0；
-- Bud 独立 Growth、20 Growth 成叶、掐芽时 Growth 完整回主干；
-- 0/1/2/3叶时第一层预算固定为 Tree 1.0 / 0.7 / 0.4 / 0.1，每片叶约0.3；Flower / Fruit 只在所属母叶的0.3预算内部继续分流，不影响其它叶片；
-- Sapling 主干100 Growth只更新自身亲和，不进入下一 Stage；
-- 叶片的 Bud / SmallLeaf / LargeLeaf 生命周期，以及 Fruit Growth=100 时 parent Leaf 同步转为纤维质 Aquamelon Leaf；
-- Bud→SmallLeaf→LargeLeaf→FlowerBud 使用集中时间边界；Flower/Fruit 使用同一生殖 Growth 轴 0→30→100；
-- 基于服务器时间和事件边界的离线 Growth settlement；首次跨 bloom boundary 时让玩家登录后看到花期；
-- 全局可调配置与七元素固定索引；
-- 只显示最强元素颜色、不提供元素 UI；
-- Fruit 形成后累计 `FruitElementAmount[7]`，v0 Flavor 直接派生为七元素比例；Mature Fruit 后仍可低效率继续富集；
-- 第一种元素反应：水 + 草 → 绽放 / 草种子性状体；
-- 活体器官采摘后的独立 world Material identity，以及 GreenFruit 与 Mature Aquamelon 两条不同加工路线；
-- 1～3 份等体积水瓜汁混合及结果重算。
-
-当前不扩展第二种元素反应、更多料理、顾客经营或多人系统。基础生长链以 [growth-foundation-requirements.md](growth-foundation-requirements.md) 的 checklist 为当前设计进度来源；未确认的吸收 / Growth / Stage 数值不得由实现阶段自行补全。
-
-## 必读顺序
-
-1. [requirements.md](requirements.md)  
-   第一版 MVP 的目的、边界和完成标准。开发时先用它判断“该不该做”。
-
-2. [setting.md](setting.md)  
-   千星奇域水瓜树的世界设定。解释为什么只有一棵长期培养的树、为什么会受七元素影响，以及多人长期方向。
-
-3. [development-conventions.md](development-conventions.md)  
-   当前实现层开发约定。固定七元素索引、Reserve / Growth / Affinity 向量表示，以及节点图中的统一数据访问方式。
-
-4. [growth-system.md](growth-system.md)  
-   当前植物生长的主要 source of truth。定义土壤储备、树体内部储备、Growth Tick、Stage、叶片、花果、连续学习与体验目标。
-
-5. [growth-foundation-requirements.md](growth-foundation-requirements.md)  
-   当前正在逐条收敛的基础生长链 checklist。记录哪些规则已经确认、当前讨论到哪里，以及哪些内容还不能进入实现。
-
-6. [growth-balance-baseline.md](growth-balance-baseline.md)  
-   当前基础生长数值速查。集中记录 Soil、元素球、RootPreference、吸收上限、单元素 Cap、Seed / Seedling 阈值，以及对应的新手登录体验和第一轮推算。
-
-7. [elemental-cultivation.md](elemental-cultivation.md)  
-   七元素培养结果、表现与后续料理规则。RootPreference 与 Growth Affinity 已分离；口味、绽放、水瓜汁等下游规则继续保留在本文件。
-
-8. [interaction.md](interaction.md)  
-   MVP 的输入与劳动方式：玩家不直接控制史莱姆移动，而是点击可交互对象下达行动。
-
-9. [implementation-roadmap.md](implementation-roadmap.md)  
-   当前实现地图与 SDD 工作流。用 Mermaid 和 Checklist 列出待实现功能、依赖关系、可选择起点，以及“Feature → Flow Blocks → Files → GitHub Issue/Spec → 开发 → 验收”的标准流程。
-
-## 当前核心闭环
+## 当前核心玩法
 
 ```text
-元素浇灌
-↓
-土壤七元素储备
-↓
-Growth Tick：土壤蒸发 / RootPreference + 单元素饱和吸收
-↓
-Seed / Seedling：直接转成 Growth
-↓
-Sapling 起：进入树体 Reserve
-↓
-每日04:00检查出芽 + Bud / Leaf 长期循环
-↓
-SmallLeaf 12h → LargeLeaf 12h → FlowerBud 约24h → 可见开花
-↓
-Flower Growth 0→30，在母叶预算内约50% sink，持续塑形 Affinity
-↓
-Growth=30 形成 Fruit 并锁定 Affinity
-↓
-Green Fruit 30→100，在母叶预算内80–90%强 sink；Mature Fruit 100+ 在母叶预算内约20%继续富集
-↓
-FruitElementAmount → 派生 FlavorRatio
-↓
-Fruit Growth=100：Green Fruit → Mature Fruit；parent Leaf 同步纤维化为 Aquamelon Leaf
-↓
-采摘：SmallLeaf → TenderLeaf；LargeLeaf → ThickLeaf；Aquamelon Leaf → AquamelonLeaf
-↓
-采摘：Green Fruit → GreenFruit；Mature Fruit → Aquamelon
-↓
-GreenFruit → GreenFruitPeel + GreenFruitFlesh
-Aquamelon → AquamelonShell x2 + AquamelonJuice
-AquamelonShell → AquamelonFlesh + remaining shell material
-↓
-后续混合 / 料理
-↓
-玩家观察结果
-↓
-反向决定下一轮培养
+玩家富集元素球并收集
+→ Soil[7]：容量100V、自然保留率0.99/uh
+→ 根系按 RootPreference、Affinity及V/uh吸收上限取用真实元素
+→ Seed / Seedling：直接形成 Growth
+→ Sapling：元素进入 Tree Reserve[7]
+→ Reserve × Tree Affinity 动态生成当次 Growth Budget[7]
+→ 叶片优先实际取用，未用额度返回 Tree
+→ 每片 Leaf 仅在自己的预算内向所属 Flower/Fruit 分流
+→ 剩余预算用于 Tree Growth 或 Active Bud Growth
+→ 器官按 Growth 达标成长、结果、成熟
+→ 采摘独立地面材料并加工/试调
+→ 玩家根据元素构成调整下一轮培养
 ```
 
-第一条优先验证的可见闭环是：**土壤供给 → 树体成长 → 叶片生成与变色 → 玩家采集 → 再生**。
+Reserve→Growth Budget 的确切计算系数和根系最终 V/uh 上限仍在共同校准中，不能引用某个平台原型的固定代谢比例当作正式规则。生长、元素供给和根系吸收应保持相同语义与数值，仅靠现实时间压缩做 Web 加速。
 
-完整第一版仍要证明：**玩家会为了想得到某种器官或水瓜汁结果，主动改变下一轮水瓜树的培养方式。**
+## 已确定成长阈值
 
-## 开发切入顺序
+| 转换 | Growth |
+| --- | ---: |
+| Seed → Seedling | 45 |
+| Seedling → Sapling | 90 |
+| Sapling 主干亲和塑形循环 | 100（不再升 Mature Tree） |
+| Bud → 嫩叶 | 20 |
+| 嫩叶 → 肥厚叶 | 26 |
+| 肥厚叶 → 生成花苞 | 18 |
+| 花苞 → 花（连续生殖 Growth） | 26 |
+| 花 → 青果（连续生殖 Growth） | 40 |
+| 青果 → 成熟水瓜（连续生殖 Growth） | 90 |
 
-具体功能拆分、依赖关系和可选择起点统一以 [implementation-roadmap.md](implementation-roadmap.md) 为准。
+花苞、花、青果和成熟水瓜共用同一条生殖 Growth[7]，开花与结果不清零；结果时锁 Affinity，果实 `FruitElementAmount[7]` 从结果后实际获取的元素中独立累计，按七元素比例派生 Flavor。成熟后仍可少量继续富集。
 
-以下列表保留为高层实现依赖顺序：
+叶片自身 Growth 与其附属生殖 Growth 相互独立；每片 Leaf 有来自 Tree 的独立预算，花果只在所属叶片内部二级分流。正常养分下嫩叶约12 uh、肥厚叶约12 uh、花苞约24 uh、花约12 uh是用于推算阈值的**体验参照**，不是要求其出生后必须等待这些时间的闹钟。
 
-1. 建立土壤七元素储备、Growth / Stage / Affinity 基础状态；Sapling 起再引入 Tree Reserve。
-2. 建立统一 Growth Tick，并支持按 UTC 时间补算离线 Tick。
-3. 实现元素球刷新 / 半衰、土壤浇灌与容量归一化、土壤蒸发、RootPreference / 单元素饱和吸收。
-4. 实现 Seed → Seedling → Sapling 的直接 Growth 转换，再进入 Sapling 起的 Reserve / Growth 模型。
-5. 实现每日04:00出芽事件、Bud=20、掐芽回流、最多3叶和 Tree/Leaf 分流。
-6. 实现 SmallLeaf / LargeLeaf / FlowerBud 的集中时间结算，再实现 Flower 0→30、Fruit 30→100、阶段 sink 与 Affinity 锁定。
-7. 接入最小点击劳动和叶片采集，按 SmallLeaf → TenderLeaf、LargeLeaf → ThickLeaf 的材料 identity 形成第一条可重复的可见闭环。
-8. 再接入元素球、`FruitElementAmount → FlavorRatio`、Growth=100 的母叶同步成熟、GreenFruit / Aquamelon 采摘与已确认的最小材料加工；绽放、六维 Taste 与料理扩展另开 Spec。
-9. 最后把各独立功能串成完整“培养 → 采集 → 制作 → 发现 → 再培养”闭环。
+## 产果体验目标
 
-这里描述的是实现依赖顺序，不额外增加新的玩法设计。
+- 日常维护者：约24 uh见 Seedling、72 uh进入 Sapling、168 uh内收获首颗果实；稳定期约4–6果/168 uh。
+- 间隔几天维护者：成长继续但土壤供给不足会变慢；稳定期目标约2–4果/168 uh。
+- 每周一次维护者：一周后看到可见成长、土地明显需要维护；稳定期约2果/168 uh。
 
-## 未来更新备忘
+三类玩家**只有 Soil 真实元素输入历史不同**，并无不同的 Growth 公式、离线隐藏产能或福利倍率。这些是设计目标，是否能达成仍需在统一 V/uh 模型下校准。
 
-[future-updates.md](future-updates.md) 记录当前已经出现、但明确不进入本轮 MVP 的设计方向。现阶段主要包括植物健康度：均衡培养最稳定、定向培养获得特色但增加生理压力、极端纯元素培养可能低产且更适合特殊加工。
+## 材料和加工
 
-该文件不是当前实现 source of truth；未来真正开发这些能力时需要重新形成独立 Spec。
+当前所有采摘材料留在世界地面列表，不引入通用背包系统。
 
-## 外部基础资料
+- `SmallLeaf → TenderLeaf`、`LargeLeaf → ThickLeaf`，成熟果 Growth90 时母叶同步纤维化为 `AquamelonLeaf`。
+- `GreenFruit → GreenFruitPeel + GreenFruitFlesh`。
+- `Aquamelon → AquamelonShell ×2 + AquamelonJuice`。
+- `AquamelonShell → AquamelonFlesh + remaining shell material`。
 
-以下文档仍然有效，但不是本目录中的 MVP source of truth：
+Processing 产物完整继承来源 Affinity；生长累积由青果肉/水瓜汁承载，已经成形的结构组织不重复复制累积元素。水瓜汁1～3份等体积试调当前是非破坏性预览，未消费材料也未产生合成道具。
 
-- [普通水瓜 Aquamelon](../../docs/plants/aquamelon.md)：原世界水瓜的基础形态、部位和材料来源。
-- [植物养分—生长系统](../../docs/plants/nutrient-growth-system.md)：跨世界、跨植物复用的通用养分 / Growth / Affinity / Stage 模型。
-- [Growth Tick](../../docs/plants/growth-tick.md)：通用的单次生长结算顺序。
-- [气候系统占位](../../docs/plants/climate-system.md)：当前仅接收器官环境逸散接口，不实现气候反馈。
-- [游戏概念](../../docs/overview.md)：正式项目的总体世界与设计原则。
+## 设计与实现入口
 
-## 历史玩法文档
+1. [uh 时间和数值合同](../../docs/plants/uh-time-unit.md) — 所有时间/速率约定。
+2. [成长结算](../../docs/plants/growth-tick.md) — 一次 `Δuh` 的结算顺序与状态权威边界。
+3. [种植与生长系统](growth-system.md) — 土壤/储备、Affinity 与器官生长规则。
+4. [基础数值与体验](growth-balance-baseline.md) — 现行阈值、用户供给行为和待校准变量。
+5. [生长需求](growth-foundation-requirements.md) — 实现时的行为约束。
+6. [开发约定](development-conventions.md) — 七元素顺序、变量和节点图边界。
+7. [材料设计方法](../../docs/plants/material-design-principles.md) — 结构组织与生长累积组织。
+8. [实施路线图](implementation-roadmap.md) — 功能范围与开发任务拆分。
+9. [输入交互](interaction.md)、[世界设定](setting.md)、[培养与后续拓展](elemental-cultivation.md)。
 
-以下文档来自“反复播种 + 加工设备 + 餐厅经营 + 积分扩张”的早期 MVP 方案。它们可以提供未来设计参考，但**不能覆盖本目录的现行 MVP 规则**：
+## 当前不自行补齐
 
-- [旧种植方案](../../docs/gameplay/farming.md)
-- [旧加工方案](../../docs/gameplay/processing.md)
-- [旧餐厅与顾客方案](../../docs/gameplay/restaurant.md)
-- [旧 MVP 积分与解锁](../../docs/gameplay/progression.md)
+生长预算生成系数、最终根系 V/uh 上限、叶片未吸收额度的七元素返还细节、出芽概率按 uh 的事件频率、采果后复花阈值尚需设计确认；不因优化结算粒度或换平台而自行创造规则。
 
-尤其需要注意：
-
-- 当前千星奇域 MVP 只有一棵长期培养、不会自然凋亡的水瓜树，不执行“留种 → 播种 → 再种植”循环；
-- 当前千星奇域 MVP 的材料加工以本目录已确认的 GreenFruit / Aquamelon 路线为准，不要求旧加工设备链；后续水瓜汁混合建立在 `AquamelonJuice` 材料之上；
-- 顾客经营、积分扩张和生产压力都不是当前第一版完成条件。
-
-## 尚未设计、不要自行补全
-
-进入开发时，以下内容仍应保持未定义状态，不应由实现者自行扩写：
-
-- RootPreference、固定 1.0/h 总吸收上限、单元素 `0.30 × Affinity` Cap、Seed → Seedling = 45、Seedling → Sapling = 90、Sapling 主干100 Growth周期、Bud=20、每日04:00出芽概率、0~3叶分流、SmallLeaf/LargeLeaf/FlowerBud 时间边界、Flower 0→30、Fruit 30→100、Affinity lock、三档 leaf-local 生殖 sink 与 FruitElementAmount / FlavorRatio 已锁定；仍未锁定的是单元素 Cap 读取 Base / Effective Affinity、多元素重分配、Reserve 上限 / 休眠细节、具体 Growth rate 校准与最终产量；
-- 元素球的刷新位置、牵引细节、多人归属与元素种类的进一步叙事规则；
-- 元素锁定能力的获取、解除和表现方式；
-- 第二种及之后的元素反应；
-- 叶片进入料理后的口味和用途；
-- 草种子性状体作为独立材料的玩法；
-- 更复杂的料理加工和配料；
-- Processing 产物之间的 `ElementAmount` 分配、`Affinity` 继承 / 变化、yield / mass conservation 公式；
-- 传统 inventory slot、stack size、container、pickup capacity 与 generic item/component framework；
-- 顾客评价生成；
-- 多人访问、材料交换和互动对树体的隐藏影响。
-
-如果开发步骤触及这些边界，应先回到设计讨论，而不是自行补规则。
+第一版不引入多人经济、完整餐厅经营、通用材料/背包框架、第二种元素反应或成熟树下一阶段。

@@ -40,7 +40,7 @@
 
 第一版需要验证“浇灌不同元素资源会改变之后获得的素材”这一关系，但不要求在第一轮开发中一次完成七元素的全部性状、全部反应和完整数值模型。
 
-第一版的核心培养模型已经调整为“土壤元素储备 → 树体吸收与内部 Reserve → Growth Tick → Growth Vector → 器官 Stage / 连续学习 / 表型”。具体见 [七元素养分与生长系统](growth-system.md)。元素颜色、口味、水草绽放与水瓜汁混合等下游规则继续见 [七元素培养与水瓜汁混合](elemental-cultivation.md)。旧版直接向树体浇灌、树体连续自然衰减和器官一次性快照规则不再作为当前实现依据。
+第一版的核心培养模型为“土壤元素储备 → 树体吸收与内部 Reserve → 按 `Δuh` 结算 → Growth Vector → 器官 Stage / 连续学习 / 表型”。具体见 [七元素养分与生长系统](growth-system.md)。元素颜色、口味、水草绽放与水瓜汁混合等下游规则继续见 [七元素培养与水瓜汁混合](elemental-cultivation.md)。旧版直接向树体浇灌、树体连续自然衰减和器官一次性快照规则不再作为当前实现依据。
 
 ### 素材与不同形态
 
@@ -52,11 +52,11 @@
 | --- | --- | --- |
 | SmallLeaf | `TenderLeaf` | 嫩叶 |
 | LargeLeaf | `ThickLeaf` | 肥厚的叶片 |
-| 所属 Fruit Growth=100 后同步纤维化的 parent Leaf | `AquamelonLeaf` | 水瓜树叶 |
-| Green Fruit，30<=Growth<100 | `GreenFruit` | 青果 |
-| Mature Fruit，Growth>=100 | `Aquamelon` | 水瓜 |
+| 所属生殖器官 Growth=90 后同步纤维化的 parent Leaf | `AquamelonLeaf` | 水瓜树叶 |
+| Green Fruit，40<=Growth<90 | `GreenFruit` | 青果 |
+| Mature Fruit，Growth>=90 | `Aquamelon` | 水瓜 |
 
-`AquamelonLeaf` 不是叶片单纯放久后的时间成熟结果。Fruit Growth 达到 100 时：
+`AquamelonLeaf` 不是叶片单纯放久后的时间成熟结果。生殖 Growth 达到 90 时：
 
 ```text
 Green Fruit -> Mature Fruit

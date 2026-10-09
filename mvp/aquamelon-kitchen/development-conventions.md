@@ -1,7 +1,5 @@
 # 水瓜厨房 MVP：开发约定
 
-> 2026-10-08 时间修订：本文遗留的 `dtHours` / 每小时速率 / 每分钟在线结算及「约一周 Sapling」是历史实现口径；统一改按 `dtTick`、per-Tick 数值与独立 `tick:time` 映射。千星奇域 1 Tick = 1 游戏小时，新目标约 1 天 Seedling、3 天 Sapling、第一周至少一果。Web 快速参数不作为千星奇域正式平衡。详见 [Growth Tick](../../docs/plants/growth-tick.md)。
-
 
 本文件记录千星奇域“水瓜厨房”MVP 的实现层约定。它不新增玩法规则，只约束数据结构、字段组织和七元素向量的索引方式。
 
@@ -125,7 +123,7 @@ CFG_TreeRootPreference[7]
 最终吸收还需要同时考虑：
 
 - 当前 Soil 可用元素；
-- 固定的总吸收上限 `CFG_MaxTotalAbsorbPerHour = 1.0`；
+- 按模型统一的 `MaxRootAbsorbVPerUH` 总吸收上限（4/5/6 V/uh仍在校准）；
 - 单元素有效吸收上限；
 - 实际 dt。
 
@@ -134,10 +132,10 @@ CFG_TreeRootPreference[7]
 ```text
 ElementCap[i]
 =
-1.0 × 0.30 × Affinity[i]
+MaxRootAbsorbVPerUH × 0.30 × Affinity[i] × Δuh
 ```
 
-因此 Growth Affinity 虽然不再充当“RootPreference / 提取权重”，但会影响对应元素通道的最大吸收量。单一元素不能独自撑满完整 1.0/h 吞吐量。
+因此 Growth Affinity 虽然不再充当“RootPreference / 提取权重”，但会影响对应元素通道的最大吸收量。单一元素不能独自撑满根系总吸收上限；同一 uh 内的上限不会因结算频率改变。
 
 尚未最终锁定：ElementCap 使用 BaseAffinity 还是实时 EffectiveAffinity，以及多元素预算在 RootPreference / Cap / Soil 可用量之间的最终重分配算法。
 
@@ -176,12 +174,6 @@ GrowthNutrient[i] × Affinity[i]
 - Stage 固化；
 - 后续父子器官继承；
 - 表型 / 元素倾向。
-
-不要再实现旧规则：
-
-```text
-ExtractionAffinity = min(Affinity, 1)
-```
 
 
 ## Base Affinity 与 Effective Affinity
@@ -223,7 +215,7 @@ Sapling 没有下一 Stage。当前主干每累计满 100 Growth，按本轮 Gro
 
 ### Flower / Fruit lineage Growth Affinity
 
-当前旧配置：
+当前生殖器官模板：
 
 ```text
 [1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00]
@@ -250,77 +242,23 @@ range = [0, 1]
 该配置故意不把七元素完全拉平，使 Hydro / Dendro 在随机培养中保留一定自然富集机会。
 
 
-## CFG 边界
+## 配置及时间字段
 
-旧版 `CFG.Affinity / Stem / Leaf / Fruit` 结构仍可作为当前编辑器配置的基础数据来源，但新的生长系统还需要：
+所有速率以 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 计算；结算 Tick 仅表示推进对应的 `Δuh`。千星现实3600秒推进1 uh，Web当前10秒推进1 uh；细分结算使用 `Δuh`，不复制整 uh 的养分预算。
 
-- Growth Tick 间隔；
-- 土壤蒸发率；
-- Tree RootPreference 基础值（当前已锁定）；
-- 固定总吸收上限 `CFG_MaxTotalAbsorbPerHour = 1.0`；
-- 单元素基础 Cap `0.30 × Affinity`；
-- Seed / Seedling 的 GrowthThreshold（当前已锁定为 45 / 90）；
-- Sapling 主干 Growth 周期阈值（当前 100）；
-- Bud GrowthThreshold（当前 20）；
-- 每日 04:00 出芽概率（0叶0.80 / 1叶0.40 / 2叶0.01 / 3叶0）；
-- 子器官分流比例（当前 Leaf 每片 0.3；0/1/2/3叶时 Tree 剩余 1.0/0.7/0.4/0.1）；
-- 各器官 Stage 的环境损耗；
-- 连续学习参数；
-- 表型阈值。
+规范配置应包含：SoilRetentionPerUH=0.99、容量100V、RootPreference[7]、Affinity[7]、根系总吸收V/uh上限、单元素基础通道份额0.30、种子/器官Growth阈值与平台现实秒数/uh映射。
 
-这些字段的**最终编辑器结构和命名**不在本文件先行拍板，由对应 Feature Spec 确定，再回写本文件。
+- 统一吸收上限的最终值正在4/5/6 V/uh之间校准，不预先固定成一个历史值。
+- Sapling TreeReserve[7] 必须依据当次 Reserve 与 Tree Affinity 动态生成成长预算；取用系数/额外上限尚未确认，不存在正式的固定 Reserve 抽取百分比。
+- 每片叶可优先实际取用树本次预算的30%，未用额度归还 Tree；附属 Flower/Fruit 只从本叶当次预算分流。
+- Seed/Seedling阈值45/90；Sapling主干塑形100；Bud20；Leaf26/18；生殖同一 Growth 26/40/90。花开和结果不清零该生殖向量。
+- 出芽机会按0/1/2/3叶概率0.80/0.40/0.01/0计；**按 uh 如何触发和细分机会次数**需统一确认，不假定每次结算都重复投概率，也不使用硬性每日固定时刻作为 Growth 阶段条件。
 
-不要为了提前补齐 CFG 而自行发明未确认字段。
+时间持久化记录实际世界更新时间及必要的离散事件去重状态，恢复时从上次时间推进累计 `Δuh` 并在真正的 Growth 跨阈值时处理阶段事件；不得另行使用按每次 Tick 累加固定一小时的近似器。
 
-## 时间字段
-
-统一 Growth Tick 后，不再把旧的“树体元素连续衰减时间戳”作为核心模型。
-
-至少需要语义上的：
-
-```text
-LastGrowthTickAt
-LastBudCheck / 可等价判断是否已处理某个服务器日 04:00
-```
-
-用于：
-
-- 在线 Tick 调度；
-- 离线期间根据真实经过时间补算连续 Growth；
-- 登录时按事件边界回放每日 04:00 出芽检查；
-- 防止短时间重登重复触发同一个服务器日的出芽机会。
-
-元素球仍拥有自己的出生 / 保存时间规则，不与 Growth Tick 时间戳混为一谈。
-
-当前元素球数值基线：
-
-```text
-InitialAmount = 8~10
-HalfLife = 15 min
-Destroy when total < 1
-Spawn check = every 5 min
-SpawnChance = 1 / (1 + (FieldBallTotal / 28)^3)
-Login catch-up window = max recent 30 min
-```
-
-登录补算按真实 SpawnTime 和球龄计算半衰，不额外制造一套“登录补偿球”。
+元素球与土壤只使用同一 uh 计时体系。玩家主动「富集→收集」元素球、清空场地不影响已经进入 Soil 的存量；元素球随 `Δuh` 半衰，收集即时结算实际剩余量，不会自己自动刷新。
 
 ## Sapling Bud 与分流状态约定
-
-Sapling 的出芽不是每 Tick 随机事件，而是服务器时间每日 04:00 的离散事件。
-
-当前规则：
-
-```text
-LeafCount 0 → 0.80
-LeafCount 1 → 0.40
-LeafCount 2 → 0.01
-LeafCount 3 → 0
-```
-
-如果 04:00 已存在 Active Bud，则跳过当天检查。
-
-Tree Reserve 形成的本 Tick生长养分预算先向已存在叶片分流：
 
 ```text
 0叶：Tree 1.0
@@ -329,16 +267,9 @@ Tree Reserve 形成的本 Tick生长养分预算先向已存在叶片分流：
 3叶：Tree 0.1 / Leaf A 0.3 / Leaf B 0.3 / Leaf C 0.3
 ```
 
-有 Active Bud 时，Tree 份额转换得到的 GrowthGain 写入 `BUD_Growth[7]`，而不是 `TREE_Growth[7]`。Bud 累计满 20 后成为正式叶片；若玩家提前掐芽，则：
+上述是叶片优先取用份额上限；未能实际吸收的部分返回 Tree 预算。存在 Active Bud 时仅 Tree 自身份额形成的 GrowthGain 改写入 `BUD_Growth[7]`，达到20产生叶；掐芽时已累积量完整返回 `TREE_Growth[7]`。叶片自主生长、结果与其他叶互不重新分配。
 
-```text
-TREE_Growth[i] += BUD_Growth[i]
-BUD_Growth = zero vector
-```
-
-Bud 是持久世界状态，不是一次 Tick 的临时变量，因为离线回放和玩家采芽都需要跨 Tick 读取。
-
-离线补算不得简单把完整离线时长压成一次最终计算；至少需要按 04:00、Bud 达到阈值、Tree Growth 达到100、Leaf / Flower / Fruit 阈值等离散事件边界分段。
+离线结算按每一实际 Growth 状态边界分段；出芽随机机会须按正式确认的 uh 风险频率去重。FlowerBud、Flower、GreenFruit、MatureFruit 从花苞诞生沿同一生殖 Growth[7] 持续增长。
 
 ## 节点图实现原则
 
@@ -362,16 +293,3 @@ LEAF_Growth[i]
 短生命周期的 `AbsorbElems`、比例、临时转换结果等只通过节点连线 / 局部值传递，不落为跨节点图共享的实体变量。实体变量只保存真正需要持久化的世界状态。
 
 器官通信采用消费者主动获取：Tree 读取 / 修改自己的配对 Soil；Soil 不需要知道 Tree 的成长规则。事件 / 信号只承担流程触发和实例路由，不承担养分等业务数据传输。
-
-## 旧字段迁移
-
-以下旧语义不再作为新实现的 source of truth：
-
-```text
-TREE_LastElementUpdateAt
-器官生成时一次性 OrganElement 快照后永久冻结
-浇灌直接写入 TREE_Elems
-树体元素按旧连续公式直接自然衰减
-```
-
-已有实验节点图可以继续作为 genshin-ts 编译 / 导入验证材料，但正式功能实现应按新的土壤—Reserve—Growth Tick 模型重新拆 Spec。

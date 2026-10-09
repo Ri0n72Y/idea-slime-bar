@@ -1,5 +1,7 @@
 # 水瓜厨房 MVP：实现路线图与 Spec 工作流
 
+所有模型速率和时长遵照 [uh 等效小时规范](../../docs/plants/uh-time-unit.md)，`Tick` 仅是可以细分的结算事件，不是速率或成长年龄单位。
+
 本文件把当前 MVP 拆成可以逐项选择和实现的功能点，并规定从“选择功能”到“开始编码”的 SDD 工作流。
 
 它回答两个问题：
@@ -68,7 +70,6 @@ flowchart TD
 说明：
 
 - 箭头表示**实现依赖或集成依赖**，不是强制的开发顺序。
-- 旧的“浇灌直接写树体 / 树体连续衰减 / 器官一次性快照”已经被土壤—Reserve—Growth Tick 模型替代。
 - 一个功能点可以拆成多个简单 Flow Block；一个 Flow Block 也可以需要多份源码、复合节点、编辑器绑定和测试文件。
 - 通用养分规则见根目录 `docs/plants/nutrient-growth-system.md` 与 `docs/plants/growth-tick.md`；千星奇域映射见 `growth-system.md`。
 
@@ -132,39 +133,23 @@ flowchart TD
 
 ---
 
-### F2 — 统一 Growth Tick 与服务器时间离线补算
+### F2 — uh 结算与离线一致性
 
-目标：建立土壤、树体和后续器官共用的离散生长结算节奏。
+目标：模型以 [uh](../../docs/plants/uh-time-unit.md) 推进真实 `Δuh`；所有养分速率统一为 V/uh，千星服务端与 Web 仅改变现实秒数/uh映射。
 
-当前基线：
+- [ ] F2.1 计算上次状态到当前时刻的 `Δuh`，支持1 uh及其分数步长，不能通过增加结算次数提高养分吞吐。
+- [ ] F2.2 Soil超容量同比缩放，按 `0.99 ** Δuh` 自然蒸发；元素球按 uh 计龄与半衰。
+- [ ] F2.3 Soil → RootPreference / Affinity 通道上限 / 根系总上限 `MaxRootAbsorbVPerUH × Δuh`。
+- [ ] F2.4 Seed / Seedling 的吸收量直接转换到自身 Growth[7]；到45/90才升阶段。
+- [ ] F2.5 Sapling 将根系吸收实际写入 TreeReserve[7]，按 **Reserve×TreeAffinity 动态**生成本次 GrowthNutrientBudget[7]；生成函数参数需设计确认。
+- [ ] F2.6 叶片优先实际取用各自名义30%预算，其未使用额度返还 Tree；每片叶本次预算内部再独立向附属 Flower/Fruit 分流，不抢其他叶预算。
+- [ ] F2.7 Tree 剩余预算结算为 TreeGrowth，若有 Active Bud 则写入 BudGrowth[7]。
+- [ ] F2.8 Growth 达标才进行器官形态变化；Stage跨越时保证亲和与 Growth 的连续性/固化点。
+- [ ] F2.9 出芽概率必须按统一的 uh 机会频率进行判定，不将一次技术 Tick 等价于一次抽奖；待确认后实现。
+- [ ] F2.10 离线事件回放跨 Growth 阈值分段，不机械模拟无必要的所有小时间步，也不跳过真实生长事件。
+- [ ] F2.11 调度和页面 UI 可以更高频更新，但不得另创 GameTime 与模型分叉。
 
-```text
-GrowthUpdateIntervalSeconds = 60
-SoilRetentionPerHour = 0.99
-TreeGrowthRetentionPerHour = 0.99   # Sapling 起
-MaxTotalAbsorbPerHour = 1.0
-```
-
-Tick 只负责结算，实际变化全部使用真实 `dt`。
-
-候选流程块：
-
-- [ ] F2.1 根据 UTC 时间确定应执行的 Tick 数。
-- [ ] F2.2 土壤元素自然蒸发。
-- [ ] F2.3 根据 Soil、RootPreference、1.0/h 总上限和单元素 Cap 计算吸收。
-- [ ] F2.4 Seed / Seedling：吸收结果直接转换为 Growth。
-- [ ] F2.5 Sapling 起：吸收结果写入 Tree Reserve。
-- [ ] F2.6 Sapling 起判断 Growing / Dormant，并从 Reserve 提取生长预算。
-- [ ] F2.7 先完成第一层 `Tree -> Tree self + each Leaf` 分配；再由每片 Leaf 只在自己当次预算内部，向 Leaf self 与其附属 Flower / Fruit 按阶段 sink 做第二层分流。Tree self budget 再转换为 Tree Own GrowthGain；不做跨叶预算重分配。
-- [ ] F2.8 无 Active Bud 时写入 `TREE_Growth[7]`；有 Active Bud 时写入 `BUD_Growth[7]`。
-- [ ] F2.9 连续学习 Effective Affinity；Seed / Seedling 检查 Stage，Sapling 检查主干100 Growth周期和 Bud=20。
-- [ ] F2.10 跨服务器时间 04:00 时，先结算此前连续 Growth，再基于真实 LeafCount / Bud 状态做一次出芽检查。
-- [ ] F2.11 更新 `LastGrowthTickAt` 与每日 Bud 检查状态。
-- [ ] F2.12 离线进入时按事件边界分段回放，不逐分钟模拟，也不把整个离线区间错误压成一次最终随机计算。
-
-复杂流程不得全部塞进单一节点图；实际开发时按上述职责继续拆 Flow Block / Spec。
-
----
+不增加独立计时器服务或新仿真框架；坚持现有平台内的单一权威状态。
 
 ### F3 — 土壤浇灌与容量竞争
 
@@ -180,102 +165,52 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] F3.6 Overflow 当前直接丢弃，未来可接气候系统。
 - [ ] F3.7 边界测试覆盖空土、未满、刚好满、超量输入和单元素极端。
 
-旧版“新输入优先 / 挤出旧 Soil”规则已经废弃。
-
-旧“元素锁定”能力在新模型中的作用位置尚未重新设计，**不进入本 Feature**。
-
 ---
 
-### F4 — 元素球刷新、衰减与牵引浇灌
+### F4 — 主动元素球富集、收集与衰减
 
-设计入口：GitHub Issue #1。
+- [ ] F4.1 玩家按「富集」主动生成一个七元素等概率的纯元素球，数值范围按统一的材料参数。
+- [ ] F4.2 纯元素球单次主动富集初始 **8～10 V**；以 `Δuh` 为年龄按半衰期 **0.25 uh** 衰减，剩余总量 **<1 V** 时消失。
+- [ ] F4.3 「收集」将当前球的剩余元素量立刻写入 Soil，球从场地移除；不能等下一次结算才接收。
+- [ ] F4.4 「清空场地」只影响未收集球，不回退已收集 Soil[7]。
+- [ ] F4.5 普通模式**不自动生成元素球**；不建立额外玩家在线刷新收益或离线补偿球。
+- [ ] F4.6 调试中可以选择元素、推进 `Δuh` 或清理状态；与普通模式真实数据隔离。
+- [ ] F4.7 Web 的球富集区保留独立可操作栏，千星输入由服务端世界/实体与 UI 分离实现。
 
-目标：把土壤元素输入变成世界中可观察、会自然蒸发、可由玩家选择并牵引的资源。
+### F5 — Growth 驱动的生命阶段与器官分流
 
-需要覆盖：
-
-- [ ] F4.1 元素球实体数据；当前纯元素球初始量随机 8～10。
-- [ ] F4.2 15 分钟半衰期连续衰减。
-- [ ] F4.3 总量小于 1 时消失。
-- [ ] F4.4 每 5 分钟最多尝试生成 1 个新球。
-- [ ] F4.5 生成概率：`1 / (1 + (FieldBallTotal / 28)^3)`。
-- [ ] F4.6 不设硬球数上限；目标是让场上总元素压力自然形成大概率约 8 球以内的软稳态。
-- [ ] F4.7 登录时最多回放最近 30 分钟的正常刷新历史，并按真实 SpawnTime / age 计算衰减。
-- [ ] F4.8 短时间重登只补算真实离线时间，不重复获得完整 30 分钟窗口。
-- [ ] F4.9 玩家与元素球交互后进入牵引状态。
-- [ ] F4.10 靠近土壤 / 树苗浇灌区域后自动吸附。
-- [ ] F4.11 以吸附时剩余元素量提交给 F3，写入土壤。
-- [ ] F4.12 元素种类第一版随机。
-
-仍待后续 Spec 明确：刷新位置、牵引移动与中断、吸附范围、多人归属、元素种类未来的针对性与故事性。
-
----
-
-### F5 — 器官生长、Stage 与养分分流
-
-目标：把树体 Growth 和子器官建立成可持续运行的生长链。
+所有阶段转换只检查对应向量累计 Growth，不使用必须待满指定时间的年龄门槛。具体体验以 uh 计量，是正常供养下的阈值校准参考。
 
 #### F5-Tree — Seed / Seedling / Sapling
 
-- [ ] Seed → Seedling → Sapling；Sapling 是当前版本长期玩法阶段，Mature 延后。
-- [ ] Seed / Seedling 没有 Reserve，直接 Soil → Absorb → Growth。
-- [ ] Sapling 起开始拥有 Tree Reserve。
-- [ ] Seed / Seedling 升级时清空 Growth，并固定当前 Effective Affinity 为下一 Stage Base。
-- [ ] 所有当前阶段统一使用 `MaxTotalAbsorbPerHour = 1.0`。
-- [ ] Seed → Seedling 的 GrowthThreshold = 45。
-- [ ] Seedling → Sapling 的 GrowthThreshold = 90。
-- [ ] Sapling 主干 Growth 周期 = 100；满值只更新 / 固定自身 Affinity，不升级 Stage。
-- [ ] 每日服务器时间 04:00 检查一次出芽：0叶0.80 / 1叶0.40 / 2叶0.01 / 3叶0。
-- [ ] Active Bud 使用 `BUD_Growth[7]`；阈值 = 20。
-- [ ] Bud 存在时，Tree Own GrowthGain 全部写入 Bud，Tree Growth 暂停增长。
-- [ ] 玩家掐芽时，Bud Growth 完整合并回 Tree Growth。
-- [ ] Bud 正常到 20 后，以此刻 Tree 的当前亲和按标准父子器官继承规则生成 SmallLeaf；SmallLeaf 出生后拥有独立 Affinity。
-- [ ] 当前最多 3 叶。
+- [ ] Seed Growth45 → Seedling Growth90 → Sapling长期循环；Sapling主干 Growth100 只塑形 Affinity，不升 Mature Tree。
+- [ ] Sapling前无 Tree Reserve；Sapling开始采用 Reserve×Tree Affinity 的动态生长预算。
+- [ ] RootPreference、单元素30%×Affinity吸收 cap和最终 `V/uh` 根系总上限按统一模型使用；4/5/6 V/uh仍在校准中。
+- [ ] Active Bud 将 Tree 本次自身 GrowthGain 转入 BudGrowth，达到20出生 SmallLeaf；掐芽返还 Bud 全部 Growth。
+- [ ] 最多3片叶，0/1/2/3叶的原出芽概率为80%/40%/1%/0%；其每uh机会频率待统一确认，不能随技术 Tick 增加抽奖次数。
+- [ ] 每片叶首次形成时根据当时父器官亲和继承偏移，自此自行塑形，不实时跟随 Tree。
 
-体验目标：
+#### F5-Leaf — 叶片与花苞
 
-- 积极玩家约 47h 后看到 Seedling，第三个自然日上线时已有明确发芽反馈。
-- 再约 95h 进入 Sapling；真实体验约一周进入主要长期玩法。
-- Sapling 后约第1天常见第一芽，第3天左右形成第一片叶，第6～7天逐渐进入两叶主状态。
-- 第三叶在前几周只属于少量旺盛植株。
-- 玩家掐芽不是获得额外加速 Buff，而是把 Bud Growth 退回主干，更快完成主干100 Growth亲和塑形周期。
+- [ ] 每片叶第一层名义份额30%，Tree对应剩余100%/70%/40%/10%；叶片无法实际取用的额度返还 Tree。
+- [ ] SmallLeaf 自身阶段 Growth 0→26 形成 LargeLeaf；将当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，并将**该叶自身阶段 Growth[7] 清零**，再开始下一段独立成长。
+- [ ] LargeLeaf 从清零后的本叶阶段 Growth 0→18 生成附属 FlowerBud；FlowerBud 新建独立 ReproductiveGrowth[7]，母叶继续存活并按自己的预算成长。
+- [ ] 嫩叶无额外组织损耗，肥厚叶自身 Growth 保留效率60%，与 Tree Reserve 取用无关。
+- [ ] FlowerBud从自身独立于母叶的生殖 Growth=0开始积累，与后续 Flower/GreenFruit/Aquamelon共享同一向量。
+- [ ] 典型嫩叶12 uh、肥厚叶12 uh、花苞24 uh只用于校准实际 Growth 速率，不做倒计时或年龄门槛。
+- [ ] 果实成熟 Growth90 时，母叶与果同步转换为可采纤维化 AquamelonLeaf。
 
-#### F5-Leaf — 叶片与开花前生命周期
+#### F5-FlowerFruit — 一条连续的生殖 Growth
 
-- [ ] 当前 Sapling 最多 3 片叶。
-- [ ] 0 叶时 Tree 1.0。
-- [ ] 1 叶时 Tree 0.7 / Leaf 0.3。
-- [ ] 2 叶时 Tree 0.4 / Leaf A 0.3 / Leaf B 0.3。
-- [ ] 3 叶时 Tree 0.1 / 三片 Leaf 各0.3；主干几乎停止是预期结果。
-- [ ] Bud=20 后生成 SmallLeaf，并在出生瞬间从当前 Tree 一次性继承标准父子器官 Affinity；之后不实时跟随 Tree。
-- [ ] SmallLeaf 约 12h → LargeLeaf；再约 12h → FlowerBud；再约 24h → bloom boundary。
-- [ ] SmallLeaf / LargeLeaf / FlowerBud 由统一 settlement 按 elapsed time 推进，不建立三个独立 Timer。
-- [ ] Fruit Growth 达到 100 时，Green Fruit -> Mature Fruit 与 parent Leaf -> fibrous Aquamelon Leaf 同步发生；该叶采摘后得到 `AquamelonLeaf`，不新增“成熟叶计时器”。
-- [ ] 离线首次跨越 bloom boundary 时，该器官停在刚开始的 Flower，让玩家登录后看到花期；不建立 scheduler framework。
-- [ ] Leaf 没有独立 Reserve，继续从 Tree 的本 Tick Growth Nutrient Budget 取自己的份额。
-- [ ] Leaf 在未锁定阶段根据自己的 Growth 独立塑形 Affinity；SmallLeaf 出生后 Tree 的变化不回写。
-- [ ] 嫩叶当前无环境损耗；成叶自身保留率 baseline 仍为 0.6，约 0.4 可逸散到环境。
-- [ ] 颜色 / 形态继续读取 Growth / Effective Affinity；视觉细节由表现 Spec 处理。
+- [ ] FlowerBud→Flower 总 Growth26；Flower→GreenFruit 总 Growth40；GreenFruit→成熟水瓜 总 Growth90；**不在开花或结果时清零**。
+- [ ] 花期预期约12 uh，真实转换依累计 Growth 达到40而非经过12 uh。
+- [ ] 花苞/花从所属母叶当次预算内拿50%，GreenFruit拿85%（80%～90%参考范围），成熟果继续按20%富集，不跨叶分流。
+- [ ] 只有结果时锁定当前 Affinity；`FruitElementAmount[7]` 从此开始按实际进入果实的 V 累积，FlavorRatio按组成比例派生。
+- [ ] GreenFruit可早摘；成熟水瓜仍继续低效富集元素，不锁 Flavor，不自动采收。
+- [ ] 采果后母叶留在树上可以再次生成花苞，但需要基于采收后**新增 Growth** 达到待确定阈值；不得使用固定等待门槛或直接沿用历史 Growth。
+- [ ] 材料采收身份、最小加工路线和完整 Affinity 继承遵照现有材料设计，不引入背包/通用配方系统。
 
-#### F5-FlowerFruit — Flower / Green Fruit / Mature Fruit
-
-这部分已形成当前 Sapling 后半段生命周期合同，但仍不要求塞进第一条叶片垂直切片。
-
-- [ ] Flower / Fruit 是同一个生殖器官的连续 Growth 轴。
-- [ ] Flower 使用 Growth 0→30；正常供给下约 12h 达到 30 是体验目标，不建立 FlowerTimer。
-- [ ] Flower 从所属母叶本次 settlement 获得的 Leaf Growth Nutrient Budget 中分流，当前 sink baseline ≈50%，并继续塑形 Affinity；不会直接从 Tree 总预算或其它 Leaf 取值。
-- [ ] Growth 到 30：Flower 凋谢并形成 Fruit；当前 Affinity 在此锁定。
-- [ ] Fruit 从同一 Growth 轴 30 继续到 100；30≤Growth<100 为 Green Fruit，Growth≥100 为 Mature Fruit。
-- [ ] Green Fruit sink 目标为母叶当次预算的 80–90%，保留实现时校准区间；Mature Fruit sink baseline ≈20%。多叶同时结果时各自只在自己的母叶预算内部独立分流，不相互抢占。
-- [ ] Fruit 形成后不再塑形 Affinity，开始累计 `FruitElementAmount[7]`。
-- [ ] `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`；总量为 0 时尚未形成 Flavor，ratio 只派生、不重复持久化。
-- [ ] Mature Fruit 到 100 后仍继续低效率累计元素，因此 FlavorRatio 仍可变化；100 只锁物理成熟。
-- [ ] Fruit 形成后随时可采摘；Green Fruit 是独立料理材料，不是失败状态。摘果只使所属母叶重新获得完整的自身 Leaf budget，不触发其它叶片或 Tree 的第一层预算重分配。
-- [ ] Green Fruit 外观从青绿 / 柔软逐步过渡到 Mature Fruit 的深褐木质果壳；内部由混沌元素粘液过渡到“果壳 → 光滑内膜 → 果肉膜 → 清澈水瓜水”。
-- [ ] Mature Fruit 可用少量亮晶晶逸散表达仍在富集；本 Feature 不实现通用 shader / VFX framework。
-- [ ] 成熟后催化 / 精炼 / 老种子等只保留未来语义插口，不定义状态或公式。
-
----
+**共同时间/数值体验目标**：规律维护者约24 uh到 Seedling、72 uh到 Sapling、168 uh内首颗成熟水瓜，稳定期每168 uh约4～6果；其他上线频率只经实际 Soil 供给差异影响成长速度。
 
 ### F6 — 元素表型、颜色与隐藏亲和
 
@@ -284,7 +219,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 需要覆盖：
 
 - [ ] 未成熟器官可随着连续学习和 Growth 构成改变表现。
-- [ ] Seed / Seedling 与仍在学习的 Leaf 阶段继续遵守既有 Affinity 固化语义；生殖器官例外是 Flower Growth=30 时直接锁定 Affinity，Fruit 30→100 不再塑形。
+- [ ] Seed / Seedling 与仍在学习的 Leaf 阶段继续遵守既有 Affinity 固化语义；生殖器官例外是 生殖 Growth 达40结果时锁定 Affinity，Growth40→90 的青果期继续富集实际果实元素。
 - [ ] 某元素 Affinity 达到表现阈值时，可以进入对应颜色 / 变种形态。
 - [ ] 未达到阈值时保持普通形态，但隐藏 Affinity 仍然保留。
 - [ ] 多元素同时超过阈值时的视觉选择规则由表现 Spec 决定。
@@ -305,7 +240,7 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 - [ ] F7.2 `ΣFruitElementAmount = 0` 时，Flavor 尚未形成。
 - [ ] F7.3 总量大于 0 时派生 `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`。
 - [ ] F7.4 不额外持久化重复 `FlavorRatio` 向量，除非后续实现出现明确必要性。
-- [ ] F7.5 Growth=100 后仍允许元素继续累计，因此 FlavorRatio 可以继续变化。
+- [ ] F7.5 生殖 Growth=90 后仍允许元素继续累计，因此 FlavorRatio 可以继续变化。
 - [ ] F7.6 本 Feature 不实现六维 Taste、Affinity→Flavor efficiency、Flavor decay / cap、催化或精炼。
 
 当前不建立通用 Flavor conversion pipeline。未来具体料理如何解释这个比例，在对应 Feature 重新形成 Spec。
@@ -343,9 +278,9 @@ Tick 只负责结算，实际变化全部使用真实 `dt`。
 
 - [ ] F9.1 SmallLeaf 采摘后生成独立 `TenderLeaf` / 嫩叶材料。
 - [ ] F9.2 LargeLeaf 采摘后生成独立 `ThickLeaf` / 肥厚的叶片材料。
-- [ ] F9.3 Fruit Growth=100 的同一成熟事件把 parent Leaf 转成纤维质 Aquamelon Leaf；采摘后生成 `AquamelonLeaf` / 水瓜树叶。
-- [ ] F9.4 Green Fruit 在 `30 <= Growth < 100` 可采摘为 `GreenFruit` / 青果。
-- [ ] F9.5 Mature Fruit 在 `Growth >= 100` 可采摘为 `Aquamelon` / 水瓜。
+- [ ] F9.3 Fruit 生殖 Growth=90 的同一成熟事件把 parent Leaf 转成纤维质 Aquamelon Leaf；采摘后生成 `AquamelonLeaf` / 水瓜树叶。
+- [ ] F9.4 Green Fruit 在 `40 <= Growth < 90` 可采摘为 `GreenFruit` / 青果。
+- [ ] F9.5 Mature Fruit 在 `Growth >= 90` 可采摘为 `Aquamelon` / 水瓜。
 - [ ] F9.6 Living Organ -> world Material 后退出 Tree / Leaf nutrient allocation、organ Growth 与 on-tree enrichment。
 - [ ] F9.7 每个具体材料至少携带 `MaterialType`、`ElementAmount[7]`、`Affinity[7]` 语义；`FlavorRatio` 继续由 ElementAmount 比例派生，不要求统一 generic 数据框架。
 - [ ] F9.8 `GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；青果皮与青果肉都是独立材料。
@@ -505,14 +440,14 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 需要看到：
 
 - [ ] Seed / Seedling / Sapling 的阶段链可运行。
-- [ ] 土壤元素按 RootPreference、1.0/h 总上限和单元素 Cap 被吸收。
-- [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 按 0.99/h retention 产生生长预算。
+- [ ] 土壤元素按 RootPreference、统一根系 `V/uh` 总吸收上限和七元素通道 Cap 被吸收。
+- [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 和 Tree Affinity 联合产生动态生长预算，精确转换系数仍待确认。
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
 - [ ] Sapling 当前最多出现 3 片叶；大多数长期处于2叶，少量进入3叶。
 - [ ] 每片叶获得约 0.3 的分流预算；3叶时 Tree 仅保留约0.1。
-- [ ] 叶片前半段按 SmallLeaf → LargeLeaf → FlowerBud 的已确认 elapsed-time boundary 推进；第一条切片仍可在进入 Flower runtime 前收口。
+- [ ] 叶片按 SmallLeaf Growth 26 → 固化本叶亲和并清零本叶阶段 Growth → LargeLeaf 新阶段 Growth 18 → 生成 FlowerBud 推进；不得改为固定等待 uh。第一条切片仍可在 Flower runtime 前收口。
 - [ ] 叶片 Effective Affinity 持续学习。
-- [ ] 按各阶段合同处理 Affinity：Leaf 学习阶段独立塑形；Flower→Fruit 在 Growth=30 锁定；不要用一个通用规则覆盖所有阶段。
+- [ ] 按各阶段合同处理 Affinity：SmallLeaf→LargeLeaf 固化本叶亲和并重置本叶阶段 Growth；Flower→GreenFruit 于**连续生殖 Growth 达到 40**时锁定生殖亲和；不能清零生殖 Growth 或用一个通用规则覆盖所有阶段。
 - [ ] 叶片表现可以随培养方向产生差异。
 - [ ] 玩家点击成熟可采叶片。
 - [ ] 史莱姆移动并完成摘叶。
@@ -656,7 +591,7 @@ Flow Block 应尽量满足：
 计算错过 Tick 数
 土壤蒸发
 树体按 RootPreference / Cap 吸收
-生成本 Tick 生长预算
+根据当前 Reserve 与 Tree Affinity 生成本次 `Δuh` 生长预算
 Tree / Leaf 第一层分流
 各 Leaf 内部的生殖器官第二层分流
 Growth Vector 转换
