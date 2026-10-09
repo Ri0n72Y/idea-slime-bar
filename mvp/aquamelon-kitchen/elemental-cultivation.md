@@ -4,7 +4,7 @@
 
 **植物如何从土壤获取元素、如何形成 Growth Vector、如何经历 Stage、叶片 / 花 / 果如何持续学习亲和与分流养分，已经迁移到 [七元素养分与生长系统](growth-system.md)。本文件不再作为这些生长规则的 source of truth。**
 
-**后续策划独立稿**：[果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md)。该稿已经记录新确定的 90G / 1U=30G / 默认方向 / 消耗与挂果反应规则，但仍有与当前 v0 Fruit Growth=100、FlavorRatio 语义之间的待解冲突；不要将其直接视作已批准的 runtime 实现要求。下方旧 BloomStrength / 六维 Taste 等历史草稿也不能反向覆盖新策划稿。
+**后续策划独立稿**：[果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md)。该稿已经记录新确定的 90G / 1U=30G / 默认方向 / 消耗与挂果反应规则，并已澄清花与果实共享连续七维 Growth、没有第二个 FruitElementAmount 向量；当前 v0 Fruit Growth=100、FlavorRatio 等旧口径仍待一致性修订，不可直接视作已批准的 runtime 实现要求。下方旧 BloomStrength / 六维 Taste 等历史草稿也不能反向覆盖新策划稿。
 
 第一版的培养链已经更新为“土壤储备 → 树体储备 → Growth Tick → 器官生长”。
 
