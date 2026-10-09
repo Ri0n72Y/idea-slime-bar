@@ -57,6 +57,8 @@
 7. [elemental-cultivation.md](elemental-cultivation.md)  
    七元素培养结果、表现与后续料理规则。RootPreference 与 Growth Affinity 已分离；口味、绽放、水瓜汁等下游规则继续保留在本文件。
 
+   **资料调研（非现行 Spec）：**[元素反应的战斗效果与风味/口感候选表](elemental-reaction-flavor-survey.md)。覆盖经典反应与特殊月/星反应，保留待讨论标记；不改变当前七元素数值合同。
+
 8. [interaction.md](interaction.md)  
    MVP 的输入与劳动方式：玩家不直接控制史莱姆移动，而是点击可交互对象下达行动。
 
