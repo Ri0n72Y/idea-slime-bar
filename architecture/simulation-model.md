@@ -100,7 +100,7 @@ Cordis dependency graph 只描述模块和 Service 的依赖关系，不用于�
 
 World Time 是长期世界过程的共同时间基准。
 
-例如植物从 10:00 生长到 14:00，Growth System 可以直接根据经过时间计算当前阶段，而不需要执行大量逐秒 tick。
+例如水瓜植物的成长模型从 10 uh 推进到 14 uh，Growth System 按累计 4 uh 的真实养分与 Growth 变化结算，不需要按现实秒数重复整小时速率。
 
 客户端可以显示并预测时间表现，但权威世界时间来自 World Server。
 
