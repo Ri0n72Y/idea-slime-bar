@@ -7,7 +7,7 @@
 ```text
 富集的元素球（玩家收集）
      ↓
-Soil_Elems[7] （容量100；自然蒸发0.99/uh）
+Soil_Elems[7] （容量1000；自然蒸发0.998/uh）
      ↓ 根系取用：Soil、RootPreference、Affinity、单元素/总吸收V/uh上限
 Seed / Seedling → 直接转换到自身 Growth[7]
 Sapling         → TREE_Elems[7] / Reserve
@@ -24,7 +24,7 @@ Sapling         → TREE_Elems[7] / Reserve
 - Reserve 是尚未转化的真实七元素 V；Growth 是已形成器官生长与亲和偏移的七维事实。
 - 每个器官只在本次父器官给予的预算中吸收；子器官未实际取用的份额返还父器官，不因生成固定名义份额而丢失。
 - Seed、Seedling 没有 Tree Reserve；进入 Sapling 才持久化 Reserve。
-- Reserve 动态生长预算**由当前 Reserve 与 Tree Affinity 共同决定**。精确转换公式的系数/额外上限尚待校准；不要改成固定百分比消耗。
+- Reserve 动态生长预算**由当前 Reserve 与 Tree Affinity 共同决定**。Tree Reserve容量180 V；总量≥100 V时**满速预算**、低于100 V时按`R/100`降速。**Tree Affinity>1允许预算提取总额放大，不再将七元素加权Affinity结果归一化到固定总额**；每种元素仍不能超过实际Reserve。预算参考系数尚待校准；不要改成固定百分比消耗。
 - Soil 自然蒸发属于世界环境损耗，**不能与 Tree Reserve → Growth Budget 混为一谈**。
 
 ## 2. 时间与计算尺度
@@ -35,19 +35,19 @@ MaxRootAbsorbThisStep = MaxRootAbsorbVPerUH × Δuh
 Soil_Elems[i] *= SoilRetentionPerUH ** Δuh
 ```
 
-`SoilRetentionPerUH = 0.99`；该参数仅用于 Soil。千星可以每1 uh、1/12 uh或1/60 uh结算；Web当前1 uh=10秒，可以用更细时间片更新 UI，但要累计出完全相同的 uh 代谢。出芽等随机事件的次数不能随细分结算间隔增加。
+`SoilRetentionPerUH = 0.998`；该参数仅用于 Soil。千星可以每1 uh、1/12 uh或1/60 uh结算；Web当前1 uh=10秒，可以用更细时间片更新 UI，但要累计出完全相同的 uh 代谢。出芽等随机事件的次数不能随细分结算间隔增加。
 
 当前模拟的生命周期事件全部按 Growth 阈值跨越处理，只有玩家实际可见花期等表现策略可能要求在离线回放时安排一个展示停点；这个停点不得丢失已累计 Growth。
 
 ## 3. 土壤与元素球
 
-- `SOIL_Elems[7]` 是元素存量，容量100 V。玩家点击「富集」生成等概率的一个纯净元素球，点击「收集」立即将球**当前剩余量**加入 Soil 并移除该球；「清空场地」不影响已经进入 Soil 的储备。
-- 元素球没有普通玩法的自动刷新。每次「富集」生成等概率纯元素球，初始元素量 **8～10 V**；球按统一模型时间 **半衰期 0.25 uh**（对应千星的15分钟基线）衰减：`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`；总元素量 **<1 V** 时销毁。Web 时间压缩只改变这些 uh 在现实中经历多久，不改变球的生命周期数值。
-- Soil 若总量超过100，下一次结算开始时按 `100 / SoilTotal` 对七维存量等比例缩放；之后自然蒸发、再被植物吸收。超量直接损失，不设置隐藏回收池。
+- `SOIL_Elems[7]` 是元素存量，容量1000 V。玩家点击「富集」生成等概率的一个纯净元素球，点击「收集」立即将球**当前剩余量**加入 Soil 并移除该球；「清空场地」不影响已经进入 Soil 的储备。
+- 元素球没有普通玩法的自动刷新。每次「富集」生成等概率纯元素球，初始元素量**期望80 V**（具体上下限待定）；球按统一模型时间 **半衰期 0.25 uh**（对应千星的15分钟基线）衰减：`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`；总元素量 **<1 V** 时销毁。Web 时间压缩只改变这些 uh 在现实中经历多久，不改变球的生命周期数值。
+- Soil 若总量超过1000，下一次结算开始时按 `1000 / SoilTotal` 对七维存量等比例缩放；之后自然蒸发、再被植物吸收。超量直接损失，不设置隐藏回收池。
 - RootPreference = `[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
 - Tree 初始 Base Affinity = `[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]`。
-- 单元素通道基础上限份额为 `0.30 × 对应 Tree Affinity`；每一 uh 的总吸收上限在 **4、5、6 V/uh 对照方案**中继续校准，未最终锁定。多元素同时受 Soil 可用量、RootPreference、各自通道 cap 和总 cap 限制。
-- Stage 不额外产生未经授权的根系加成。玩家的元素搭配可以改变摄取比例与亲和学习的方向。
+- 单元素通道基础上限份额为 `0.30 × 对应 Tree Affinity`；根系上限按 Seed / Seedling / Sapling 阶段分别校准（当前候选2.0/1.85/14 V/uh，并未最终批准）。Sapling Reserve≤100 V时根系满速，100～180 V时按ln下降，180 V时停止吸收；多元素仍受 Soil 可用量、RootPreference、通道cap与阶段总cap限制。见[第一周期望校准](first-fruit-uh-calibration.md)。
+- Stage只改变**已配置的阶段根系上限**，不提供隐形加速；同一阶段三类玩家使用完全相同的上限。玩家元素搭配仍可改变摄取比例与亲和学习方向。
 
 ## 4. Growth 驱动的亲和塑形
 
@@ -203,7 +203,7 @@ Destroy Bud
 
 - SmallLeaf 出生时继承当前 Tree 的亲和偏移，之后按自己的 Leaf Growth[7] 塑形。**SmallLeaf 的阶段 Growth 达到 26 时，先将当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，再将该叶阶段 Growth[7] 清零**；LargeLeaf 从新的零基线累计 **18 Growth**，达标后生成附属 FlowerBud。这里清零的只是母叶自己的阶段 Growth；**FlowerBud 新建的 ReproductiveGrowth[7] 从零开始，此后开花、结果、成熟均不重置该生殖向量**。
 - FlowerBud 拥有独立于母叶的 `ReproductiveGrowth[7]`；**花苞 0→26、Flower 26→40、GreenFruit 40→90、成熟果 90+ 全程沿同一向量累计，开花和结果都不清零。**
-- FlowerBud / Flower 占母叶本次养分预算50%，GreenFruit 占85%（80%～90%校准区间的当前候选），成熟果占20%。LargeLeaf 自身组织的 Growth 保留效率为60%，SmallLeaf 没有同类损耗；这些不等于 Reserve 的抽取比例。
+- FlowerBud / Flower 占母叶本次养分预算**40%**，GreenFruit 占85%（80%～90%校准区间的当前候选），成熟果占20%。LargeLeaf 自身组织的 Growth 保留效率为60%，SmallLeaf 没有同类损耗；这些不等于 Reserve 的抽取比例。
 - 花和果继续按自身 Growth 的元素组成塑形亲和；形成 GreenFruit 时锁定当前生殖亲和，并从此开始累计另外一份 `FruitElementAmount[7]`；之前用于器官形成的 Growth 不被复制成可食元素储备。
 - 花结果约12 uh是期望的可见体验，由 Growth 26→40 与真实供养速率共同决定；不独立倒计时。
 - GreenFruit 达生殖 Growth 90 时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟后仍可以低效率继续富集，Flavor 不锁定、不自动采收。
@@ -372,6 +372,6 @@ Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `Fl
 
 ## 9. 体验与实施边界
 
-积极玩家的校准目标为24 uh见 Seedling、72 uh见 Sapling、168 uh内首果；每天维护的成熟生产目标约4–6果/168 uh，间歇维护2–4果/168 uh，每周一次约2果/168 uh。三个行为仅通过 Soil 的真实补给历史形成差异，不用不同的成长公式。
+积极玩家的校准目标为20–22 uh见 Seedling、**60 uh见 Sapling**、168 uh内成熟首果；**每周上线一次的玩家第168 uh回访亦应得到成熟水瓜，且Soil已干、Reserve约30V；每日上线玩家应更早收获且Reserve更健康**；每天维护的成熟生产目标约4–6果/168 uh，间歇维护2–4果/168 uh，每周一次约2果/168 uh。三个行为仅通过 Soil 的真实补给历史形成差异，不用不同的成长公式。
 
 在 Reserve×Affinity 动态预算、根系上限、出芽风险频率与采收复花阈值全部落实前，任何旧固定百分比代谢、等待小时阈值或按平台另设的成长倍率都不应被写入当前设计或作为最终数值结论。千星正式游戏由服务端节点图实现，Web 是同一模型的现实时间加速实验，不共享代码。
