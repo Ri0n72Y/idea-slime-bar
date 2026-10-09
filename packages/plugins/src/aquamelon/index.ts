@@ -24,3 +24,4 @@ export {
   normalizeVector,
   sumVector
 } from './vector'
+export { isBlendableJuice, previewJuiceBlend, type JuiceBlendPreview } from './juice-blend'
