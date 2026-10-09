@@ -1,6 +1,6 @@
 # 水瓜厨房 MVP：七元素培养与水瓜汁混合
 
-本设计稿保留七元素培养表现与下游料理设计记录。**当前 Sapling 生命周期、Fruit Affinity 锁定点、`FruitElementAmount[7]` 与 v0 `FlavorRatio` 的 source of truth 已迁移到 [七元素养分与生长系统](growth-system.md)。本文后半部旧六维 Taste / 绽放 / 水瓜汁公式只作为延后设计草稿，不得覆盖当前 v0 Fruit Flavor 语义。**
+本文件只记录七元素培养表现、性状与待开发的下游玩法。权威养分、生命周期、Fruit Flavor 规则见 [七元素养分与生长系统](growth-system.md)；未进入当前 v0 的料理与反应设想不得覆盖已确认的果实 ElementAmount 比例模型。
 
 **植物如何从土壤获取元素、如何形成 Growth Vector、如何经历 Stage、叶片 / 花 / 果如何持续学习亲和与分流养分，已经迁移到 [七元素养分与生长系统](growth-system.md)。本文件不再作为这些生长规则的 source of truth。**
 
@@ -34,18 +34,9 @@ Growth / Affinity 决定颜色与形态
 
 相关背景见 [千星奇域水瓜树](setting.md) 和 [水瓜厨房 MVP 需求](requirements.md)。
 
-## 生长与七元素数据来源
+## 七元素培养数据与亲和
 
-旧版曾在本文件中定义“浇灌直接写入树体、树体元素连续衰减、器官生成时做一次静态元素快照”。
-
-这些规则已经被新的养分—生长模型替代。
-
-当前应按以下文档理解：
-
-- [七元素养分与生长系统](growth-system.md)：千星奇域水瓜树的土壤、树体 Reserve、Growth Vector、Stage、叶片、花果与体验目标。
-- [开发约定](development-conventions.md)：七元素向量、Reserve / Growth / Affinity 的实现层语义。
-- [通用植物养分—生长系统](../../docs/plants/nutrient-growth-system.md)：跨项目的抽象模型。
-- [Growth Tick](../../docs/plants/growth-tick.md)：每次生长 Tick 的统一执行顺序。
+RootPreference 决定植物从 Soil 吸收哪些元素，Growth Affinity 决定各元素如何参与单通道上限与 Growth 转换。时间与养分模型共用 [uh 统一规范](../../docs/plants/uh-time-unit.md)，不能另行在本文件定义单位。
 
 ### RootPreference 与 Growth Affinity
 
@@ -161,39 +152,11 @@ SOIL_Elems[i] *= KeepRatio
 连续投同一元素会逐步替换原有组成，但不会在捕获瞬间通过“先挤旧土再加入”的旧算法处理。
 
 
-### 旧“元素锁定”规则
+### 统一 uh 时间与养分流
 
-旧版定义的“树体元素锁定后不衰减、不被挤出”建立在旧模型上。
+本文件中的培养速度统一使用 [uh 等效小时](../../docs/plants/uh-time-unit.md)，吸收上限用 V/uh，生长使用器官实际累计 Growth[7]。Seed / Seedling 直接从根系吸收形成 Growth；Sapling 先进入 Reserve，再由当前 Reserve×Tree Affinity 动态生成本次预算。每片叶优先取用本次预算、未用额度返还 Tree；花果只能从所属母叶本次所得份额取用。
 
-新的土壤—Reserve—Growth Tick 模型下，锁定究竟作用于土壤、树体 Reserve、Affinity 还是其他培养机制尚未重新设计。
-
-因此：
-
-> **元素锁定能力暂时退出当前实现 source of truth，等待后续单独设计，不要把旧锁定语义直接迁移到新系统。**
-
-### 旧连续衰减公式
-
-以下旧公式：
-
-```text
-TreeElementNew
-=
-TreeElementOld × (1 - DecayRate)^ElapsedHours
-```
-
-不再用于树体 Reserve。
-
-当前基础节奏改为统一 Growth Tick，并使用实际 dt：
-
-```text
-CFG_GrowthUpdateIntervalSeconds ≈ 60
-SoilRetentionPerHour = 0.99
-TreeGrowthRetentionPerHour = 0.99
-```
-
-在线更新周期只控制反馈频率，真实变化量按 `RatePerHour + dt` 计算。
-
-树体内部元素的减少主要来自“用于生长的实际代谢和 Tree → Leaf 第一层分流”；Flower / Fruit 只继续分流所属母叶已经获得的预算，而不是额外从整株 Tree 抽取。树体不再额外叠加统一的自然蒸发。
+元素锁定对土壤、Reserve 或亲和的具体作用尚未设计，不属于当前培养公式。
 
 ## 培养结果与玩家体验目标
 
