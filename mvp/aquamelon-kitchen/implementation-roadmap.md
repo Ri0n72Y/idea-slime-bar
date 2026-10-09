@@ -440,7 +440,7 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 需要看到：
 
 - [ ] Seed / Seedling / Sapling 的阶段链可运行。
-- [ ] 土壤元素按 RootPreference、1.0/h 总上限和单元素 Cap 被吸收。
+- [ ] 土壤元素按 RootPreference、统一根系 `V/uh` 总吸收上限和七元素通道 Cap 被吸收。
 - [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 按 0.99/h retention 产生生长预算。
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
 - [ ] Sapling 当前最多出现 3 片叶；大多数长期处于2叶，少量进入3叶。
