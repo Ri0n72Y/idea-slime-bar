@@ -1,5 +1,10 @@
 # 水瓜厨房 MVP：七元素养分与生长系统
 
+## 2026-10-09 优先口径：V/hr 与 uh
+
+> 当前共用的时间/速率合同见 [uh 等效小时与 V/hr](../../docs/plants/uh-time-unit.md)。千星 **1 uh=现实1小时**，Web **1 uh=现实10秒**（可调）；`Tick` 只是积分/结算频率，Web 不另设游戏数值。以下历史段落里`per Tick` / \'elapsed-time boundary\' / Tree Reserve 固定`0.9/0.99` 比例消耗的说法，若与此合同冲突，作为**历史实现参考**而非本轮授权语义。已接受的器官 Growth 校准阈值为`26/18/26/40/90`（花苞→花→青果→成熟果同一 Growth 向量、不在开花处清零）；正式 Reserve × Affinity → Growth Budget 的函数系数仍待定，不能沿用过去的产果时间推算为本轮结论。
+
+
 > **Web 出芽检查补充（2026-10-08）**：Web 每次 Growth Tick 后立即检查出芽条件并按当前叶数投概率，不等待每日 04:00；千星奇域的每日 04:00 规则仍保留，以下每日出芽章节专指该客户端设计。
 
 > **2026-10-08 生效的节奏/时间修订**：本页下方的 `dtHours`、`RatePerHour`、`0.99/h`、每 60 秒结算及「约一周到 Sapling」属于旧版分析记录，**不再作为当前时间或成长目标合同**。权威计算合同改为 [Growth Tick](../../docs/plants/growth-tick.md) 的 `dtTick`。一次 Tick 使用独立的 per-Tick 吸收/代谢参数；`tick:time` 只控制 Tick 与游戏时间及现实触发间隔的映射。千星奇域默认 1 Tick = 1 游戏小时；Web 允许更快的现实 Tick。新目标：积极玩家约 1 游戏日 Seedling、约 3 游戏日 Sapling 并开始花果流程，第一周至少一个果实。Web 目标是积极操作约一小时现实时间内触及 Sapling / Flower / Fruit。千星奇域旧数值目前尚**不能达成**新节奏，参数校准仍待 Lead 决策，不能把 Web 数值覆盖给千星奇域。采果后一游戏日，仍在树上的母叶重新形成 FlowerBud，继承当时的 EffectiveAffinity；后续只用本叶分到的预算。叶片材料的 ElementAmount 是采摘时 Leaf Growth[7] 快照。
