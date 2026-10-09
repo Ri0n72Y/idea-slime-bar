@@ -278,9 +278,9 @@ flowchart TD
 
 - [ ] F9.1 SmallLeaf 采摘后生成独立 `TenderLeaf` / 嫩叶材料。
 - [ ] F9.2 LargeLeaf 采摘后生成独立 `ThickLeaf` / 肥厚的叶片材料。
-- [ ] F9.3 Fruit Growth=100 的同一成熟事件把 parent Leaf 转成纤维质 Aquamelon Leaf；采摘后生成 `AquamelonLeaf` / 水瓜树叶。
-- [ ] F9.4 Green Fruit 在 `30 <= Growth < 100` 可采摘为 `GreenFruit` / 青果。
-- [ ] F9.5 Mature Fruit 在 `Growth >= 100` 可采摘为 `Aquamelon` / 水瓜。
+- [ ] F9.3 Fruit 生殖 Growth=90 的同一成熟事件把 parent Leaf 转成纤维质 Aquamelon Leaf；采摘后生成 `AquamelonLeaf` / 水瓜树叶。
+- [ ] F9.4 Green Fruit 在 `40 <= Growth < 90` 可采摘为 `GreenFruit` / 青果。
+- [ ] F9.5 Mature Fruit 在 `Growth >= 90` 可采摘为 `Aquamelon` / 水瓜。
 - [ ] F9.6 Living Organ -> world Material 后退出 Tree / Leaf nutrient allocation、organ Growth 与 on-tree enrichment。
 - [ ] F9.7 每个具体材料至少携带 `MaterialType`、`ElementAmount[7]`、`Affinity[7]` 语义；`FlavorRatio` 继续由 ElementAmount 比例派生，不要求统一 generic 数据框架。
 - [ ] F9.8 `GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；青果皮与青果肉都是独立材料。
@@ -441,7 +441,7 @@ F4 元素球不是第一条垂直切片的前置条件。测试阶段可以通�
 
 - [ ] Seed / Seedling / Sapling 的阶段链可运行。
 - [ ] 土壤元素按 RootPreference、统一根系 `V/uh` 总吸收上限和七元素通道 Cap 被吸收。
-- [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 按 0.99/h retention 产生生长预算。
+- [ ] Seed / Seedling 直接形成 Growth；Sapling 起 Tree Reserve 和 Tree Affinity 联合产生动态生长预算，精确转换系数仍待确认。
 - [ ] Tree Growth Vector 累积并触发 Stage / 叶片生成。
 - [ ] Sapling 当前最多出现 3 片叶；大多数长期处于2叶，少量进入3叶。
 - [ ] 每片叶获得约 0.3 的分流预算；3叶时 Tree 仅保留约0.1。
