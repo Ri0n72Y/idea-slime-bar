@@ -1,5 +1,10 @@
 # 水瓜厨房：基础生长数值速查
 
+## 2026-10-09 时间单位和目标优先说明
+
+> [uh 等效小时与 V/hr 统一口径](../../docs/plants/uh-time-unit.md) 是本轮校准的时间与单位合同：原 `V/hr` 速率数值不变，分析时可写 `V/uh`；**千星1 uh=现实1小时、Web当前1 uh=现实10秒**，Tick 只定义计算频率。下方 2026-10-08 的 `per Tick` 原型参数和 Web/千星不同平衡表，以及更早的约48小时/约一周生长期，均应作为**历史参考**。本轮以积极玩家 `24/72/168 uh` 目标、器官 Growth `26/18/26/40/90` 为校准口径；Reserve与Tree Affinity动态生成Growth Budget，未批准固定 0.9/0.99 消耗率。三类玩家仅因土壤供给历史不同而成长速度不同，不能将历史推算冒充已达到目标。
+
+
 > **2026-10-08 新目标及单位优先声明**：此文下方按 `RatePerHour / dtHours` 推算的数值与新目标冲突，是历史参考而非现行目标或自动批准的参数。正式单位是 `dtTick`，千星奇域默认每 Tick 对应 1 游戏小时。新的积极玩家目标是约 **24 Tick** 到 Seedling、**72 Tick** 到 Sapling 并开始开花结果，**168 Tick** 内获得至少一个果实。Seed 45 / Seedling 90 / Bud 20 / Flower 30 / Fruit 100 等阶段阈值暂不随之更改。当前历史吞吐上限 1/Tick 与 Reserve retention 0.99/Tick 仍不足以完成该目标；需单独校准千星奇域供应/吸收/Reserve 消耗等参数，**不可**直接复制 Web 的快速数值。Web 正在使用独立的 `tick:time`、吸收与代谢配置进行试玩校准。参见 [Growth Tick](../../docs/plants/growth-tick.md) 与 `packages/plugins/src/aquamelon/config.ts`。
 
 
