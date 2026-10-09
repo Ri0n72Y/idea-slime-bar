@@ -129,7 +129,7 @@ AquamelonShell → AquamelonFlesh + remaining shell material
 
 ## 新元素反应策划（尚未并入 MVP 实现合同）
 
-[果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md) 记录了后续策划讨论确认的 90G 初次成熟数值基线、1U=30G、严格 >1U 的主动触发条件、KQM 实验优先级作为默认触发方向、单次 1U 消耗及挂果富集／复合反应。**已澄清花与果实只使用一份连续的七维 Growth 向量：30G结果、90G初次成熟**；但当前 main 仍写有 Fruit Growth=100 及独立 FruitElementAmount/FlavorRatio。策划稿不直接覆盖现有实现合同，待下一轮同步旧文档和实现边界。
+[果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md) 记录了后续策划讨论确认的 90G 初次成熟数值基线、1U=30G、严格 >1U 的主动触发条件、KQM 实验优先级作为默认触发方向、单次 1U 消耗及挂果富集／复合反应。**已澄清花与果实共享一个连续的 Growth／物质账户：30G结果、90G初次成熟，反应产物与剩余七元素共同占据总容量，成熟后富集效率指数减速**；但当前 main 仍写有 Fruit Growth=100 及独立 FruitElementAmount/FlavorRatio。策划稿不直接覆盖现有实现合同，待下一轮同步旧文档和实现边界。
 
 ## 未来更新备忘
 
