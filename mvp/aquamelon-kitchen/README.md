@@ -77,6 +77,7 @@ Processing 产物完整继承来源 Affinity；生长累积由青果肉/水瓜�
 7. [材料设计方法](../../docs/plants/material-design-principles.md) — 结构组织与生长累积组织。
 8. [实施路线图](implementation-roadmap.md) — 功能范围与开发任务拆分。
 9. [输入交互](interaction.md)、[世界设定](setting.md)、[培养与后续拓展](elemental-cultivation.md)。
+10. [水／火／冰感官基准与四种增幅水瓜](elemental-sensory-baseline.md) — 风味描述与七维表征候选；不改变结算或运行时合同。
 
 ## 当前不自行补齐
 
