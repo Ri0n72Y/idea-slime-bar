@@ -46,7 +46,7 @@ Soil_Elems[i] *= SoilRetentionPerUH ** Δuh
 - Soil 若总量超过1000，下一次结算开始时按 `1000 / SoilTotal` 对七维存量等比例缩放；之后自然蒸发、再被植物吸收。超量直接损失，不设置隐藏回收池。
 - RootPreference = `[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
 - Tree 初始 Base Affinity = `[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]`。
-- 单元素通道基础上限份额为 `0.30 × 对应 Tree Affinity`；根系上限按 Seed / Seedling / Sapling 阶段分别校准（当前候选2.0/1.85/14 V/uh，并未最终批准）。Sapling Reserve≤100 V时根系满速，100～180 V时按ln下降，180 V时停止吸收；多元素仍受 Soil 可用量、RootPreference、通道cap与阶段总cap限制。见[第一周期望校准](first-fruit-uh-calibration.md)。
+- 单元素通道基础上限份额为 `0.30 × 对应 Tree Affinity`；根系上限按 Seed / Seedling / Sapling 阶段分别校准（当前候选2.0/1.85/14 V/uh，并未最终批准）。Sapling Reserve≤100 V时根系满速，100～180 V时按ln下降，180 V时停止吸收；**土壤每种元素的充盈度还要影响对应元素根系吸收效率：高存量时接近满速、低于浓度阈值后按自然对数曲线急速下降**，不能只检查是否存在足够Soil使原通道cap吃满；该浓度ln函数的精确阈值/斜率尚需校准。多元素仍受 Soil 可用量、RootPreference、通道cap与阶段总cap限制。见[第一周期望校准](first-fruit-uh-calibration.md)。
 - Stage只改变**已配置的阶段根系上限**，不提供隐形加速；同一阶段三类玩家使用完全相同的上限。玩家元素搭配仍可改变摄取比例与亲和学习方向。
 
 ## 4. Growth 驱动的亲和塑形
