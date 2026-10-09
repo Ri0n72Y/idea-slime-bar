@@ -244,7 +244,7 @@ range = [0, 1]
 
 ## 配置及时间字段
 
-所有速率以 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 计算；**以 Tick 次数、物理小时、游戏小时混合表示速度的写法已由 uh 替代**。千星现实3600秒推进1 uh，Web当前10秒推进1 uh；细分结算使用 `Δuh`，不复制整 uh 的养分预算。
+所有速率以 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 计算；结算 Tick 仅表示推进对应的 `Δuh`。千星现实3600秒推进1 uh，Web当前10秒推进1 uh；细分结算使用 `Δuh`，不复制整 uh 的养分预算。
 
 规范配置应包含：SoilRetentionPerUH=0.99、容量100V、RootPreference[7]、Affinity[7]、根系总吸收V/uh上限、单元素基础通道份额0.30、种子/器官Growth阈值与平台现实秒数/uh映射。
 
