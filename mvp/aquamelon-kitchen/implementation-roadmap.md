@@ -240,7 +240,7 @@ flowchart TD
 - [ ] F7.2 `ΣFruitElementAmount = 0` 时，Flavor 尚未形成。
 - [ ] F7.3 总量大于 0 时派生 `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`。
 - [ ] F7.4 不额外持久化重复 `FlavorRatio` 向量，除非后续实现出现明确必要性。
-- [ ] F7.5 Growth=100 后仍允许元素继续累计，因此 FlavorRatio 可以继续变化。
+- [ ] F7.5 生殖 Growth=90 后仍允许元素继续累计，因此 FlavorRatio 可以继续变化。
 - [ ] F7.6 本 Feature 不实现六维 Taste、Affinity→Flavor efficiency、Flavor decay / cap、催化或精炼。
 
 当前不建立通用 Flavor conversion pipeline。未来具体料理如何解释这个比例，在对应 Feature 重新形成 Spec。
