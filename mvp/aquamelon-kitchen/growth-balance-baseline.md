@@ -8,9 +8,9 @@
 
 | 玩家行为 | 早期里程碑目标 | 稳定期每168 uh产果目标 |
 | --- | --- | --- |
-| 每天上线并规律供给 | 20–22 uh到 Seedling、约60 uh到 Sapling、168 uh内首颗成熟水瓜，且首果应明显早于每周玩家 | 4–6 |
+| 每天固定时刻补土 | 第2次24uh见Seedling、第3次48uh见SmallLeaf、第4次72uh见Flower、第5次96uh可采成熟果 | 4–6（长期尚未验证） |
 | 每隔几天上线补给 | 成长持续，断供时放缓、重新补充后恢复，不靠隐藏加速 | 2–4 |
-| 每周上线补给 | 首次168 uh回访应能收获**成熟水瓜**，同时土干、Reserve接近30 V休眠线 | 约2 |
+| 每周上线补给 | 目标仍是首次168uh回访有成熟水瓜、土干、Reserve接近30V；**须用新12/40/90基线重算** | 约2（待验证） |
 
 三类玩家**数值模型完全相同**，只允许 Soil[7] 的外部输入时刻与数量不同。Web 只缩短现实等待，不更改上述数值。
 
@@ -22,11 +22,11 @@
 - 根系吸收先看 Soil 可用量和偏好，再受总上限 `MaxRootAbsorbVPerUH×Δuh` 与单元素通道上限约束；实际吸收不会超过任一元素现有库存。**同时，应对每种Soil元素分别叠加充盈度对数型效率**：较高库存维持吸收高位，进入低库存区间后效率陡降，而非仅按`min(soil_i×RootPreference,cap_i)`在最后才发现供给不足。浓度ln曲线的数值仍需校准，参考[首果期望校准](first-fruit-uh-calibration.md)。
 - 当前 RootPreference 基线：`[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
 - Tree 初始基础 Affinity：`[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]`。单元素基础通道份额为 `0.30×对应 Affinity`；基础/实时亲和的具体读取阶段仍需校准。
-- **根系上限可以按Seed / Seedling / Sapling阶段校准**，但三类玩家在同一阶段必须共用数值。当前第一周期望对照候选为`2.0 / 1.85 / 14 V/uh`，尚未锁定；单纯4/5/6的历史对照不再作为现行基线。Sapling的根系吸收效率在Reserve总量≤100 V时为100%，100～180 V随ln曲线递减，180 V为0；见[第一周期望校准](first-fruit-uh-calibration.md)。
+- **根系上限可以按Seed / Seedling / Sapling阶段校准**，但三类玩家在同一阶段必须共用数值。当前每日首果期望试算候选为`2.0 / 1.85 / 16 V/uh`，尚未锁定；单纯4/5/6的历史对照不再作为现行基线。Sapling的根系吸收效率在Reserve总量≤100 V时为100%，100～180 V随ln曲线递减，180 V为0；见[第一周期望校准](first-fruit-uh-calibration.md)。
 
 ## 3. 树体生长预算与器官分流
 
-Seed 与 Seedling 没有 Reserve，吸收的 V 直接按自身 Affinity 转换 Growth。Sapling 起吸收进入 Tree Reserve[7]。
+Seed和Seedling没有Reserve，由Soil输入按亲和度直接形成**同一条连续TreeGrowth[7]**，累计45→90；90G进入Sapling时将七元素Growth严格逐维1G→1V转入初始Reserve，清零Sapling TreeGrowth；第一枚Bud同时出现，不等待首次随机检查和80V初始唤醒。此后根系吸收到Tree Reserve[7]。
 
 **Tree 每次根据 Reserve[7] 与自身 Affinity 动态生成 Growth Nutrient Budget[7]**。Reserve总量达到100 V即**满速预算**，100～180 V不再因储备量额外加速，低于100 V则按`R/100`衰减；Tree Reserve总容量180 V。**Affinity>1允许相应元素提取预算大于其比例基准，从而放大总提取预算，不再按亲和加权总和归一化抵消这种收益**，但任何元素的提取不得超过真实储备。参考系数及每元素具体取用仍待校准，不存在将Reserve固定按10%或1%抽取的已批准规则。
 
@@ -39,7 +39,7 @@ Seed 与 Seedling 没有 Reserve，吸收的 V 直接按自身 Affinity 转换 G
 | 2 | 30% | 40% |
 | 3 | 30% | 10% |
 
-这只是第一层分流份额，不意味着没有吸收能力的叶片也一定消耗这30%。花苞/花分流母叶本次预算的**40%（已确认）**；青果富集基线85%（处于已讨论的80–90%区间）；成熟水瓜继续以20%低效富集。叶自身在肥厚阶段保留率60%，嫩叶不设置类似损耗；该保留率是叶组织形成 Growth 的效率，不是树 Reserve 的消耗比例。
+这只是第一层分流份额，不意味着没有吸收能力的叶片也一定消耗这30%。**FlowerBud / Flower / GreenFruit统一取得母叶本次预算的80%（已确认）**；成熟后继续20%低效富集仍是候选。LargeLeaf自身Growth保留率60%，嫩叶无同类损耗。二级分流不会额外扣Tree Reserve；每叶30%不变。
 
 Active Bud 将原本属于 Tree 自身的 GrowthGain 暂时接入独立 BudGrowth[7]；掐芽时完整退回 TREE_Growth，已生长叶片的预算不受影响。
 
@@ -47,16 +47,16 @@ Active Bud 将原本属于 Tree 自身的 GrowthGain 暂时接入独立 BudGrowt
 
 | 转换 | 对应 Growth 达标 |
 | --- | ---: |
-| Seed → Seedling | 45 |
-| Seedling → Sapling | 90 |
+| Seed → Seedling | 连续TreeGrowth累计45 |
+| Seedling → Sapling | **同一TreeGrowth累计90**，转为Sapling初始Reserve |
 | Bud → SmallLeaf | 20 |
 | SmallLeaf → LargeLeaf（本叶） | 26 |
-| LargeLeaf → FlowerBud（本叶） | 18 |
-| FlowerBud → Flower（生殖轴） | 26 |
+| LargeLeaf → FlowerBud（本叶） | SmallLeaf达26G升LargeLeaf**同时出现**，不再需要18G |
+| FlowerBud → Flower（生殖轴） | **累计12** |
 | Flower → GreenFruit（同一生殖轴） | 40 |
 | GreenFruit → Aquamelon（同一生殖轴） | 90 |
 
-由正常供养推导的嫩叶约12 uh、肥厚叶约12 uh、花苞约24 uh、可见花期约12 uh 是**校准目标**。任何器官并不因为实际经过这些 uh 就自动进阶。SmallLeaf 的阶段 Growth 达 26 后固化其 EffectiveAffinity 为 LargeLeaf BaseAffinity，**仅将叶自身阶段 Growth[7] 清零**，LargeLeaf 从零再累计 18 才生成花苞；**花苞出生时独立的生殖 Growth[7] 从零开始，之后花苞→花→果实全过程连续累计**，开花与结果不清零；结果时锁定亲和，结果后累计 `FruitElementAmount[7]` 以派生风味比例。
+所有时长都是由实际Growth推得的体验目标，不是隐藏倒计时。SmallLeaf本叶26G时固化自身Affinity、清零**本叶阶段Growth**并立即变为LargeLeaf+FlowerBud；新的生殖Growth[7]从0开始，累计12G开花、40G结果、90G成熟。**开花与结果两次亲和固化**但不清零生殖Growth；两次间的Affinity塑形只读固化后的增量。结果后另累计FruitElementAmount派生Flavor。
 
 Sapling 主干 Growth 达100只完成本次 Affinity 塑形周期，不升 Mature Tree。最多3叶，出芽概率按当前叶数0/1/2/3对应0.80/0.40/0.01/0；**各时段是否投一次以及如何换算为按 uh 连续风险**仍待统一，不能因结算精度增加而增加机会。
 
@@ -75,7 +75,7 @@ GreenFruit 形成后就可采摘；Fruit Growth 达90为成熟 Aquamelon，母�
 
 ## 6. 未锁定的校准量
 
-- Reserve × Tree Affinity → 每 uh 预算的**参考系数B0**、各元素不足时如何重分配；**Affinity>1放大实际预算**及Reserve100 V满速规则已确认。
+- Reserve × Tree Affinity → 每 uh 预算的参考系数B0、各元素不足时如何重分配；**Affinity>1放大实际预算**及Reserve100V满速规则已确认。当前每日试算使用B0=5.4V/uh，**仍是候选**。
 - 单叶对七元素预算的实际取用上限、返还规则和溢出处理。
 - Seed / Seedling / Sapling 根系上限最终V/uh档位、Reserve100～180 V **ln** 吸收曲线的精确实现与出芽概率的uh频率合同。
 - 每周一次是否真实达到**168 uh内成熟果 + Soil干 + Reserve约30 V**；每日首果能否较每周**显著提前**，以及稳定周产量目标。详见[期望值数值对照](first-fruit-uh-calibration.md)。
