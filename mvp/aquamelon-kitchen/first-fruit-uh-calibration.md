@@ -1,130 +1,58 @@
-# 第一周期望校准：60 uh Sapling 与供给频率差异（2026-10-10）
+# 水瓜厨房：首轮五次上线数值基线（2026-10-10）
 
-> **状态：计算备忘，不是正式数值锁定或运行验收。** 此文件沿用 [uh 合同](../../docs/plants/uh-time-unit.md)、[现行生长系统](growth-system.md)。本轮正式确认的是：**Seedling 20–22 uh、Sapling 约60 uh**的体验目标；Tree Affinity 高于1可以真实放大从 Reserve 提取的生长预算总量；花苞/花使用母叶预算**40%**；每日维护玩家首果应明显早于每周一次玩家，后者首周仍必须有成熟水瓜。使用同一玩法数值，Web只加速现实uh历时。
+> **设计决策已确认**：Seed/Seedling 连续 Growth；Sapling 一次性按 1 Growth = 1 V Reserve 逐元素转入、TreeGrowth 重新开始；首次 Bud 与 Sapling 同时出现；SmallLeaf 达 26 G 时直接进入 LargeLeaf 并创建 FlowerBud；花苞、花、青果从所属母叶预算统一取得 **80%**；花→果生殖 Growth 始终连续累计，**12 / 40 / 90 G**；Flower 和 GreenFruit 各进行一次亲和固化。每片叶仍取得 Tree 本次预算的 **30%**。此文件取代此前以「Sapling60uh、花苞/花40%、26/40/90」为前提的首周试算**设计依据**。
 
-## 1. 机制合同与候选公式
+## 1. 唯一时间与玩家反馈目标
 
-已确认的基础尺度：
+单位只用 [uh](../../docs/plants/uh-time-unit.md)，千星1uh=现实1小时，Web默认1uh=10秒；Tick仅是积分事件。玩家在0uh播种并补满土，此后每日在24/48/72/96uh固定时刻补土：
 
-- Soil 最大容量 **1000 V**，Tree Reserve 容量 **180 V**；Soil 自然损耗按固定**比例**逐uh发生，当前试算保留率 **0.998 / uh**。库存越多，该uh的绝对蒸发量越大。
-- 元素球单次平均 **80 V**；仍按七元素等概率选纯元素，具体随机量上下限尚未确定；均匀**期望输入**不等于真实玩家恰好获得均匀七元素。
-- Reserve 总量 `R<=100 V`，根系自身满速；`100<R<180` 根系随储备充盈按 **ln** 下降，`R>=180` 不再吸收。可用无形状参数的候选：
-  `RootFactor(R) = 1`（R≤100），`ln(180/R)/ln(1.8)`（100<R<180），`0`（R≥180）。
-- Sapling 在 `R>=100 V` 时拥有满额生长预算，`0<R<100` 时满速预算随 R/100 成比例下降；30/80 V 休眠/唤醒迟滞暂沿用。
-- **Affinity>1 允许增大本次实际提取预算总量**，不得为了固定总额对七元素 Affinity 权重求和后归一化。遵守每元素实际储备可用量上限与质量守恒。供校准的最小候选公式：
-  ```text
-  R = sum(TreeReserve[7])
-  fullness = min(1, R / 100)
-  Budget_i = min(
-    TreeReserve_i,
-    B0 * Δuh * fullness * (TreeReserve_i / R) * max(0, TreeEffectiveAffinity_i)
-  )
-  TreeReserve_i -= Budget_i
-  ```
-  这里 `B0` 仅是未锁定的参考系数；例如某元素 Affinity=1.2 则可使其提取量相对基准提高20%（仍受该元素 Reserve上限约束）；器官在转换 Nutrient→Growth 时又按**该器官自己的**完整亲和转化。这两步用途不同，不能借「质量守恒」错误地把 Affinity>1 截到1。
-- Bud20、Leaf26/18、FlowerBud26、Flower→GreenFruit40、GreenFruit→MatureFruit90；生殖 Growth 花苞→花→果连续。FlowerBud/Flower使用母叶预算40%、青果85%、成熟后20%；子器官实际未吸收预算返还父级（**本轮无叶片局部提取Cap的数值模型暂假定份额全被吸收**）。
+| 上线 | 时刻 | 最迟应出现的可见成果 |
+| --- | ---: | --- |
+| 首次 | 0uh | 播种 |
+| 第二次 | 24uh | Seedling（发芽） |
+| 第三次 | 48uh | SmallLeaf（第一片小叶） |
+| 第四次 | 72uh | Flower（可见花朵） |
+| 第五次 | 96uh | Mature Aquamelon，可主动采摘 |
 
-## 2. 为什么以前每日补土和每周补土首果时间几乎相同
+成果由实际 Growth 跨阈值触发，**不得用对应的24uh时点强制升级**；以上只是主动玩家回访时的验收目标。首个 Sapling 在48uh前形成，先前「约60uh Sapling」指标已被新上线反馈合同取代。
 
-原始条件是：**所有玩家初次都把1000 V Soil补满**，同一个 Soil 可供根系消耗数天；在 Soil_i 足够供应各通道 cap 的大部分时间，抽取速度主要受 RootCap 与 Reserve100～180的 ln 限流，而非土壤表面库存多少。
+## 2. Growth 与 Reserve：两个不同生命周期段
 
-由此，频繁补土玩家的额外存量在**第一颗果实的前半段**几乎不改变吸收；差异主要出现在每周玩家接近 Soil枯竭时。换掉「归一化 Affinity>1」错误后仍如此，不能再把每日和每周首果只差十几uh视为已经满足「明显更快」的设计目标。
+- Seed 和 Seedling 都没有 Reserve，按实际 Soil 根系吸入 × 相应 Affinity 累加到**同一条** `TreeGrowth[7]`。累计 `sum(TreeGrowth)>=45` 时变为 Seedling，**不清零**该 Growth，也不在此重算一次已计入的亲和偏移；累计 `>=90` 时变为 Sapling。
+- Sapling 转换是**逐元素严格 `TreeReserve[i] = TreeGrowth[i]`**，即1 Growth→1 V Reserve。生长的 Affinity>1 所产生的 Growth 放大**完整保留**，这是植物允许的生产收益，不按原摄取V反向缩减。转移后 `Sapling.TreeGrowth[7]=0`，不能同时保留可再次用于 Tree 自身 Growth 的旧值。
+- Sapling 出生时立即创建第一枚 `Bud`（Growth初始0）。**不要求先经过一次 Dormant→Reserve80V 的启动等待**，正常生长后因长期缺养才适用当前的30/80V休眠迟滞。第二、第三枚Bud的随机机会仍待单独确认。
+- Bud累计20G→SmallLeaf；SmallLeaf本叶阶段 Growth 累计26G→LargeLeaf，固化本叶亲和、清零**本叶阶段 Growth**，同时直接生成附属 FlowerBud，**不再额外等待18G**。
 
-**用户已明确补充：土壤每种元素的充盈度必须影响根系对应元素的吸收效率；高存量在较高效率平台，少量时沿ln曲线陡降。** 这与原`min(Soil[i]×RootPreference[i], ElementCap_i)`不同：原式仅在供给不足以填满通道时才会显著降速；新增浓度效率需同时应用在对应元素通道。候选参数与首果影响见本页第5节。
-
-## 3. 第一周期望模型对照（全部玩家使用同一参数）
-
-为观察可行区间，而非宣称锁定参数，用一组**条件性候选**：
-
-| 量 | 试算值 |
-| --- | ---: |
-| Seed 总根系上限 | 2.0 V/uh |
-| Seedling 总根系上限 | **1.85 V/uh** |
-| Sapling 总根系上限 | **14 V/uh** |
-| Budget 基数 `B0` | **4.4 V/uh** |
-| Soil 总容量 / 每uh保留率 | 1000 V / 0.998 |
-| Tree Reserve 总容量 / 满速线 | 180 V / 100 V |
-| 元素球平均值 | 80 V |
-
-模型严格使用七元素**均匀期望补给**；每24/72/168uh上线时将 Soil 补齐1000V；每uh结算一次（尚未实测1/12uh）；使用当前七元素 RootPreference、按 BaseAffinity 的单通道 cap，出芽80%/日以指数风险的**平均等待时间约14.9uh**代理，**不是**真实随机出芽的分位数或每人收获保证。实际 Reserve 没有空位则让根系少吸并将余量留在 Soil。每周玩家在首次168uh回访**补土之前**取样。
-
-| 事件/存量 | 每24uh补土 | 每72uh补土 | 每168uh补土 |
-| --- | ---: | ---: | ---: |
-| Seedling | 21 uh | 21 uh | 21 uh |
-| Sapling | **60 uh** | **60 uh** | **60 uh** |
-| 出第一片嫩叶 | 78 uh | 78 uh | 78 uh |
-| 首次 FlowerBud | 99 uh | 99 uh | 99 uh |
-| 首次开花 | 121 uh | 121 uh | 122 uh |
-| 首次结果 GreenFruit | 131 uh | 131 uh | 135 uh |
-| **首颗成熟 Aquamelon** | **147 uh** | **148 uh** | **162 uh** |
-| 第168uh Soil | 705.3 V | 717.7 V | **0 V** |
-| 第168uh Tree Reserve | **111.0 V** | **112.8 V** | **30.7 V** |
-| 第168uh Tree Activity | Growing | Growing | Growing，接近30V休眠线 |
-
-**该组达到**21uh萌芽、60uh Sapling、每周首周成熟果、周末土干储备约30V、每日储备>100V；**未充分达到**「每日首果显著提前」，每天147uh相较每周162uh仅快15uh（约0.625日），三日补土与日补土仅差1uh。
-
-Flower→GreenFruit在该场景下约10～13uh，属于此前「约12uh」的近似范围，不存在隐藏定时器。
-
-另一组合 Sapling根系16～18V/uh、B0约4.3V/uh 可把首果差拉到约18uh，但是周玩家首果会逼近**168uh整点**，缺乏随机出芽的安全余量。提高Sapling吸收上限并不必然扩大差距：每日和每周最初都富集到了同一1000V上限且受同一储备限流。
-
-## 4. 设计结论与明确未完事项
-
-**确认**：Sapling目标60uh、亲和大于1增加实际预算、无归一化扣减、40%花期分流、三类玩家同一V/uh模型、每周第一周应拿到**成熟果**。
-
-**候选不锁定**：`2.0/1.85/14 V/uh` 分阶段根系上限、`B0=4.4V/uh`、ln曲线的精确写法、出芽的连续风险合同、采果后复花阈值以及每一叶的实际提取cap和未用预算返还数值。
-
-**存在设计张力**：虽然用户已批准增加土壤元素浓度对数衰减，但每日玩家和每周玩家初始同有1000V，绝大部分第一周期均在浓度饱和区间。新增ln效率能加强后期低土壤减速，却**不自动保证**首次产果差距达到数天。当前稳健候选仅拉开17uh，不能宣称已满足“每日明显更快”的体验目标。
-
-**不涉及**：直接修改Web/Miliastra运行代码、CI或插件角色分工。当前仓库的旧domain参数与本次设计仍存在实现差距，需要后续单独开发/审查。长期2叶/3叶周产量和出芽随机性没有在本轮首果期望表中验证。
-
-## 5. 土壤七元素逐通道 ln 吸收效率：用户确认的机制、待校准的曲线
-
-> **2026-10-10 新确认**：Soil本身的七元素充盈度应显著影响各自根系通道的吸收效率。不是仅在Soil接近0时才触发`min(soil_i × RootPreference_i, ElementCap_i)`的供给限制。**高库存保持高效率平台，较低库存沿ln曲线明显下降。** 这与已有的`Reserve总量100–180V时根系ln限流`是两个不同因子。
-
-针对每种元素`Soil_i`单独给出一条**无硬性非零截断**的平滑ln曲线，满足库存变成0才严格无法吸收：
+## 3. 花果唯一累计轴与分流
 
 ```text
-SoilFactor_i = min(1, ln(1 + Soil_i/K) / ln(1 + H/K))
-
-# 仅用于期望值校准，参数尚未获批：
-K = 15 V              # 低量区间下降形状
-H = 80 V              # 该单元素达到100%浓度效率的平台线
-
-ReserveRootFactor = 1                         if ReserveTotal <= 100
-                  = ln(180/ReserveTotal)/ln1.8 if 100 < ReserveTotal < 180
-                  = 0                         if ReserveTotal >= 180
-
-Cap_i_this_uh = StageMaxAbsorbVPerUH * 0.30 * TreeBaseAffinity_i
-                * ReserveRootFactor * SoilFactor_i
-
-AbsorbCandidate_i = min(Soil_i * RootPreference_i, Cap_i_this_uh * Δuh)
-# 最后仍受总通道cap、总实际根系上限、Reserve可用空位限制。
+LargeLeaf + FlowerBud: ReproductiveGrowth[7]=0
+  ├─ sum(Growth) >= 12 → Flower       （第一次 Affinity 固化；Growth不清零）
+  ├─ sum(Growth) >= 40 → GreenFruit   （第二次 Affinity 固化并锁定；Growth不清零）
+  └─ sum(Growth) >= 90 → MatureFruit  （成熟；Growth不清零）
 ```
 
-浓度示例（一个元素的 Soil V）：
+- 第一层每片 Leaf 固定取得树本次 Growth Nutrient Budget 的 **30%**；第二层 FlowerBud / Flower / GreenFruit 统一取得**该母叶份额的80%**，即在有一片叶时，首枚生殖器官取当次 Tree Budget 的 `0.30 × 0.80 = 24%`。未取得的预算仍归母叶使用；不同叶片不会额外从Tree全局二次提款。
+- Flower 时固化此刻 EffectiveAffinity 为本阶段新基线；其后塑形只读取**第一次固化之后新增加**的 Growth，不能复用先前Growth重复放大；GreenFruit 时第二次固化并锁定果实 Affinity。**生殖 Growth[7] 一条向量连续累积，花、果形态变化均不清零**。 `FruitElementAmount[7]` 另从GreenFruit形成后累计，用于风味，不和生殖 Growth 合并。
+- MatureFruit形成后留树低速继续富集的分流，沿用 **20%候选**，不随本轮「成熟前统一80%」一同变成80%。GreenFruit可提前采摘，材料加工身份和亲和继承等旧规则仍有效。
 
-| Soil_i | 80及以上 | 60 | 40 | 20 | 10 | 5 | 0 |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| SoilFactor_i | 100% | 87.2% | 70.4% | 45.9% | 27.7% | 15.6% | 0% |
+## 4. 每日玩家的**条件性期望数值对照**
 
-**这里SoilFactor_i必须是逐元素，而不是仅用Soil总量计算一个全树系数**：即使其它元素足够，某一维Soil耗尽也不能被总Soil“高充盈”掩盖。保留原`RootPreference`、Affinity通道cap、元素实际库存约束，不使吸收凭空超过Soil。因为模型初始1000V均匀分为7维，即每维约142.9V，初次全补时全部位于平台区；这种平台特征本身决定频繁补土的首果优势不会立刻放大。
+**仅用于复算的一组完整数值条件**：Soil容量1000V、固定比例留存0.998/uh、单球均值80V、每次补土按七元素各1/7的期望向量填满1000V；Seed / Seedling / Sapling 根系上限候选 `2 / 1.85 / 16 V/uh`；Soil单通道与根系总吞吐的浓度log1p候选 `H=120V,K=25V`；Reserve容量180V、100V以上满速成长、100–180V根系ln限流、30/80V休眠迟滞；Tree预算参考速率候选 `B0=5.4V/uh`，Affinity>1**允许放大实际预算总额**不归一化；每叶30%，成熟前三种生殖状态80%。**除了上面明确确认的生命周期/分流/阈值，不应把这些拟合值全部当作最终已锁定的实现配置。**
 
-### 相同初始条件，仅加入 SoilFactor_i 的对照
+| 达到事件 | 期望模型中的uh |
+| --- | ---: |
+| Seedling / Sapling+首Bud | 21 / 43 |
+| SmallLeaf / LargeLeaf+FlowerBud | 46 / 57 |
+| Flower（生殖累计12G） | **64** |
+| GreenFruit（生殖累计40G） | **76** |
+| Mature Aquamelon（生殖累计90G） | **95** |
 
-均匀元素输入、每日24uh / 每72uh / 每168uh时补齐Soil1000V，Seed/Seedling/Sapling根系上限`2.0/1.85/14 V/uh`、B0`4.4V/uh`（非归一化Affinity放大）、土壤蒸发保留0.998/uh、Reserve上限180V、满速线100V、花苞/花40%、成熟门槛90，首芽采用连续日概率对应的平均等待时长代理；结算1uh/步：
+玩家第72uh能看到Flower，第96uh能采摘MatureFruit；第96uh预计Soil约766V、Reserve约130V，植物Growing。**积分步长为1uh，首次成熟只比96uh上线提前1uh；未验证更小步长、实际随机球、真实客户端或CI**。这些结果不构成每个玩家的概率保证。
 
-| 事件 | 每日补土 | 每3天补土 | 每周补土 |
-| --- | ---: | ---: | ---: |
-| Seedling | 21 | 21 | 21 |
-| Sapling | **60** | **60** | **60** |
-| Flower | 121 | 121 | 124 |
-| GreenFruit | 131 | 132 | 137 |
-| **首颗MatureFruit** | **147** | **150** | **164** |
-| 第168uh Soil存量（V） | 709.94 | 725.36 | **0.51** |
-| 第168uh Reserve存量（V） | 113.46 | 114.49 | **31.62** |
+## 5. 后续计算边界
 
-**对照**：不加入额外土壤浓度ln时首果147/148/162 uh，每日对每周领先15uh；加入后147/150/164 uh，领先17uh（只增加2uh）。这是原有初始1000V已足以覆盖第一周期多数阶段的结构性限制，**不能以此声称已经实现“每天上线首果快数天”**。
+- **下一轮对每周仅在0uh补一次1000V Soil 的玩家只进行数值推演**，使用本文件的相同机制与候选数值，不预先加低频补偿、Growth阶段等待钟或独立参数。应报告事件时刻、Soil/Reserve曲线、首次Dormant时刻、168uh真实活动状态；低频供养再次校准前不修改本文件已确认的每日基线。
+- 采果后母叶复花 Growth 条件尚未锁定，因此首果推演不能替代稳定周产量；第二/第三片叶的独立概率事件也不是本轮确定性首果的约束。
+- 此文件为设计规格与独立期望分析，**不代表已经修改Cordis/TypeScript、千星节点图或完成Web实测**。
 
-**敏感性反例**：若采用`SoilFactor_i=clamp(ln(Soil_i/5)/ln(80/5),0,1)`并在库存≤5V时直接0吸收，虽然表面上更加“陡降”，每周玩家168uh可能完全无法成熟果，且Soil残留约33.6V、Reserve约28V触发休眠。**用户的首周成熟果、回访接近30V为更高优先约束，不能仅追求陡降。**
-
-以上只是首果期望分析：尚未实现分数uh积分、随机芽时间分布、低频玩家成熟后复花和长期产量。**锁定的是土壤逐元素对数型浓度依赖方向，不是K=15/H=80的具体值。** 模型见对话产出的`aquamelon_soil_ln_expectation.py`；没有修改TypeScript/Cordis或千星服务端节点图。
