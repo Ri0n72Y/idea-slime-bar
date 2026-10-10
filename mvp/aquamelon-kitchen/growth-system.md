@@ -88,17 +88,9 @@ TREE_EffectiveAffinity[i] = TREE_BaseAffinity[i]
 
 只有 Growth 会塑造当前亲和。
 
-### Seed / Seedling Stage 升级
+### Seed / Seedling 连续 Growth 与 Sapling 转换
 
-Seed / Seedling 自身进入下一 Stage：
-
-```text
-TREE_EffectiveAffinity
-→ 下一 Stage TREE_BaseAffinity
-
-TREE_Growth
-→ 清零
-```
+Seed 和 Seedling 没有 Reserve，使用同一条 `TREE_Growth[7]` 连续累积：总Growth达45变为Seedling而不清零、总Growth达90进入Sapling。成长轴到Sapling的边界按逐元素 `TREE_Reserve[i] = TREE_Growth[i]` 严格1 Growth→1 V Reserve；Affinity放大的Growth完整保留。结转后清零Sapling的本体 `TREE_Growth[7]`，不重复获得同一份Growth。早期的亲和塑形不应在Seedling升级时重复固化。
 
 ### Sapling 主干亲和循环
 
@@ -179,33 +171,33 @@ Destroy Bud
 
 | 事件 | Growth 达标条件 |
 | --- | ---: |
-| Seed → Seedling | Seed Growth 45 |
-| Seedling → Sapling | Seedling Growth 90 |
+| Seed → Seedling | 连续 Tree Growth 累计 45 |
+| Seedling → Sapling | **同一条**连续 Tree Growth 累计 90；逐元素 1G→1V Reserve |
 | Sapling 自身亲和再塑形 | TREE_Growth 100（只循环塑形，不升级 Mature Tree） |
 | Bud → SmallLeaf | BUD_Growth 20 |
 | SmallLeaf → LargeLeaf | 本叶 Growth 26 |
-| LargeLeaf → 生成 FlowerBud | 本叶新阶段 Growth 18 |
-| FlowerBud → Flower | 同一生殖 Growth 26 |
+| LargeLeaf → 生成 FlowerBud | SmallLeaf 达26G升为 LargeLeaf 时**同步生成**，无额外18G |
+| FlowerBud → Flower | 同一生殖 Growth 累计 **12** |
 | Flower → GreenFruit | 同一生殖 Growth 40 |
 | GreenFruit → Mature Aquamelon | 同一生殖 Growth 90 |
 
-每段的典型成长 **uh** 只是按正常养分供给反算 Growth 阈值的体验目标，例如嫩叶约12 uh、肥厚叶约12 uh、花苞约24 uh、可见花期约12 uh。不存在强制等待到相应时间才进阶的隐藏计时器。
+每段的典型 **uh** 是由真实Growth推导的体验目标，不是隐藏倒计时；已确认的每日上线反馈为24uh发芽、48uh有小叶、72uh开花、96uh有成熟水瓜。详见[首轮数值基线](first-fruit-uh-calibration.md)。
 
-- Seed 生长达45时固化当前亲和，进入 Seedling 后按下一阶段重新积累 Growth；Seedling 达90后进入 Sapling 并获得 Reserve。
+- Seed/Seedling共用一条Growth（累计45→90），45G时只切换显示阶段，90G时按逐维1G→1V转入Sapling初始Reserve并清空Sapling TreeGrowth；在Sapling出现的同一刻**生成第一枚Active Bud**，不需要等待首次概率检查或从0V Reserve强制休眠唤醒。
 - Sapling 从 Soil 读取养分进入 Reserve；按动态预算取用并向已有叶片优先分流。已形成叶上限3片；每叶第一层预算名义份额30%，0/1/2/3叶时 Tree 余额分别为100%/70%/40%/10%，若叶未实际吸收则未用份额回归 Tree。
 - 在没有 Bud 时 Tree 预算结算为 TREE_Growth，达到100完成一次亲和塑形周期；有 Active Bud 时原本属于主干自身的 GrowthGain 进入 BUD_Growth。掐芽时全部 BUD_Growth 回到 TREE_Growth；Bud 达20则形成独立 SmallLeaf，继承出生时父亲和偏移。
-- 出芽0/1/2/3叶原概率值为80%/40%/1%/0。**投掷机会频率和是否按等效 uh 拆分为连续风险待统一批准**，禁止把一次结算事件自动当成一次新出芽机会。
-- Sapling Reserve 活性/休眠门槛 `30/80` 目前是需继续校准的候选边界；因供养中断进入休眠时仍允许根系恢复吸收。
+- **首次Bud在Sapling生成时立即创建**；原0/1/2/3叶每日出芽概率80%/40%/1%/0不再应用于首次Bud，后续第二/第三Bud的频率合同继续待定；结算次数不能制造额外随机机会。
+- Sapling Reserve活性/休眠迟滞30/80 V仍是长期供养的候选边界；**不得把刚进入Sapling且有从早期Growth转入的初始Reserve视为天然Dormant，再要求≥80V才能首次Growing**。供养中断后的Dormant仍允许根系恢复吸收。
 
 ## 6. Leaf → Flower → Fruit
 
 生殖器官是所属母叶的附属器官，**只取母叶本次获得的预算，不影响其他叶片，也不二次向 Tree 索要养分**。
 
-- SmallLeaf 出生时继承当前 Tree 的亲和偏移，之后按自己的 Leaf Growth[7] 塑形。**SmallLeaf 的阶段 Growth 达到 26 时，先将当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，再将该叶阶段 Growth[7] 清零**；LargeLeaf 从新的零基线累计 **18 Growth**，达标后生成附属 FlowerBud。这里清零的只是母叶自己的阶段 Growth；**FlowerBud 新建的 ReproductiveGrowth[7] 从零开始，此后开花、结果、成熟均不重置该生殖向量**。
-- FlowerBud 拥有独立于母叶的 `ReproductiveGrowth[7]`；**花苞 0→26、Flower 26→40、GreenFruit 40→90、成熟果 90+ 全程沿同一向量累计，开花和结果都不清零。**
-- FlowerBud / Flower 占母叶本次养分预算**40%**，GreenFruit 占85%（80%～90%校准区间的当前候选），成熟果占20%。LargeLeaf 自身组织的 Growth 保留效率为60%，SmallLeaf 没有同类损耗；这些不等于 Reserve 的抽取比例。
-- 花和果继续按自身 Growth 的元素组成塑形亲和；形成 GreenFruit 时锁定当前生殖亲和，并从此开始累计另外一份 `FruitElementAmount[7]`；之前用于器官形成的 Growth 不被复制成可食元素储备。
-- 花结果约12 uh是期望的可见体验，由 Growth 26→40 与真实供养速率共同决定；不独立倒计时。
+- SmallLeaf出生时继承当前Tree亲和偏移，之后用自己的Leaf Growth[7]塑形。**SmallLeaf达到26G时**固化其亲和为LargeLeaf的BaseAffinity，并且只清零叶自身阶段Growth；**LargeLeaf与附属FlowerBud同时出现**，不再额外累积18G等待花苞。新花苞的ReproductiveGrowth[7]从0开始，到开花、结果、成熟都持续累计、不重置。
+- FlowerBud拥有独立于母叶的`ReproductiveGrowth[7]`：**累计0→12G为Flower；12→40G为GreenFruit；40→90G为MatureFruit**。这是单一向量的累计阈值，不是三个独立阶段的增长量；开花和结果时Growth均不清零。
+- **FlowerBud、Flower、GreenFruit统一取得母叶本次养分预算的80%（本轮锁定）**，而每片叶从Tree获得的首层份额仍是30%。MatureFruit完成后继续低速富集的20%仍是待复核候选。LargeLeaf自身Growth保留效率60%，SmallLeaf没有同类损耗；这些不是Reserve提取比例。
+- **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清零累计生殖Growth[7]。另从GreenFruit形成时开始累计`FruitElementAmount[7]`，此前器官形成Growth不被复制成可食元素储备。
+- 花苞/花的可见时长由实际预算、Growth 0→12→40累计速率确定，**不引入独立倒计时**；每日补土的当前试算约57uh花苞、64uh开花、76uh青果、95uh成熟。
 - GreenFruit 达生殖 Growth 90 时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟后仍可以低效率继续富集，Flavor 不锁定、不自动采收。
 - `FlavorRatio[i] = FruitElementAmount[i] / Σ FruitElementAmount`，总量为0时不生成 Flavor。元素量与风味之间不新增历史 Taste/绽放算法。
 - 收获后如果母叶仍在，可在母叶采果后的新 Growth 达标时重生 FlowerBud；其具体新增 Growth 阈值尚需正式确定，**不采用固定24 uh时钟，也不复用母叶历史 Growth 直接触发**。
@@ -228,7 +220,7 @@ GreenFruit 外观青绿、柔软，内部是未稳定分层的元素粘液；结
 | SmallLeaf | `TenderLeaf` | 嫩叶 |
 | LargeLeaf | `ThickLeaf` | 肥厚的叶片 |
 | Fruit Growth = 90 后同步纤维化的 parent Leaf | `AquamelonLeaf` | 水瓜树叶 |
-| Green Fruit，`40 <= Growth < 90` | `GreenFruit` | 青果 |
+| Green Fruit，`40 <= ReproductiveGrowth < 90` | `GreenFruit` | 青果 |
 | Mature Fruit，`Growth >= 90` | `Aquamelon` | 水瓜 |
 
 其中：
@@ -372,6 +364,6 @@ Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `Fl
 
 ## 9. 体验与实施边界
 
-积极玩家的校准目标为20–22 uh见 Seedling、**60 uh见 Sapling**、168 uh内成熟首果；**每周上线一次的玩家第168 uh回访亦应得到成熟水瓜，且Soil已干、Reserve约30V；每日上线玩家应更早收获且Reserve更健康**；每天维护的成熟生产目标约4–6果/168 uh，间歇维护2–4果/168 uh，每周一次约2果/168 uh。三个行为仅通过 Soil 的真实补给历史形成差异，不用不同的成长公式。
+积极玩家的**上线次数反馈目标**为24uh见Seedling、48uh见SmallLeaf、72uh见Flower、96uh可采摘成熟水瓜；独立每日期望试算分别在21/46/64/95uh发生。每周一次玩家的首周成熟与临休眠体验仍需在本轮新基线下重新计算；长期周产量目标每日4–6、间歇2–4、每周约2均未经验证。玩家类型只通过Soil真实补给时间/数量产生不同轨迹，不另配Growth倍率。
 
 在 Reserve×Affinity 动态预算、根系上限、出芽风险频率与采收复花阈值全部落实前，任何旧固定百分比代谢、等待小时阈值或按平台另设的成长倍率都不应被写入当前设计或作为最终数值结论。千星正式游戏由服务端节点图实现，Web 是同一模型的现实时间加速实验，不共享代码。
