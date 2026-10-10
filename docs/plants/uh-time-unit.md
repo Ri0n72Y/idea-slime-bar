@@ -31,20 +31,20 @@ Web 只是压缩同一模型的实际耗时，不存在另一套专属吸收、G
 
 | 成长边界 | 累计 Growth 阈值 |
 | --- | ---: |
-| Seed → Seedling | 45 |
-| Seedling → Sapling | 90 |
+| Seed → Seedling | 连续TreeGrowth总量45 |
+| Seedling → Sapling | 连续TreeGrowth总量90，逐元素1G→1V初始Reserve |
 | Bud → 嫩叶 | 20 |
 | 嫩叶 → 肥厚叶（叶自身成长轴） | 26 |
-| 肥厚叶 → 花苞（叶自身新阶段成长轴） | 18 |
-| 花苞 → 开花（生殖成长轴） | 26 |
+| 肥厚叶 + 花苞同步出生 | SmallLeaf自身26G达到即发生，不另需18G |
+| 花苞 → 开花（生殖成长轴） | 累计**12** |
 | 开花 → 青果（同一生殖成长轴） | 40 |
 | 青果 → 成熟水瓜（同一生殖成长轴） | 90 |
 
-**SmallLeaf 达到本叶 26 Growth 时**固化其亲和为 LargeLeaf BaseAffinity，**清零且仅清零该叶阶段 Growth[7]**；LargeLeaf 从新基线增长 18 后生成 FlowerBud，此时生殖 Growth[7] 从零开始。**花苞、花、青果和成熟水瓜共享这条生殖 Growth[7]，开花和结果都不重置累积量**；结果时锁定 Affinity，`FruitElementAmount[7]` 记录结果以后实际进入果实的养分。花期目标约 12 uh 是用于标定 26→40 所需真实 Growth 的体验参考，不是单独的倒计时门槛。采果后再次开花的 Growth 条件尚需正式校准。
+Seed与Seedling共用连续TreeGrowth（累计45→90），Seedling时不清零；进入Sapling时按七元素逐维**1Growth=1V Reserve**，并把Sapling TreeGrowth置零，首次Bud同步生成、不要求先达到80V才能Growing。**SmallLeaf本叶26G**时固化亲和且只清零本叶阶段Growth，LargeLeaf与FlowerBud同时出现；生殖Growth[7]独立从0开始，**累计12G开花、40G青果、90G成熟**，开花与结果两次固化Affinity但不清零Growth；结果后才另记FruitElementAmount[7]。花期具体时长取决于实际Growth/uh，不是固定等待；采果后的再次开花仍需校准。每片叶固定Tree预算30%，花苞/花/青果统一取母叶预算**80%**。
 
 ## 玩家供给与目标
 
-同一套 V/uh 模型面对不同的玩家上线频率，**唯一预期变化是 Soil[7] 的真实供给历史**。体验校准参考：积极玩家20–22 uh到Seedling、约60 uh到Sapling、168 uh内首果；每周首次168 uh回访时亦应有成熟水瓜并接近休眠；稳定期每日维护约每168 uh有4–6果、间歇维护2–4果、每周维护约2果。这是目标，不是已实现的产量承诺。
+同一套 V/uh 模型面对不同的玩家上线频率，**唯一预期变化是 Soil[7] 的真实供给历史**。体验校准参考：积极玩家第2/3/4/5次上线（24/48/72/96uh）分别看见Seedling/SmallLeaf/Flower/可采成熟水瓜；每周首次168 uh回访时亦应有成熟水瓜并接近休眠；稳定期每日维护约每168 uh有4–6果、间歇维护2–4果、每周维护约2果。这是目标，不是已实现的产量承诺。
 
 根系上限按Seed/Seedling/Sapling阶段分别校准、各平台同一套数值。Reserve容量180V，达到100V后Growth Budget保持满速，低于100V按储备充盈度递减；根系在100–180V区间按ln下降。**Tree Affinity>1可以真实增加提取预算总额**，不额外归一化削弱这一收益。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/first-fruit-uh-calibration.md)。
 
