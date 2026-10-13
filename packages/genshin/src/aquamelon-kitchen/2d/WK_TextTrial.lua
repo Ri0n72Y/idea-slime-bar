@@ -129,20 +129,19 @@ end
 
 function OnStart()
     print('WK_TextTrial OnStart')
-    root = game.FindClientUIRoot('WK_TextTrailRoot')
+    root = script.object
     if not root then
-        local available = {}
-        for _, candidate in ipairs(game.GetClientUIRoots() or {}) do
-            available[#available + 1] = candidate.name or '(unnamed)'
-        end
-        printerr('WK_TextTrailRoot not found; client UI roots: ' ..
-            table.concat(available, ', '))
+        printerr('WK_TextTrial: script.object is nil; attach Lua to UI root')
+        game.PrintClientUITree()
         return
     end
+    print('WK_TextTrial attached UI: ' .. tostring(root.name))
     snapshot = root:FindChild('Snapshot')
     history = root:FindChild('History')
     if not snapshot or not history then
-        printerr('WK_TextTrial missing Snapshot / History text control')
+        printerr('WK_TextTrial: missing Snapshot / History under ' ..
+            tostring(root.name))
+        game.PrintClientUITree()
         return
     end
     reset()
