@@ -7,7 +7,7 @@
 ```text
 富集的元素球（玩家收集）
      ↓
-Soil_Elems[7] （容量1000；自然蒸发0.998/uh）
+Soil_Elems[7] （容量1000；自然蒸发0.99/uh）
      ↓ 根系取用：Soil、RootPreference、Affinity、单元素/总吸收V/uh上限
 Seed / Seedling → 直接转换到自身 Growth[7]
 Sapling         → TREE_Elems[7] / Reserve
@@ -24,7 +24,7 @@ Sapling         → TREE_Elems[7] / Reserve
 - Reserve 是尚未转化的真实七元素 V；Growth 是已形成器官生长与亲和偏移的七维事实。
 - 每个器官只在本次父器官给予的预算中吸收；子器官未实际取用的份额返还父器官，不因生成固定名义份额而丢失。
 - Seed、Seedling 没有 Tree Reserve；进入 Sapling 才持久化 Reserve。
-- Reserve 动态生长预算**由当前 Reserve 与 Tree Affinity 共同决定**。Tree Reserve容量180 V；总量≥100 V时**满速预算**、低于100 V时按`R/100`降速。**Tree Affinity>1允许预算提取总额放大，不再将七元素加权Affinity结果归一化到固定总额**；每种元素仍不能超过实际Reserve。预算参考系数尚待校准；不要改成固定百分比消耗。
+- Reserve 动态生长预算**由当前 Reserve 与 Tree Affinity 共同决定**。Tree Reserve容量180 V；本轮采用无休眠的0～180 V归一化S曲线（`M=95 V, W=12 V`），并非旧版`R≥100 V`满速、`R/100`下降的函数。**Tree Affinity>1允许实际预算提取总额放大，不进行七元素加权Affinity归一化**；每种元素不能提取超过自身Reserve。B0=5.4 V/uh是当前期望校准参数，不是已验证的运行时配置。见[首轮数值校准](first-fruit-uh-calibration.md)。
 - Soil 自然蒸发属于世界环境损耗，**不能与 Tree Reserve → Growth Budget 混为一谈**。
 
 ## 2. 时间与计算尺度
@@ -35,7 +35,7 @@ MaxRootAbsorbThisStep = MaxRootAbsorbVPerUH × Δuh
 Soil_Elems[i] *= SoilRetentionPerUH ** Δuh
 ```
 
-`SoilRetentionPerUH = 0.998`；该参数仅用于 Soil。千星可以每1 uh、1/12 uh或1/60 uh结算；Web当前1 uh=10秒，可以用更细时间片更新 UI，但要累计出完全相同的 uh 代谢。出芽等随机事件的次数不能随细分结算间隔增加。
+`SoilRetentionPerUH = 0.99`；该参数仅用于 Soil。千星可以每1 uh、1/12 uh或1/60 uh结算；Web当前1 uh=10秒，可以用更细时间片更新 UI，但要累计出完全相同的 uh 代谢。出芽等随机事件的次数不能随细分结算间隔增加。
 
 当前模拟的生命周期事件全部按 Growth 阈值跨越处理，只有玩家实际可见花期等表现策略可能要求在离线回放时安排一个展示停点；这个停点不得丢失已累计 Growth。
 
@@ -46,7 +46,7 @@ Soil_Elems[i] *= SoilRetentionPerUH ** Δuh
 - Soil 若总量超过1000，下一次结算开始时按 `1000 / SoilTotal` 对七维存量等比例缩放；之后自然蒸发、再被植物吸收。超量直接损失，不设置隐藏回收池。
 - RootPreference = `[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
 - Tree 初始 Base Affinity = `[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]`。
-- 单元素通道基础上限份额为 `0.30 × 对应 Tree Affinity`；根系上限按 Seed / Seedling / Sapling 阶段分别校准（当前候选2.0/1.85/14 V/uh，并未最终批准）。Sapling Reserve≤100 V时根系满速，100～180 V时按ln下降，180 V时停止吸收；**土壤每种元素的充盈度还要影响对应元素根系吸收效率：高存量时接近满速、低于浓度阈值后按自然对数曲线急速下降**，不能只检查是否存在足够Soil使原通道cap吃满；该浓度ln函数的精确阈值/斜率尚需校准。多元素仍受 Soil 可用量、RootPreference、通道cap与阶段总cap限制。见[第一周期望校准](first-fruit-uh-calibration.md)。
+- 单元素通道基础上限份额为 `0.30 × 对应 Tree Base Affinity`；根系阶段上限当前校准值Seed/Seedling/Sapling为`2.0/1.85/16 V/uh`。七元素**共享唯一的Soil总量效率系数**：`F_soil=ln(1+sum(Soil)/200)/ln(6)`（Soil总容量1000 V），无须为每种元素另建浓度系数。各通道另受各自Soil可用量、RootPreference、Affinity及通道上限约束；通道候选量合计若超过`阶段总cap × F_soil`则同比缩减。Sapling根系在Reserve≤100 V时不受储备充盈度限流，100～180 V时仍按既有ln函数逐渐限流、到180 V停止吸收；**这一根系限流与Reserve→Growth Budget的S曲线是不同机制**。详见[第一周期望校准](first-fruit-uh-calibration.md)。
 - Stage只改变**已配置的阶段根系上限**，不提供隐形加速；同一阶段三类玩家使用完全相同的上限。玩家元素搭配仍可改变摄取比例与亲和学习方向。
 
 ## 4. Growth 驱动的亲和塑形
@@ -187,7 +187,7 @@ Destroy Bud
 - Sapling 从 Soil 读取养分进入 Reserve；按动态预算取用并向已有叶片优先分流。已形成叶上限3片；每叶第一层预算名义份额30%，0/1/2/3叶时 Tree 余额分别为100%/70%/40%/10%，若叶未实际吸收则未用份额回归 Tree。
 - 在没有 Bud 时 Tree 预算结算为 TREE_Growth，达到100完成一次亲和塑形周期；有 Active Bud 时原本属于主干自身的 GrowthGain 进入 BUD_Growth。掐芽时全部 BUD_Growth 回到 TREE_Growth；Bud 达20则形成独立 SmallLeaf，继承出生时父亲和偏移。
 - **首次Bud在Sapling生成时立即创建**；原0/1/2/3叶每日出芽概率80%/40%/1%/0不再应用于首次Bud，后续第二/第三Bud的频率合同继续待定；结算次数不能制造额外随机机会。
-- Sapling Reserve活性/休眠迟滞30/80 V仍是长期供养的候选边界；**不得把刚进入Sapling且有从早期Growth转入的初始Reserve视为天然Dormant，再要求≥80V才能首次Growing**。供养中断后的Dormant仍允许根系恢复吸收。
+- **移除30/80 V的Dormant/Growing休眠迟滞**：Reserve不足时只通过0～180 V连续生长预算曲线自然减速；Reserve为0时Growth Budget为0，根系仍可继续吸收。没有初次启动唤醒门槛或后续休眠触发。
 
 ## 6. Leaf → Flower → Fruit
 
@@ -197,7 +197,7 @@ Destroy Bud
 - FlowerBud拥有独立于母叶的`ReproductiveGrowth[7]`：**累计0→12G为Flower；12→40G为GreenFruit；40→90G为MatureFruit**。这是单一向量的累计阈值，不是三个独立阶段的增长量；开花和结果时Growth均不清零。
 - **FlowerBud、Flower、GreenFruit统一取得母叶本次养分预算的80%（本轮锁定）**，而每片叶从Tree获得的首层份额仍是30%。MatureFruit完成后继续低速富集的20%仍是待复核候选。LargeLeaf自身Growth保留效率60%，SmallLeaf没有同类损耗；这些不是Reserve提取比例。
 - **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清零累计生殖Growth[7]。另从GreenFruit形成时开始累计`FruitElementAmount[7]`，此前器官形成Growth不被复制成可食元素储备。
-- 花苞/花的可见时长由实际预算、Growth 0→12→40累计速率确定，**不引入独立倒计时**；每日补土的当前试算约57uh花苞、64uh开花、76uh青果、95uh成熟。
+- 花苞/花的可见时长由实际预算、Growth 0→12→40累计速率确定，**不引入独立倒计时**；前述57/64/76/95uh是旧0.998蒸发和`R/100`预算下的历史试算，**不属于当前M=95/W=12基线**；当前每日首果98uh，更多节点见[新校准](first-fruit-uh-calibration.md)。
 - GreenFruit 达生殖 Growth 90 时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟后仍可以低效率继续富集，Flavor 不锁定、不自动采收。
 - `FlavorRatio[i] = FruitElementAmount[i] / Σ FruitElementAmount`，总量为0时不生成 Flavor。元素量与风味之间不新增历史 Taste/绽放算法。
 - 收获后如果母叶仍在，可在母叶采果后的新 Growth 达标时重生 FlowerBud；其具体新增 Growth 阈值尚需正式确定，**不采用固定24 uh时钟，也不复用母叶历史 Growth 直接触发**。
@@ -364,6 +364,6 @@ Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `Fl
 
 ## 9. 体验与实施边界
 
-积极玩家的**上线次数反馈目标**为24uh见Seedling、48uh见SmallLeaf、72uh见Flower、96uh可采摘成熟水瓜；独立每日期望试算分别在21/46/64/95uh发生。每周一次玩家的首周成熟与临休眠体验仍需在本轮新基线下重新计算；长期周产量目标每日4–6、间歇2–4、每周约2均未经验证。玩家类型只通过Soil真实补给时间/数量产生不同轨迹，不另配Growth倍率。
+积极玩家的**上线次数反馈目标**仍为24uh见Seedling、48uh见SmallLeaf、72uh见Flower、96uh可采摘成熟水瓜；当前M=95/W=12独立期望试算中每日首果98uh、隔天103uh、每3天104uh、每周138uh。168uh预计成熟果数分别2/2/2/1，**每日96uh首果仍晚2uh，每周第二叶已成为LargeLeaf**。不再使用休眠机制，长期稳定周产量仍未验证；各玩家类型仅有浇水时间的差异，不另配Growth倍率。详见[完整期望数据](first-fruit-uh-calibration.md)。
 
 在 Reserve×Affinity 动态预算、根系上限、出芽风险频率与采收复花阈值全部落实前，任何旧固定百分比代谢、等待小时阈值或按平台另设的成长倍率都不应被写入当前设计或作为最终数值结论。千星正式游戏由服务端节点图实现，Web 是同一模型的现实时间加速实验，不共享代码。
