@@ -128,6 +128,7 @@ local function bind(name, callback)
 end
 
 function OnStart()
+    print('WK_TextTrial OnStart')
     root = game.FindClientUIRoot('WK_TextTrialRoot')
     if not root then
         printerr('WK_TextTrialRoot not found: check the applied UI layout')
@@ -136,7 +137,7 @@ function OnStart()
     snapshot = root:FindChild('Snapshot')
     history = root:FindChild('History')
     if not snapshot or not history then
-        printerr('Missing Snapshot / History text window')
+        printerr('WK_TextTrial missing Snapshot / History text control')
         return
     end
     reset()
