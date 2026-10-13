@@ -25,12 +25,12 @@ end
 
 local function note(message)
     table.insert(state.logs, '第' .. state.ticks .. 'Tick：' .. message)
-    if #state.logs > 6 then table.remove(state.logs, 1) end
+    if #state.logs > 2 then table.remove(state.logs, 1) end
 end
 
 local function reset()
     state = {soilPlaced = false, tree = nil, soil = zeros(), ticks = 0,
-        logs = {'文字试玩：先铺土，再播种，再加入元素。'}}
+        logs = {'试玩：铺土→播种→输入元素'}}
     selected, elapsed = 2, 0
 end
 
@@ -83,34 +83,33 @@ local function tick()
     end
 end
 
-local function vectorText(values)
-    local items = {}
+local function vectorText(label, values)
+    local parts = {}
     for i = 1, 7 do
-        items[i] = names[i] .. string.format(' %.1f', values[i])
+        local num = values[i] < 10 and string.format('%.1f', values[i])
+            or string.format('%.0f', values[i])
+        parts[i] = names[i] .. num
     end
-    return table.concat(items, '  ')
+    return label .. ' ' .. table.concat(parts, ' ', 1, 4) ..
+        '\n     ' .. table.concat(parts, ' ', 5, 7)
 end
 
 local function display()
     if not snapshot then return end
-    local lines = {'水瓜厨房 · 千星2D文字试玩（非权威）',
-        '已过Tick：' .. state.ticks .. '  每10秒自动结算1次',
-        '土地：' .. (state.soilPlaced and '已铺设' or '空地'),
-        '选择元素：' .. names[selected],
-        '土壤：' .. vectorText(state.soil)}
-    if state.tree then
-        local tree = state.tree
-        lines[#lines + 1] = '植物：' .. stages[tree.stage + 1]
-        lines[#lines + 1] = 'Growth：' .. vectorText(tree.growth)
-        lines[#lines + 1] = 'Growth合计：' .. string.format('%.2f', total(tree.growth))
-        lines[#lines + 1] = 'Reserve：' .. vectorText(tree.reserve)
-    else
-        lines[#lines + 1] = '植物：尚未播种'
-    end
-    if state.tree and state.tree.stage == 2 then
-        lines[#lines + 1] = '提示：树苗以后仅演示Reserve累积；尚无叶/果结算。'
-    end
-    snapshot.text = table.concat(lines, '\n')
+    local tree = state.tree
+    local stage = tree and stages[tree.stage + 1] or '未播种'
+    local progress = tree and string.format('%.1f', total(tree.growth)) or '0'
+    local goal = tree and (tree.stage == 0 and '/45' or
+        tree.stage == 1 and '/90' or '') or ''
+    snapshot.text = table.concat({
+        '水瓜厨房 · 文字试玩',
+        'Tick ' .. state.ticks .. '｜10秒/次｜元素 ' .. names[selected],
+        (state.soilPlaced and '有土' or '空地') .. '｜' .. stage ..
+            '｜成长 ' .. progress .. goal,
+        vectorText('土壤', state.soil),
+        vectorText('Growth', tree and tree.growth or zeros()),
+        vectorText('Reserve', tree and tree.reserve or zeros())
+    }, '\n')
     history.text = table.concat(state.logs, '\n')
 end
 
