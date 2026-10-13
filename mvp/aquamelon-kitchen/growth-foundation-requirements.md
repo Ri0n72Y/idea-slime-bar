@@ -6,7 +6,7 @@
 
 世界长期状态由 Soil、Tree、活体器官、元素球和地面材料各自持有，所有模型均使用 Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo 的七维数组。千星奇域以服务端节点图为权威，Web 以 Cordis 领域状态为权威；平台共享规则、分离实现，不共享代码。
 
-- `Soil[7]`：七元素储备，容量1000V，收集后实时更新，当前数值校准按固定比例 `0.998/uh` 自然损耗。
+- `Soil[7]`：七元素储备，容量1000V，收集后实时更新，当前数值校准按固定比例 `0.99/uh` 自然损耗。
 - `TreeReserve[7]`：仅Sapling起存在。首次进入Sapling时逐元素按`TreeReserve[i]=TreeGrowth[i]`转入（1Growth=1V Reserve），此后才承接实际根系吸收；与Sapling本体新TreeGrowth分开。
 - `TreeGrowth[7]`：实际已转化的生长度及亲和塑形材料，Seed / Seedling 直接累计。
 - `BaseAffinity[7]`、`EffectiveAffinity[7]`、`RootPreference[7]`：转换基线、动态倾向和摄取偏好彼此独立。
@@ -19,7 +19,7 @@
 1. 统一时间映射得到 `Δuh`；按 `V/uh × Δuh` 计算根系总吸收上限。
 2. Soil 超量时七元素同比压缩至1000，再处理蒸发和真实根系吸收。植物不能获取不存在的元素；偏好、亲和通道 cap 与总 cap 同时生效。
 3. Seed / Seedling根系吸收按亲和转成**同一条连续TreeGrowth[7]**，累计45G变Seedling时不清零、累计90G变Sapling时将Growth按七维严格1:1转入初始Reserve，Sapling的TreeGrowth归零。高Affinity塑形产生的Growth直接作为植物生产收益，不回退成原始摄取V。Sapling之后根系吸入先进入Reserve。
-4. Sapling **根据当前 Reserve[7] 和 Tree Affinity 动态形成本步 GrowthNutrientBudget[7]**；取用总量不得超过储备，生成式的系数与上限待正式校准。
+4. Sapling **根据当前Reserve[7]和Tree Affinity动态形成本步GrowthNutrientBudget[7]**；取用总量不得超过各元素自身储备。本轮采用Reserve总量0～180V归一化S曲线（中点M=95V、宽度W=12V），**取消30/80V休眠迟滞**；根系七元素共享唯一Soil总量对数系数`ln(1+sum(Soil)/200)/ln(6)`，各元素仅另受自身库存、偏好和通道cap限制。详见[期望校准](first-fruit-uh-calibration.md)。
 5. **每片Leaf固定获得Tree本次预算的30%**；不能实际取用的部分回Tree本次预算。**FlowerBud/Flower/GreenFruit统一得到母叶本次份额的80%**，即第一片叶的生殖器官取得Tree当次预算的24%，不从其他叶或Tree全局二次扣费；MatureFruit之后低效继续富集的20%仍为单独候选。
 6. 剩余 Tree 本步预算转换为 TreeGrowth，Active Bud 存在时转入 BudGrowth；不建立花/果跨叶共享预算池。
 7. 不因为把结算间隔由1 uh细分为1/12或1/60 uh而重复吸收、重复 Growth 或重复投随机机会。
@@ -49,7 +49,7 @@
 
 出生器官一次性继承父器官的亲和偏移，随后自成独立成长轴。**开花时第一次、结果时第二次固化生殖亲和**；结果后才另统计FruitElementAmount与风味比例。熟果后元素积累继续，Growth达标不自动采摘。
 
-Sapling 主干 Growth 100 为 Affinity 塑形循环，不进入 Mature Tree。活叶上限3片，芽20 Growth 才生成新叶；掐芽将 BudGrowth 完整返还树干。**首次Bud随Sapling同步出生**，不经过旧0叶80%的额外随机等待和Dormant到80V的首次唤醒热机；原概率值0叶80%/1叶40%/2叶1%/3叶0仍需为后续芽明确机会频率后才能进入高频结算。
+Sapling 主干 Growth 100 为 Affinity 塑形循环，不进入 Mature Tree。活叶上限3片，芽20 Growth 才生成新叶；掐芽将 BudGrowth 完整返还树干。**首次Bud随Sapling同步出生**，不经过旧0叶80%的额外随机等待；当前已移除Dormant和80V唤醒条件；原概率值0叶80%/1叶40%/2叶1%/3叶0仍需为后续芽明确机会频率后才能进入高频结算。
 
 母叶的花/果取用是 leaf-local 二级分流。果实成熟与母叶变为纤维化水瓜树叶同步；采摘后可复花，但需要采果后新增 Growth 的正式阈值，不准用隐藏的固定等待钟替代。
 
@@ -64,4 +64,4 @@ Sapling 主干 Growth 100 为 Affinity 塑形循环，不进入 Mature Tree。�
 
 使用同一 `Δuh` 模型从上次状态推进到当前世界时间，跨越实际 Growth 阈值时分段。出芽的概率频率、可见花期停点和断粮恢复另行确定；离线玩家不得因不上线被写入另一套成长率或隐藏元素来源。
 
-验收必须包括：七元素供给足/不足、种子到成熟水瓜完整链、**每日0播种/24uh见幼苗/48uh有小叶/72uh见花/96uh收获**、Sapling初Bud、两叶互不抢养分、花果连续生殖Growth与双亲和固化、成熟后继续富集、采摘/材料加工、用户每24/72/168uh补土的真实土壤轨迹。结果均区分源代码模拟、实际 Web 试玩与千星服务端验收，不能互相冒充。
+验收必须包括：七元素供给足/不足、种子到成熟水瓜完整链、**每日0播种/24uh见幼苗/48uh有小叶/72uh见花/96uh收获（当前期望首果98uh，尚未达标）**、Sapling初Bud、两叶互不抢养分、花果连续生殖Growth与双亲和固化、成熟后继续富集、采摘/材料加工、用户每24/72/168uh浇水的真实土壤轨迹。结果均区分源代码模拟、实际 Web 试玩与千星服务端验收，不能互相冒充。
