@@ -52,7 +52,7 @@ M = 95 V; W = 12 V; 0 ≤ R ≤ 180 V
 | R（V） | 本轮S曲线的理论预算系数（约） |
 | ---: | ---: |
 | 180 | 100% |
-| 150 | 98.9% |
+| 150 | 99.1% |
 | 120 | 89.0% |
 | 110 | 77.8% |
 | 100 | 60.3% |
@@ -113,7 +113,7 @@ M = 95 V; W = 12 V; 0 ≤ R ≤ 180 V
 
 ## 7. 可复核的仓库数据
 
-- [M=95/W=12 的四种浇水周期逐日检查点（CSV）](calibration-data/reserve-sigmoid-m95-w12-checkpoints.csv)：24～168uh，每24uh的Soil、Reserve、实际预算、根系吸收、共享土壤效率与成熟果数；Reserve不存在时留空，而不是误记为0。
+- [M=95/W=12 的四种浇水周期逐日检查点（CSV）](calibration-data/reserve-sigmoid-m95-w12-checkpoints.csv)：24～168uh，每24uh的Soil、Reserve、实际预算、根系吸收、**步末Soil对应的共享效率系数**与成熟果数；Reserve不存在时留空，而不是误记为0。
 - [固定W=12、M=80～105的完整横向对照（CSV）](calibration-data/reserve-sigmoid-midpoint-scan-w12.csv)：六种中点 × 四种浇水周期，记录首/次果、第二片叶与72/96/168uh的库存和末期预算。
 - [Tree Reserve 生长预算S曲线图（SVG）](calibration-data/reserve-budget-m95-w12.svg)：本轮M=95/W=12与前版M=105/W=12并排对照。图表示理论效率曲线，不是实际Growth/uh。
 
