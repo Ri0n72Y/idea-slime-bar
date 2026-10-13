@@ -129,9 +129,14 @@ end
 
 function OnStart()
     print('WK_TextTrial OnStart')
-    root = game.FindClientUIRoot('WK_TextTrialRoot')
+    root = game.FindClientUIRoot('WK_TextTrailRoot')
     if not root then
-        printerr('WK_TextTrialRoot not found: check the applied UI layout')
+        local available = {}
+        for _, candidate in ipairs(game.GetClientUIRoots() or {}) do
+            available[#available + 1] = candidate.name or '(unnamed)'
+        end
+        printerr('WK_TextTrailRoot not found; client UI roots: ' ..
+            table.concat(available, ', '))
         return
     end
     snapshot = root:FindChild('Snapshot')
