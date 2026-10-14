@@ -79,6 +79,22 @@ Processing 产物完整继承来源 Affinity；生长累积由青果肉/水瓜�
 9. [输入交互](interaction.md)、[世界设定](setting.md)、[培养与后续拓展](elemental-cultivation.md)。
 10. [水／火／冰感官基准与四种增幅水瓜](elemental-sensory-baseline.md) — 风味描述与七维表征候选；不改变结算或运行时合同。
 
+## 七元素感官设计（策划共识；不等于运行时合同）
+
+七元素基础感官方向均已确认，均不自动生成固定的甜、酸、苦、咸、鲜味；具体香味和味道仍来自食材，元素影响其感官呈现。
+
+| 元素 | 基础感官方向 | 具体设计 |
+| --- | --- | --- |
+| 水 | 清润 | [水、火、冰感官基准](elemental-sensory-baseline.md) |
+| 火 | 热灼 | [水、火、冰感官基准](elemental-sensory-baseline.md) |
+| 冰 | 平抑 | [水、火、冰感官基准](elemental-sensory-baseline.md) |
+| 岩 | 凝聚 | [岩结晶风味](geo-cohesion-crystallize-flavor.md) |
+| 雷 | 活跃度 | [雷与反应口感](electro-activity-reaction-flavor.md) |
+| 草 | 丰盈感 | [草、激化与草原核](dendro-fullness-reaction-flavor.md) |
+| 风 | 嗅觉扩散；纯风为萦绕感 | [风、扩散与风水瓜](anemo-aroma-lingering-flavor.md) |
+
+**职责边界**：以上文件记录风味意向及食物形态；反应触发、消耗、产物质量与容量见下文的[果实元素反应结算设计](fruit-reaction-settlement-design.md)，当前以其**§6.18**为优先规则。该设计采用单一花果账户 `E_free[7] + Products[]`；其他旧稿中的 `FruitElementAmount[7]`、`FlavorRatio[7]` 等字段或100G口径仍须核对迁移范围，不得从感官文件推断权威账本。感官属性也不是已批准的七维数值字段。感官映射公式、Growth合同迁移、Web与千星奇域运行时修改均不在本次文档合并范围。
+
 ## 新元素反应策划（尚未并入 MVP 实现合同）
 
 [果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md) 记录90G初次成熟、1U=30G、同一花果Growth/物质量账户、反应产物占容与风扩散例外。数值结算采用该文**§6.18最新规则**；此前历史试算不覆盖§6.18。此文仍属设计方案，并不直接取代main中的100G及FruitElementAmount等既有运行时合同，相关一致性修订另行处理。
