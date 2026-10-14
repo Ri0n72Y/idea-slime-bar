@@ -1,6 +1,6 @@
 # 种植
 
-> **历史方案说明：** 本页来自“反复播种 + 植株整体成熟”的早期 MVP。当前 `mvp/aquamelon-kitchen/` 不再使用这里的成熟叶规则。现行千星奇域合同是：Fruit Growth 达到 100 时，Green Fruit -> Mature Fruit 与 parent Leaf -> fibrous Aquamelon Leaf 同步发生；该叶采摘后是 `AquamelonLeaf` / 水瓜树叶，而不是因为植株整体进入某个时间阶段自动成熟。其它历史种植流程仅作参考。
+> **历史方案说明：** 本页来自“反复播种 + 植株整体成熟”的早期 MVP。当前 `mvp/aquamelon-kitchen/` 不再使用这里的成熟叶规则。现行千星奇域合同是：Fruit 生殖 Growth 达到 90 时，Green Fruit -> Mature Fruit 与 parent Leaf -> fibrous Aquamelon Leaf 同步发生；该叶采摘后是 `AquamelonLeaf` / 水瓜树叶，而不是因为植株整体进入某个时间阶段自动成熟。其它历史种植流程仅作参考。
 MVP 中的种植只发生在预先设置的可种植地块上。玩家通过修整土地、播种、浇水、等待生长、选择性采叶、收获和清除植株完成一个完整种植循环。
 
 水瓜是 MVP 的基础作物，也是第一株用于验证完整种植流程的植物。

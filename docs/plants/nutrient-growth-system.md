@@ -97,13 +97,14 @@ Seedling
 
 ## Stage-specific Absorption
 
-不同 Stage 拥有不同的单 Tick 最大吸收量：
+通用植物模型**可以**为不同 Stage 定义不同的养分吸收**速率**，但速率与结算次数无关，统一用模型时间 [uh](uh-time-unit.md)：
 
 ```text
-MaxAbsorbPerTick(stage)
+MaxAbsorbVPerUH(stage)
+MaxAbsorbThisStep(stage) = MaxAbsorbVPerUH(stage) × Δuh
 ```
 
-这用来表现根系、输导系统和器官规模的成长。
+这可用于表现其他植物根系、输导系统与器官规模的成长；**它只是通用模型的可选扩展，水瓜厨房 Seed / Seedling / Sapling 使用同一根系 V/uh 总吸收上限（具体数值仍待校准），不因 Stage 自动增加吞吐。**
 
 典型方向：
 
@@ -376,7 +377,7 @@ Inherited Parent Modifier
 
 ## 子器官分流
 
-一个器官进入生长代谢时，先确定本 Tick 准备用于生长的养分预算。
+一个器官进入生长代谢时，根据本次实际推进的 `Δuh`、可用 Reserve 与器官亲和，确定**当次**准备用于生长的养分预算。一次结算事件本身不决定预算总量，也不会因为结算次数增加而产生额外资源。
 
 这些养分不是立刻全部转换为自己的 Growth，而是先向正在生长的子器官分流。
 
@@ -425,7 +426,7 @@ LeafOwnBudget
 
 ## 叶片示例
 
-假设一片成叶本 Tick 获得 10 单位生长养分，并带有一个花器官。
+假设某个 `Δuh` 结算区间内，一片成叶**实际获得** 10 V 生长养分，并带有一个花器官。此处 10 V 仅是用于展示父子分流的**本次预算示例**，不是固定 V/uh 速率，也不是水瓜的标准产量。
 
 花先分走 50%：
 
