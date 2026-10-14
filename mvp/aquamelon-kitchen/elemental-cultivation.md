@@ -2,6 +2,8 @@
 
 本文件只记录七元素培养表现、性状与待开发的下游玩法。权威养分、生命周期、Fruit Flavor 规则见 [七元素养分与生长系统](growth-system.md)；未进入当前 v0 的料理与反应设想不得覆盖已确认的果实 ElementAmount 比例模型。
 
+**后续策划独立稿**：[果实元素反应结算：设计基线与待解冲突](fruit-reaction-settlement-design.md)。该稿记录90G/1U=30G、同一花果Growth/物质账户、反应产物守恒占容、风扩散例外与成熟后指数富集减速；与旧100G及FruitElementAmount口径仍待统一，不可直接视为已批准的runtime合同。下方历史Taste/BloomStrength草稿不覆盖新策划结算稿。
+
 **植物如何从土壤获取元素、如何形成 Growth Vector、如何经历 Stage、叶片 / 花 / 果如何持续学习亲和与分流养分，已经迁移到 [七元素养分与生长系统](growth-system.md)。本文件不再作为这些生长规则的 source of truth。**
 
 第一版的培养链已经更新为“土壤储备 → 树体储备 → Growth Tick → 器官生长”。
