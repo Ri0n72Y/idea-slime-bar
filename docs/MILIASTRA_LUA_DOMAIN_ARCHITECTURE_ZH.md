@@ -1,6 +1,6 @@
 # Aquamelon Kitchen — 千星 Lua 模块化内核 v1
 
-> 设计／工程切片（2026-10-14），严格以仓库 `main@aaeb0360` 的最新生长数值文档为基线。**不复制 Web 当前运行代码，不修改现有 PR #28 的客户端试玩，也不替代 F1 服务器权威实现。**
+> 设计／工程切片（2026-10-14），以仓库 `main@aaeb0360` 已合并的 10-13 生长数值文档为执行基线；同时复核目前 `main@d94333e` 新增的果实反应/感官设计。**不复制 Web 当前运行代码，不修改现有 PR #28 的客户端试玩，也不替代 F1 服务器权威实现。**
 
 ## 1. 采用的事实、证据与信任分层
 
@@ -71,6 +71,7 @@
 - **F2-Organs**：把Leaf first-level预算30% + leaf-local生殖80%做成预算分配结果，器官状态机实现Bud20/SmallLeaf26/Reproductive12→40→90，并严格保留其连续Growth与固化边界。未锁定的复花Threshold和出芽机会频率使用明确的 **pending**，不可随机猜数。
 - **F2-Time & State**：引入权威的 `Δuh` 调度／持久化端口，解决跨Threshold精确分段与离线事件顺序，再让千星服务端节点图接管权威状态；客户端Lua只发请求／显示状态。先固定权限边界，不添加客户端“防作弊”伪检查。
 - **F4 ElementBalls / Materials / Processing**：按已确认的材料身份与元素载体拆独立状态和操作，不把所有东西塞进 `state.lua` 或 `WK2_Entry.lua`；仍禁止自动背包和未确定的加工比例。
+- **Fruit Reaction／Flavor 另立专域**：最新 main `d94333e` 已合入 [fruit-reaction-settlement-design.md](../mvp/aquamelon-kitchen/fruit-reaction-settlement-design.md) 及七元素感官文件，不能继续假设结果后只有一个裸 `FruitElementAmount[7]` 数组就足够表达所有反应。新反应专题提出 `E_free[7]+Products[]`、初次成熟90G、1U=30G、事件跨阈值去重、SRP优先级、风扩散例外；该专题自己的范围声明明确**尚未正式替代现有 MVP 生长／运行时合同**，与现有 Growth 和果实账户定义仍需集成决议。实施前设独立 **Fruit Ledger／Reaction Engine／Sensory Projection** 边界：第一层存独立账本与已发生事件，第二层只做确定性物质量结算，第三层呈现感官描述，不把风味意向反向驱动元素质量或 Soil/Tree Growth。本 PR **不实现或预判这处跨文档冲突**。
 - **UI及未来2D/3D**：文本、像素图、3D场景是**不同适配器**；换皮不重写七元素、亲和与成长规则。用户维护界面静态布局，不引入运行时自动重排。
 
 ## 6. 审查与验证分级
@@ -80,4 +81,4 @@
 - **官方编辑器层**：每个 `require` 模块需建立脚本映射；只绑定入口脚本、旧入口互斥；按钮交互与文字显示可感知。
 - **CI层**：当前仓库CI基于pnpm和Web/TS，不能以其绿灯声称Lua语法、Lua模块装载或原神千星实机验收通过。本分支不加本地执行或新CI工作流。
 
-**待审查风险（不可跳过）**：90G边界Affinity固化点、当前根系单通道选用BaseAffinity的候选选择、1uh以外的离线精确积分，以及 `require` 在创作者关卡真实映射路径的兼容。这些应在F2继续开发前由独立Reviewer/实机证据核对。
+**待审查风险（不可跳过）**：90G边界Affinity固化点、当前根系单通道选用BaseAffinity的候选选择、1uh以外的离线精确积分、`require` 在创作者关卡真实映射路径的兼容，以及**新果实反应90G账户与现行MVP果实成长/累积账户的权威集成决议**。这些应在F2继续开发前由独立Reviewer/实机证据核对。
