@@ -78,11 +78,11 @@ Living Organ
 
 ```text
 MaterialType
-ElementAmount[7]
 Affinity[7]
+E_free[7] + Products[]   // 采摘青果／成熟水瓜的完整物质账户
 ```
 
-`FlavorRatio[e] = ElementAmount[e] / sum(ElementAmount)`，仍是派生值而不是需要重复持久化的数据。不同材料可以拥有自己的元素属性、Affinity 和未来确有必要的特有数据；本轮不建立 generic material / item component framework。
+花期累计的全部自由元素均进入果实的 `E_free[7]`，成熟反应后再由 `E_free[7] + Products[]` 表示。采摘青果／成熟水瓜完整继承两部分及既有身份／Affinity，不创建另一份 `FruitElementAmount`。最终 `Flavor` 只在品尝时派生；加工后的分配与品尝公式另议。本轮不建立 generic material / item component framework。
 
 当前已确认的最小加工关系：
 
@@ -104,9 +104,9 @@ AquamelonShell
 
 `GreenFruitFlesh` 与 `AquamelonFlesh` 是不同材料；`GreenFruitPeel` 与 `AquamelonShell` 也是不同材料。成熟水瓜的“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”仍可作为生物形态描述，但不要求每个解剖层都成为可拾取 Material；当前不建立 generic `AquamelonPeel`，也不把 `AquamelonPulpMembrane` 锁成独立掉落。
 
-加工产物当前默认完整继承来源材料的 `Affinity[7]`；这不是需要守恒拆分的数量语义。Fruit 在树上持续增加的 `FruitElementAmount` / growth accumulation 则只落到实际承载富集结果的组织：`GreenFruitFlesh` 承载 Green Fruit 的持续生长累积，`AquamelonJuice` 承载 Mature Aquamelon 的持续生长累积；`GreenFruitPeel`、`AquamelonShell`、`AquamelonFlesh` 与 remaining shell 属于已经形成的结构材料，不承载这部分继续增长的累积。结构材料仍可拥有自己的 `ElementAmount`，其基础来源和数值当前不定义。通用判断方法见 [植物材料设计原则](../../docs/plants/material-design-principles.md)。
+采摘时，青果与成熟水瓜完整保留来自花苞阶段起积累的 `E_free[7]` 和已生成的 `Products[]`，不因为形态转换而损失、复制或重新从零计量。上列加工路线只锁定材料身份；**加工后元素库存如何在青果皮／肉、水瓜汁／壳等材料间分配，尚未批准**。已有 Affinity 继承原则不能作为元素数量复制的理由。通用判断边界见[植物材料设计原则](../../docs/plants/material-design-principles.md)。
 
-当前仍不设计 Processing 的 `ElementAmount` 分配公式、固定比例、质量守恒、yield、品质、耐久、新鲜度或腐败。
+当前仍不设计 Processing 的 `E_free/Products` 分配公式、固定比例、质量守恒、yield、品质、耐久、新鲜度或腐败。
 
 水瓜茎、水瓜鬃等仍可作为原世界的长期材料背景，但不在这轮千星奇域 MVP 材料 identity 合同中重新定义。
 
