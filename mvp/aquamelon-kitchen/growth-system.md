@@ -193,13 +193,13 @@ Destroy Bud
 
 生殖器官是所属母叶的附属器官，**只取母叶本次获得的预算，不影响其他叶片，也不二次向 Tree 索要养分**。
 
-- SmallLeaf出生时继承当前Tree亲和偏移，之后用自己的Leaf Growth[7]塑形。**SmallLeaf达到26G时**固化其亲和为LargeLeaf的BaseAffinity，并且只清零叶自身阶段Growth；**LargeLeaf与附属FlowerBud同时出现**，不再额外累积18G等待花苞。新花苞的ReproductiveGrowth[7]从0开始，到开花、结果、成熟都持续累计、不重置。
-- FlowerBud拥有独立于母叶的`ReproductiveGrowth[7]`：**累计0→12G为Flower；12→40G为GreenFruit；40→90G为MatureFruit**。这是单一向量的累计阈值，不是三个独立阶段的增长量；开花和结果时Growth均不清零。
+- SmallLeaf出生时继承当前Tree亲和偏移，之后用自己的Leaf Growth[7]塑形。**SmallLeaf达到26G时**固化其亲和为LargeLeaf的BaseAffinity，并且只清零叶自身阶段Growth；**LargeLeaf与附属FlowerBud同时出现**，不再额外累积18G等待花苞。新花苞的 `E_free[7]` 从0开始累计经亲和转换形成的生殖Growth；花期全部积累均成为可食果实物质，阶段转换不重置。
+- FlowerBud 的生殖账户即 `E_free[7]`；成熟之前 `M = ΣE_free`，**累计12G为Flower、40G为GreenFruit、90G为MatureFruit**。不是另一份独立的 `ReproductiveGrowth[7]` 物质库存；阶段转换时自由元素不清零。成熟达到90G后先锁定 MatureFruit 阶段，再按已确认反应规则形成 `Products[]`。
 - **FlowerBud、Flower、GreenFruit统一取得母叶本次养分预算的80%（本轮锁定）**，而每片叶从Tree获得的首层份额仍是30%。MatureFruit完成后继续低速富集的20%仍是待复核候选。LargeLeaf自身Growth保留效率60%，SmallLeaf没有同类损耗；这些不是Reserve提取比例。
-- **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清零累计生殖Growth[7]。另从GreenFruit形成时开始累计`FruitElementAmount[7]`，此前器官形成Growth不被复制成可食元素储备。
+- **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清空 `E_free[7]`。花苞与花期已经积累的 `E_free[7]` 全量进入青果及熟果，不生成结果后才开始的第二套元素储备。
 - 花苞/花的可见时长由实际预算、Growth 0→12→40累计速率确定，**不引入独立倒计时**；前述57/64/76/95uh是旧0.998蒸发和`R/100`预算下的历史试算，**不属于当前M=95/W=12基线**；当前每日首果98uh，更多节点见[新校准](first-fruit-uh-calibration.md)。
-- GreenFruit 达生殖 Growth 90 时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟后仍可以低效率继续富集，Flavor 不锁定、不自动采收。
-- `FlavorRatio[i] = FruitElementAmount[i] / Σ FruitElementAmount`，总量为0时不生成 Flavor。元素量与风味之间不新增历史 Taste/绽放算法。
+- GreenFruit 在成熟前物质量 `M=ΣE_free` 达90G时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟事件锁定阶段，随后元素反应改变 `E_free`／`Products` 或总量 `M` 也不回退。成熟后仍可以低效率继续向 `E_free` 富集，不自动采收。
+- 果实在生长、反应、采摘时均不生成或持久化最终 `Flavor`；仅最终品尝时依据当时食材本味、`E_free[7]` 与 `Products[]` 计算，具体感官映射另议。
 - 收获后如果母叶仍在，可在母叶采果后的新 Growth 达标时重生 FlowerBud；其具体新增 Growth 阈值尚需正式确定，**不采用固定24 uh时钟，也不复用母叶历史 Growth 直接触发**。
 
 ## 7. 外观与采摘价值
@@ -253,30 +253,17 @@ Living Organ
 
 世界材料作为场景中的独立对象存在，可以被搬运或直接放在地面；本轮不设计 inventory slot、stack size、container、pickup capacity 等系统。
 
-### 8.2 材料的最小元素数据语义
+### 8.2 果实采摘的数据语义
 
-当前每个具体材料实例至少具有以下元素相关语义：
+花苞阶段开始积累并进入青果、熟果的物质只有一个权威账户，成熟之前是 `E_free[7]`；成熟反应之后以 `E_free[7]` 和 `Products[]` 表示，`M = ΣE_free + ΣProducts.amount`。花期物质全部可食，不因结果而损失、复制或重新计量。
 
-```text
-MaterialType
-ElementAmount[7]
-Affinity[7]
-```
+采摘青果或成熟水瓜时，独立世界材料完整继承该果实当时的 `E_free[7]`、`Products[]` 和已确认的材料身份、Affinity 语义。采摘是状态转移／快照，不新增第二套 `FruitElementAmount[7]`，不重新计算 `FlavorRatio`，也不生成最终 `Flavor`。
 
-`FlavorRatio` 仍然只由元素量比例派生：
-
-```text
-FlavorRatio[e]
-= ElementAmount[e] / sum(ElementAmount)
-```
-
-总元素量为 0 时视为尚未形成 Flavor。当前只锁定这些语义，不提前设计统一的 generic material / item / component framework，也不把上述具体材料压缩为 `Material(type, stage)`。
-
-活体器官转换为世界材料时如何把其当前 Growth / FruitElementAmount 等运行态映射到材料的 `ElementAmount`，留到对应实现 Spec；本轮不额外发明转换公式。
+`MaterialType` 和 `Affinity[7]` 仍表达材料身份与元素倾向。其他叶片、果皮、汁液等加工产物的数据承载和物质分配按后续加工设计分别确定；不得将原有通用 `ElementAmount[7]` 或某种加工产物默认视作完整果实账户。
 
 ### 8.3 已确认的最小加工路线
 
-Processing 把一个世界材料转换为一个或多个新的世界材料实体。产物不是原材料上的 component / tag，而是新的独立 material identity，并拥有自己的 `ElementAmount[7]` / `Affinity[7]` 语义。
+Processing 把一个世界材料转换为一个或多个新的世界材料实体。产物不是原材料上的 component / tag，而是新的独立 material identity；`Affinity[7]` 的非数量语义独立于物质分配。加工后的 `E_free[7]`、`Products[]` 如何归属这些材料仍待独立设计，不能预先把各子材料定义为持有完整果实库存。
 
 Green Fruit 路线：
 
@@ -322,15 +309,7 @@ GreenFruitPeel  != AquamelonShell
 
 当前不保留一个同时覆盖青果皮与成熟果壳的 generic `AquamelonPeel`。成熟果内部仍可在生物形态描述中存在“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”，但这些解剖层不自动等于可拾取 Material；`AquamelonPulpMembrane` 当前不是已经锁定的独立掉落材料。
 
-当前 Processing 应用 [植物材料设计原则](../../docs/plants/material-design-principles.md) 的 v0 边界：
-
-- 每个 Processing 产物都完整继承其来源材料的 `Affinity[7]`。Affinity 表达材料 / 组织的元素倾向，当前不按质量拆分、不做组织衰减，也不作为守恒数量重新计算。
-- `GreenFruitFlesh` 是 Green Fruit 的 growth accumulation carrier：Green Fruit 形成后在树上持续累计的 `FruitElementAmount[7]` / growth accumulation 由它承载；`GreenFruitPeel` 是已经形成的结构组织，不承载这部分持续生长累积。
-- `AquamelonJuice` 是 Mature Aquamelon 的 growth accumulation carrier：成熟果继续挂树富集形成的 `FruitElementAmount[7]` / growth accumulation 由它承载；`AquamelonShell` 是已经形成的结构组织，不承载这部分继续增长的累积。
-- `AquamelonShell -> AquamelonFlesh + remaining shell material` 中，`AquamelonFlesh` 与 remaining shell 都是从已经形成的成熟组织中取得的结构材料，不作为 on-tree growth accumulation carrier；二者仍完整继承来源 `AquamelonShell` 的 Affinity。
-- “结构组织不承载持续生长累积”不等于“结构材料没有元素”。这些材料仍可拥有自己的 `ElementAmount[7]`；其基础来源与数值当前未定义。
-
-这里锁定的是生长累积的**承载语义**，不是 Processing 数值分配公式。当前仍不设计固定比例拆分、mass conservation、yield、quality、freshness 或 generic processing engine。
+当前仅固定上文列出的具体加工路线和材料身份。**采摘完整继承果实账户；加工后的物质分配另议。**不得提前指定 `GreenFruitFlesh` 或 `AquamelonJuice` 独占 `E_free[7] + Products[]`，也不能将该账户完整复制给每一个子材料。Processing 产物的 Affinity 既有继承原则不构成元素数量的分配公式。此处不定义各产物数量、质量守恒比例、yield、quality、freshness 或通用 Processing 框架。
 
 ### 8.4 采摘后的 leaf-local sink
 
@@ -358,7 +337,7 @@ Tree 当前亲和
 → Fruit 阶段不再塑形 Affinity
 ```
 
-Fruit 形成以后继续变化的是 `FruitElementAmount[7]` 与其派生的 `FlavorRatio[7]`，不是 Affinity。
+形成 GreenFruit 并锁定 Affinity 后，继续变化的是同一物质账户的 `E_free[7]`；成熟之后反应产物归入 `Products[]`。最终 Flavor 仅在品尝时派生，不随生长持久化。
 
 当前版本不实现重新播种、多代亲和遗传、成熟后精炼或“老种子”生命周期。成熟后持续富集只为这些未来方向保留语义插口，不提前建立框架。
 

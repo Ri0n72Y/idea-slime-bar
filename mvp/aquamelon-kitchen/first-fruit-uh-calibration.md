@@ -19,8 +19,8 @@
 ## 2. 确认的生命周期与预算语义（保持不变）
 
 - Seed/Seedling都没有Reserve，共享连续TreeGrowth[7]，总量45G为Seedling、90G为Sapling；进入Sapling时各元素严格**1G→1V TreeReserve**，Sapling自身TreeGrowth清零，第一枚Bud同步产生。
-- Bud20G→SmallLeaf；SmallLeaf自身26G→LargeLeaf并**同步产生FlowerBud**，只重置母叶自身阶段Growth，新生殖Growth独立从0开始。
-- 同一生殖Growth[7]连续累计达到12/40/90G，分别为Flower/GreenFruit/Mature Aquamelon；花、果亲和各固化一次，但不重置生殖Growth；GreenFruit以后另记FruitElementAmount。
+- Bud20G→SmallLeaf；SmallLeaf自身26G→LargeLeaf并**同步产生FlowerBud**，只重置母叶自身阶段Growth，新花苞的同一 `E_free[7]` 物质账户从0开始，阶段由总积累Growth派生。
+- 同一花果物质账户 `E_free[7]` 连续累计达到12/40/90G，分别为Flower/GreenFruit/Mature Aquamelon；花、果亲和各固化一次，但不重置自由元素。花期元素全部成为可食物质；成熟后的反应产物进入 `Products[]`，不另记 `FruitElementAmount`，成熟Stage不因反应回退。此份校准数据仅验证首次成熟前的Growth时间曲线，不构成反应后容量/Flavor验算。
 - Tree每片Leaf取当次预算30%，FlowerBud/Flower/GreenFruit统一取各自母叶所得份额的80%（单叶情况下为Tree预算24%）；成熟后20%富集仍是候选。七元素亲和>1允许放大实际Growth预算，不额外归一化。
 - 后续Bud在本次试算中使用**确定性平均等待时间代理**，不是对随机出芽分布的严格数学期望，更不能作为玩家必得第二片叶的时间保证；实际出芽机会频率仍须另行确认。
 
