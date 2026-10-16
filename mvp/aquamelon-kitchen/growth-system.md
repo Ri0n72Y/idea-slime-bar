@@ -263,7 +263,7 @@ Living Organ
 
 ### 8.3 已确认的最小加工路线
 
-Processing 把一个世界材料转换为一个或多个新的世界材料实体。产物不是原材料上的 component / tag，而是新的独立 material identity，并拥有自己的 `ElementAmount[7]` / `Affinity[7]` 语义。
+Processing 把一个世界材料转换为一个或多个新的世界材料实体。产物不是原材料上的 component / tag，而是新的独立 material identity；`Affinity[7]` 的非数量语义独立于物质分配。加工后的 `E_free[7]`、`Products[]` 如何归属这些材料仍待独立设计，不能预先把各子材料定义为持有完整果实库存。
 
 Green Fruit 路线：
 
