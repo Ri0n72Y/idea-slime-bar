@@ -196,7 +196,7 @@ Destroy Bud
 - SmallLeaf出生时继承当前Tree亲和偏移，之后用自己的Leaf Growth[7]塑形。**SmallLeaf达到26G时**固化其亲和为LargeLeaf的BaseAffinity，并且只清零叶自身阶段Growth；**LargeLeaf与附属FlowerBud同时出现**，不再额外累积18G等待花苞。新花苞的 `E_free[7]` 从0开始累计经亲和转换形成的生殖Growth；花期全部积累均成为可食果实物质，阶段转换不重置。
 - FlowerBud 的生殖账户即 `E_free[7]`；成熟之前 `M = ΣE_free`，**累计12G为Flower、40G为GreenFruit、90G为MatureFruit**。不是另一份独立的 `ReproductiveGrowth[7]` 物质库存；阶段转换时自由元素不清零。成熟达到90G后先锁定 MatureFruit 阶段，再按已确认反应规则形成 `Products[]`。
 - **FlowerBud、Flower、GreenFruit统一取得母叶本次养分预算的80%（本轮锁定）**，而每片叶从Tree获得的首层份额仍是30%。MatureFruit完成后继续低速富集的20%仍是待复核候选。LargeLeaf自身Growth保留效率60%，SmallLeaf没有同类损耗；这些不是Reserve提取比例。
-- **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清零累计生殖Growth[7]。花苞与花期已经积累的 `E_free[7]` 全量进入青果及熟果，不生成结果后才开始的第二套元素储备。
+- **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清空 `E_free[7]`。花苞与花期已经积累的 `E_free[7]` 全量进入青果及熟果，不生成结果后才开始的第二套元素储备。
 - 花苞/花的可见时长由实际预算、Growth 0→12→40累计速率确定，**不引入独立倒计时**；前述57/64/76/95uh是旧0.998蒸发和`R/100`预算下的历史试算，**不属于当前M=95/W=12基线**；当前每日首果98uh，更多节点见[新校准](first-fruit-uh-calibration.md)。
 - GreenFruit 在成熟前物质量 `M=ΣE_free` 达90G时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟事件锁定阶段，随后元素反应改变 `E_free`／`Products` 或总量 `M` 也不回退。成熟后仍可以低效率继续向 `E_free` 富集，不自动采收。
 - 果实在生长、反应、采摘时均不生成或持久化最终 `Flavor`；仅最终品尝时依据当时食材本味、`E_free[7]` 与 `Products[]` 计算，具体感官映射另议。
