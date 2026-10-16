@@ -27,7 +27,7 @@ flowchart TD
     F[器官生长系统<br/>Leaf / Flower / Fruit Stages]
     G[元素表型与显色<br/>Growth / Affinity / Material]
 
-    H[Fruit Flavor 比例]
+    H[Fruit Element Account / Taste-time Flavor]
     I[水草绽放]
     J[采集与材料加工]
     K[1~3份水瓜汁混合]
@@ -194,23 +194,23 @@ flowchart TD
 
 - [ ] 每片叶第一层名义份额30%，Tree对应剩余100%/70%/40%/10%；叶片无法实际取用的额度返还 Tree。
 - [ ] SmallLeaf 自身阶段 Growth 0→26 形成 LargeLeaf；将当前 EffectiveAffinity 固化为 LargeLeaf BaseAffinity，并将**该叶自身阶段 Growth[7] 清零**，再开始下一段独立成长。
-- [ ] LargeLeaf 从清零后的本叶阶段 Growth 0→18 生成附属 FlowerBud；FlowerBud 新建独立 ReproductiveGrowth[7]，母叶继续存活并按自己的预算成长。
+- [ ] SmallLeaf 达到26G时，同步转换成 LargeLeaf 并产生附属 FlowerBud；**没有额外18G阶段**。花苞的唯一生殖物质账户 `E_free[7]` 从0开始，母叶独立保留自己的 Growth 账户。
 - [ ] 嫩叶无额外组织损耗，肥厚叶自身 Growth 保留效率60%，与 Tree Reserve 取用无关。
-- [ ] FlowerBud从自身独立于母叶的生殖 Growth=0开始积累，与后续 Flower/GreenFruit/Aquamelon共享同一向量。
-- [ ] 典型嫩叶12 uh、肥厚叶12 uh、花苞24 uh只用于校准实际 Growth 速率，不做倒计时或年龄门槛。
+- [ ] FlowerBud、Flower、GreenFruit、Aquamelon 始终共享同一 `E_free[7]` 生殖物质账户，直到成熟后的合法反应将部分元素转为 `Products[]`，不另建第二个果实元素量账户。
+- [ ] Growth 阶段只由实际积累达标触发；体验时间目标以最新 [首果校准](first-fruit-uh-calibration.md) 为准，不使用器官固定倒计时。
 - [ ] 果实成熟 Growth90 时，母叶与果同步转换为可采纤维化 AquamelonLeaf。
 
 #### F5-FlowerFruit — 一条连续的生殖 Growth
 
-- [ ] FlowerBud→Flower 总 Growth26；Flower→GreenFruit 总 Growth40；GreenFruit→成熟水瓜 总 Growth90；**不在开花或结果时清零**。
+- [ ] FlowerBud→Flower 账户累计**12G**；Flower→GreenFruit 累计**40G**；GreenFruit→成熟水瓜 累计**90G**；**不在开花或结果时清空 E_free**。
 - [ ] 花期预期约12 uh，真实转换依累计 Growth 达到40而非经过12 uh。
-- [ ] 花苞/花从所属母叶当次预算内拿50%，GreenFruit拿85%（80%～90%参考范围），成熟果继续按20%富集，不跨叶分流。
-- [ ] 只有结果时锁定当前 Affinity；`FruitElementAmount[7]` 从此开始按实际进入果实的 V 累积，FlavorRatio按组成比例派生。
-- [ ] GreenFruit可早摘；成熟水瓜仍继续低效富集元素，不锁 Flavor，不自动采收。
+- [ ] FlowerBud／Flower／GreenFruit 统一获得母叶当次预算的**80%**；成熟果继续富集的20%仍属待复核候选，不跨叶分流。
+- [ ] 开花时进行首次生殖亲和固化，结果时第二次固化并锁定果实 Affinity；每次真实转化后的 Growth 进入同一 `E_free[7]`，**包括花期全部物质**，不再独立存储结果后元素量。
+- [ ] GreenFruit可早摘，青果／熟果采摘完整转移当时的 `E_free[7] + Products[]`；成熟水瓜阶段锁定、不因反应库存变化回退，成熟后仍可低效富集，不自动采收。Flavor只在最终品尝时生成。
 - [ ] 采果后母叶留在树上可以再次生成花苞，但需要基于采收后**新增 Growth** 达到待确定阈值；不得使用固定等待门槛或直接沿用历史 Growth。
 - [ ] 材料采收身份、最小加工路线和完整 Affinity 继承遵照现有材料设计，不引入背包/通用配方系统。
 
-**共同时间/数值体验目标**：规律维护者约24 uh到 Seedling、72 uh到 Sapling、168 uh内首颗成熟水瓜，稳定期每168 uh约4～6果；其他上线频率只经实际 Soil 供给差异影响成长速度。
+**共同时间/数值体验目标**：规律维护者24 uh见 Seedling、48 uh见 SmallLeaf、72 uh见 Flower、96 uh可采首果；现有独立模拟日维护首果约98 uh，96 uh目标尚未达成。稳定期每168 uh 4～6果仍待验证；不同上线频率只经实际 Soil 供给差异影响生长。
 
 ### F6 — 元素表型、颜色与隐藏亲和
 
@@ -230,43 +230,28 @@ flowchart TD
 
 ---
 
-### F7 — Fruit Flavor Ratio
+### F7 — 统一花果元素物质账户与品尝边界
 
-目标：让果实结果后的七元素实际累计量直接成为 v0 Flavor 的事实源，不引入第二套味道转换。
+目标：花苞、花、青果、熟果采用唯一 `E_free[7] + Products[]` 账户；结果不丢弃花期积累，也不创建第二套元素库存。
 
-需要覆盖：
+需要覆盖（**实施前须另经领域合同迁移审查**）：
 
-- [ ] F7.1 持久化 `FruitElementAmount[7]`，只累计 Fruit 形成以后实际进入果实的七元素量。
-- [ ] F7.2 `ΣFruitElementAmount = 0` 时，Flavor 尚未形成。
-- [ ] F7.3 总量大于 0 时派生 `FlavorRatio[e] = FruitElementAmount[e] / ΣFruitElementAmount`。
-- [ ] F7.4 不额外持久化重复 `FlavorRatio` 向量，除非后续实现出现明确必要性。
-- [ ] F7.5 生殖 Growth=90 后仍允许元素继续累计，因此 FlavorRatio 可以继续变化。
-- [ ] F7.6 本 Feature 不实现六维 Taste、Affinity→Flavor efficiency、Flavor decay / cap、催化或精炼。
-
-当前不建立通用 Flavor conversion pipeline。未来具体料理如何解释这个比例，在对应 Feature 重新形成 Spec。
+- [ ] F7.1 FlowerBud 从0累计 `E_free[7]`，经 Affinity 形成的七元素 Growth 即实际可食物质。
+- [ ] F7.2 12G开花、40G结果、90G成熟；阶段锁定，反应不能导致成熟回退或重复成熟。
+- [ ] F7.3 成熟时／后按[反应结算设计](fruit-reaction-settlement-design.md)的合法离散事件把 `E_free` 转为 `Products`，普通反应守恒，风扩散适用已确认例外；`M = ΣE_free + ΣProducts.amount`。
+- [ ] F7.4 采摘完整继承两类库存和身份／Affinity，不丢失、不复制元素物质量。
+- [ ] F7.5 `Flavor` **仅在最终品尝时派生**；不预先建立 Fruit FlavorRatio 作为持久化或风味合同。
+- [ ] F7.6 加工后 `E_free/Products` 如何分配、最终品尝公式尚待另外确定；本 Feature 不发明通用材料或味觉引擎。
 
 ---
 
-### F8 — 水 + 草绽放
+### F8 — 成熟果元素反应（待独立实施 Spec）
 
-目标：实现 MVP 唯一元素反应。
+反应触发与投入／产物基线已在[果实元素反应结算](fruit-reaction-settlement-design.md)确认；包括绽放及其他合法反应，但仍**不是当前平台的既有运行时实现**。实施时沿用F7的单账户与已确认反应规则，以最新§6.18为准，不能复活旧的 `BloomStrength`、固定25/60阈值或「反应后直接口味修正」算法。
 
-需要覆盖：
-
-- [ ] F8.1 触发条件：Hydro ≥ 25。
-- [ ] F8.2 触发条件：Dendro ≥ 25。
-- [ ] F8.3 Hydro + Dendro ≥ 60。
-- [ ] F8.4 计算 `BloomStrength`。
-- [ ] F8.5 保存 `Bloom` / `BloomStrength`。
-- [ ] F8.6 应用绽放口味修正。
-- [ ] F8.7 编辑器侧草种子性状体表现。
-
-复合节点候选：
-
-- [ ] `bloom_calc`
-- [ ] `bloom_taste_modifier_calc`
-
-是否合并由该功能 Spec 决定。
+- [ ] 明确成熟事件及随后合法富集事件的结算来源、目标份额、库存转移与特殊反应中间产物。
+- [ ] 复核同一事件中反应顺序、成熟锁定、风扩散增幅后的物质容量，以及 Debug 可验证性。
+- [ ] 不在反应结算阶段生成最终 `Flavor`；加工与最终品尝映射另议。
 
 ---
 
@@ -282,12 +267,12 @@ flowchart TD
 - [ ] F9.4 Green Fruit 在 `40 <= Growth < 90` 可采摘为 `GreenFruit` / 青果。
 - [ ] F9.5 Mature Fruit 在 `Growth >= 90` 可采摘为 `Aquamelon` / 水瓜。
 - [ ] F9.6 Living Organ -> world Material 后退出 Tree / Leaf nutrient allocation、organ Growth 与 on-tree enrichment。
-- [ ] F9.7 每个具体材料至少携带 `MaterialType`、`ElementAmount[7]`、`Affinity[7]` 语义；`FlavorRatio` 继续由 ElementAmount 比例派生，不要求统一 generic 数据框架。
+- [ ] F9.7 青果／熟果采摘材料完整继承 `MaterialType`、`Affinity[7]` 及果实当时的 `E_free[7] + Products[]`；不产生或复制 Flavor，也不建立第二套库存。其他加工材料的数据承载待单独决定。
 - [ ] F9.8 `GreenFruit -> GreenFruitPeel + GreenFruitFlesh`；青果皮与青果肉都是独立材料。
 - [ ] F9.9 `Aquamelon -> AquamelonShell x2 + AquamelonJuice x1`；两个水瓜壳与一份水瓜汁都是独立材料实体。
 - [ ] F9.10 `AquamelonShell -> AquamelonFlesh + remaining shell material`；当前只确认可剥出一份水瓜肉，不定义剩余壳命名、总产量、工具、耗时或损耗。
 - [ ] F9.11 `GreenFruitFlesh != AquamelonFlesh`，`GreenFruitPeel != AquamelonShell`；不建立 generic `AquamelonPeel`，也不把解剖学“果肉膜”强制定义为 `AquamelonPulpMembrane` 掉落。
-- [ ] F9.12 Processing 产物拥有独立 `ElementAmount / Affinity` 数据能力，但本 Feature 不定义元素量分配、Affinity 继承 / 变化、yield 或 mass conservation 公式。
+- [ ] F9.12 上述加工路径只锁定材料身份；具体 `E_free/Products` 在子材料间的归属、数量和守恒细则留待加工专题，不因采摘完全继承便自动复制给全部加工产物。
 
 依赖点击劳动和搬运基础；材料仍以世界对象存在，可直接放置在场景中。
 
@@ -757,8 +742,8 @@ MANUAL: connect compound node xxx_calc
 第一条闭环之后再进入：
 
 - [ ] **F5-FlowerFruit**
-- [ ] **F7 Fruit Flavor Ratio**
-- [ ] **F8 水 + 草绽放**
+- [ ] **F7 统一果实物质账户与品尝边界**
+- [ ] **F8 成熟果元素反应**
 - [ ] **F9 采集与材料加工**
 - [ ] **F10 水瓜汁混合**
 - [ ] **F12 长期休眠 / 生长平衡深化**
