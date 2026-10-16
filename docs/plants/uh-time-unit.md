@@ -40,7 +40,7 @@ Web 只是压缩同一模型的实际耗时，不存在另一套专属吸收、G
 | 开花 → 青果（同一生殖成长轴） | 40 |
 | 青果 → 成熟水瓜（同一生殖成长轴） | 90 |
 
-Seed与Seedling共用连续TreeGrowth（累计45→90），Seedling时不清零；进入Sapling时按七元素逐维**1Growth=1V Reserve**，并把Sapling TreeGrowth置零，首次Bud同步生成、当前无30/80V休眠唤醒门槛。**SmallLeaf本叶26G**时固化亲和且只清零本叶阶段Growth，LargeLeaf与FlowerBud同时出现；生殖Growth[7]独立从0开始，**累计12G开花、40G青果、90G成熟**，开花与结果两次固化Affinity但不清零Growth；结果后才另记FruitElementAmount[7]。花期具体时长取决于实际Growth/uh，不是固定等待；采果后的再次开花仍需校准。每片叶固定Tree预算30%，花苞/花/青果统一取母叶预算**80%**。
+Seed与Seedling共用连续TreeGrowth（累计45→90），Seedling时不清零；进入Sapling时按七元素逐维**1Growth=1V Reserve**，并把Sapling TreeGrowth置零，首次Bud同步生成、当前无30/80V休眠唤醒门槛。**SmallLeaf本叶26G**时固化亲和且只清零本叶阶段Growth，LargeLeaf与FlowerBud同时出现；生殖账户 `E_free[7]` 从0开始，**累计12G开花、40G青果、90G成熟**；开花与结果两次固化Affinity但不清零自由元素，全部花期Growth进入可食果实。成熟后反应产物并入同一账户的 `Products[]`，Stage锁定，采摘完整继承，Flavor只在品尝时生成。花期具体时长取决于实际Growth/uh，不是固定等待；采果后的再次开花仍需校准。每片叶固定Tree预算30%，花苞/花/青果统一取母叶预算**80%**。
 
 ## 玩家供给与目标
 

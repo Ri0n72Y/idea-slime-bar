@@ -56,20 +56,20 @@ Active Bud 将原本属于 Tree 自身的 GrowthGain 暂时接入独立 BudGrowt
 | Flower → GreenFruit（同一生殖轴） | 40 |
 | GreenFruit → Aquamelon（同一生殖轴） | 90 |
 
-所有时长都是由实际Growth推得的体验目标，不是隐藏倒计时。SmallLeaf本叶26G时固化自身Affinity、清零**本叶阶段Growth**并立即变为LargeLeaf+FlowerBud；新的生殖Growth[7]从0开始，累计12G开花、40G结果、90G成熟。**开花与结果两次亲和固化**但不清零生殖Growth；两次间的Affinity塑形只读固化后的增量。结果后另累计FruitElementAmount派生Flavor。
+所有时长都是由实际Growth推得的体验目标，不是隐藏倒计时。SmallLeaf本叶26G时固化自身Affinity、清零**本叶阶段Growth**并立即变为LargeLeaf+FlowerBud；新花苞从0开始累计同一 `E_free[7]`，累计12G开花、40G结果、90G成熟。**开花与结果两次亲和固化**，不重置物质账户；两次间的Affinity塑形只读固化后的新增Growth。花期全部 Growth 转为可食果实物质，不另累计 FruitElementAmount；成熟后才可能生成 `Products[]`。
 
 Sapling 主干 Growth 达100只完成本次 Affinity 塑形周期，不升 Mature Tree。最多3叶，出芽概率按当前叶数0/1/2/3对应0.80/0.40/0.01/0；**各时段是否投一次以及如何换算为按 uh 连续风险**仍待统一，不能因结算精度增加而增加机会。
 
 ## 5. 收获与再生
 
-GreenFruit 形成后就可采摘；Fruit Growth 达90为成熟 Aquamelon，母叶同步成为纤维化水瓜树叶。成熟后元素量仍可继续低效率富集，不锁定 Flavor。
+GreenFruit 形成后就可采摘；Fruit Growth 达90为成熟 Aquamelon，母叶同步成为纤维化水瓜树叶。成熟后元素可继续低效率加入 `E_free[7]`；成熟阶段锁定，反应改变库存不会回退，最终 Flavor 只在品尝时派生。
 
 实际采摘使活体器官转成地面材料，不再参加 Tree/Leaf 养分分配。两条加工路径：
 
 - GreenFruit → GreenFruitPeel + GreenFruitFlesh。
 - Aquamelon → AquamelonShell ×2 + AquamelonJuice；AquamelonShell 继续处理为 AquamelonFlesh 与剩余果壳。
 
-加工所得材料按既定规则完整继承 Affinity；持续成长累积的元素量由青果肉或水瓜汁承载，成形的结构组织不复制这份生长累积。所有材料有独立的 ElementAmount[7] 与 Affinity[7]。
+采摘青果或熟果完整转移当时的 `E_free[7] + Products[]`，花苞及开花期间的物质量也包含其中，不丢失或复制。材料加工之后如何拆分自由元素与反应产物仍待研究；不再预设青果肉或水瓜汁独占全部元素累积。
 
 母叶保留时可再次形成花苞，但**采果后的新增 Growth 门槛尚待确认**；不得用固定等待24 uh代替 Growth 门槛，亦不得复用采收前历史 Growth 直接触发。
 

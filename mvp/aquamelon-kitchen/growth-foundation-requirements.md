@@ -10,9 +10,9 @@
 - `TreeReserve[7]`：仅Sapling起存在。首次进入Sapling时逐元素按`TreeReserve[i]=TreeGrowth[i]`转入（1Growth=1V Reserve），此后才承接实际根系吸收；与Sapling本体新TreeGrowth分开。
 - `TreeGrowth[7]`：实际已转化的生长度及亲和塑形材料，Seed / Seedling 直接累计。
 - `BaseAffinity[7]`、`EffectiveAffinity[7]`、`RootPreference[7]`：转换基线、动态倾向和摄取偏好彼此独立。
-- `BudGrowth[7]`、每片叶自身 Growth[7]、各叶附属生殖器官的 Growth[7]：分开存储，只通过一次预算分流相互联系。
-- `FruitElementAmount[7]`：结果以后真正进入可食果实的元素 V，用于导出 FlavorRatio，不等于花苞/花阶段的生殖 Growth。
-- World Material：独立地面道具，携带 MaterialType、ElementAmount[7]、Affinity[7]，不是背包格子。
+- `BudGrowth[7]`、每片叶自身 Growth[7] 与各叶的生殖账户独立，只通过一次预算分流相互联系。生殖账户**不另建 Growth 与 FruitElementAmount 两份库存**，花苞出生即持续累计 `E_free[7]`，成熟反应产生的稳定物质量归 `Products[]`。
+- 生殖物质量 `M = ΣE_free[7] + ΣProducts.amount`；成熟前尚无产物，`M = ΣE_free`。经 Affinity 转换的器官 Growth 即加入对应七元素物质，不再以结果为起点独立计量食用元素。
+- World Material：独立地面道具。采摘青果／熟果完整保留其 `E_free[7]`、`Products[]`、材料身份及 Affinity，不是背包格子；加工分配另议。
 
 ## 2. 吸收与预算
 
@@ -45,9 +45,9 @@
 | Flower → GreenFruit | 生殖 Growth 40 |
 | GreenFruit → Aquamelon | 生殖 Growth 90 |
 
-**SmallLeaf→LargeLeaf：** 叶自身Growth达到26G时固化其亲和，**仅清零叶自己的阶段Growth**，LargeLeaf与FlowerBud同一步生成；新的生殖Growth[7]从0开始，**累计12→40→90G**分别开花、成青果、成熟。开花和结果各进行一次亲和固化，只使用该次固化后的新增Growth继续塑形，**任何一次形态切换均不清零生殖Growth**。时长由实际Growth/uh决定，不添加器官隐藏计时器。
+**SmallLeaf→LargeLeaf：** 叶自身Growth达到26G时固化其亲和，**仅清零叶自己的阶段Growth**，LargeLeaf与FlowerBud同一步生成；新花苞的 `E_free[7]` 从0开始，**累计12→40→90G**分别开花、成青果、成熟。开花和结果各进行一次亲和固化，只使用该次固化后的新增Growth继续塑形，**任何一次形态切换均不清空自由元素物质账户**。成熟后 Stage 锁定，反应及物质量变化不会回退。时长由实际Growth/uh决定，不添加器官隐藏计时器。
 
-出生器官一次性继承父器官的亲和偏移，随后自成独立成长轴。**开花时第一次、结果时第二次固化生殖亲和**；结果后才另统计FruitElementAmount与风味比例。熟果后元素积累继续，Growth达标不自动采摘。
+出生器官一次性继承父器官的亲和偏移，随后自成独立成长轴。**开花时第一次、结果时第二次固化生殖亲和**。花期所有 `E_free` 随发育进入可食果实；熟果后仍可继续富集和反应，Flavor 仅在最终品尝时生成，Growth达标不自动采摘。
 
 Sapling 主干 Growth 100 为 Affinity 塑形循环，不进入 Mature Tree。活叶上限3片，芽20 Growth 才生成新叶；掐芽将 BudGrowth 完整返还树干。**首次Bud随Sapling同步出生**，不经过旧0叶80%的额外随机等待；当前已移除Dormant和80V唤醒条件；原概率值0叶80%/1叶40%/2叶1%/3叶0仍需为后续芽明确机会频率后才能进入高频结算。
 
@@ -55,10 +55,9 @@ Sapling 主干 Growth 100 为 Affinity 塑形循环，不进入 Mature Tree。�
 
 ## 5. 材料与加工
 
-- GreenFruit 与 Aquamelon 是不同阶段、不同材料；青果肉与水瓜汁承载随果实持续积累的成长元素，果皮、果壳及剩余结构组织不复制这一部分。
-- GreenFruit → GreenFruitPeel + GreenFruitFlesh；Aquamelon → AquamelonShell ×2 + AquamelonJuice；AquamelonShell → AquamelonFlesh + remaining shell。
-- 全部 Processing 产物完整继承来源 Affinity[7]，ElementAmount 由结构与生长累积承载关系决定；不补充未批准的质量守恒比例或通用道具框架。
-- Fruit Flavor 直接是实际 FruitElementAmount 七元素占比，零元素量时尚无 Flavor；无 Taste 六维公式。
+- 青果和成熟水瓜的采摘是**完整物质账户转移**：自由七元素 `E_free[7]` 与已经产生的 `Products[]` 均保留，花期累计物质不丢失，也不因采摘复制一份。
+- 已确认加工路线的材料身份：GreenFruit → GreenFruitPeel + GreenFruitFlesh；Aquamelon → AquamelonShell ×2 + AquamelonJuice；AquamelonShell → AquamelonFlesh + remaining shell。**加工后的各产物元素分配尚未决定**，不能沿用汁液/青果肉独占全部账户的旧规则。
+- 最终 `Flavor` 仅在品尝时计算；不持久化旧 `FruitElementAmount` 或 `FlavorRatio` 作为最终口味合同。加工路线与品尝计算另行明确，不新增通用道具框架。
 
 ## 6. 离线与验收
 
