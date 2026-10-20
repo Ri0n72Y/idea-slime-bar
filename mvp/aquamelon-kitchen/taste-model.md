@@ -2,7 +2,7 @@
 
 > **状态：已确认的概念与数据含义，2026-10-09；尚未批准转换公式、运行时字段或具体实现。**
 >
-> 适用于 Aquamelon Kitchen 的共同**数值/概念设计**。千星奇域与 Web 实现独立，不能因本文直接修改两端的领域计算或编辑器节点图。
+> 适用于 Aquamelon Kitchen 的感官设计语义。本稿不决定游戏状态或计算公式；本地 Lua 单机参赛 Demo 的技术边界见 [Issue #34](https://github.com/Ri0n72Y/idea-slime-bar/issues/34)，不能据此新增运行时字段或改写元素结算。
 
 ## 1. 为什么重构
 
@@ -90,29 +90,31 @@ OralSensation[4]: Astringency / Pungency / Tingling / Cooling (0..5)
 
 ## 7. 从七元素到风味评价：保持分层
 
-### 现有权威事实（不变）
+### 当前果实的权威物质事实（以最新生长与反应设计为准）
 
-现行 [growth-system.md](growth-system.md) 仍规定：
+[元素培养](elemental-cultivation.md)、[生长系统](growth-system.md)与[反应结算设计](fruit-reaction-settlement-design.md)规定花苞、花、青果到成熟果使用连续的果实物质账户；反应后保留尚未反应的自由元素与已形成的产物：
 
 ```text
-FruitElementAmount[7] = 结果后累计的七元素事实
-FlavorRatio[e] = FruitElementAmount[e] / sum(FruitElementAmount)
+E_free[7]                = 当前自由元素的七维物质量
+Products[]               = 反应产物及其物质量
+M = ΣE_free + ΣProducts.amount
 ```
 
-`FlavorRatio` 目前仅代表**七元素组成比例**，不等于五味强度、口腔感官强度或品评得分。零总量、不重复持久化及成熟后继续富集等现行约束全部保持。
+这是**原料/反应事实**，不是口味强度。旧 `FruitElementAmount[7] → FlavorRatio[7]` 不能再当作当前果实或最终 Flavor 的权威计算合同；此处也不新增另一份七维风味库存。具体平台运行时是否已经完成迁移，须单独核验。
 
-### 后续可设计的派生层（未实现）
+### 后续可设计的感官派生层（未实现）
 
 ```text
-材料状态、七元素组成、加工与反应结果
+已确定的材料事实、自由元素和反应产物
+→ 待批准的风味映射
 → 三阶段 Taste + Oral Sensation + 可选 Feature Tags
 → 综合风味描述
-→ 按品评者偏好给出评价
+→ 玩家或 AI 根据描述进行主观品尝
 ```
 
-- **AI 评价版**：综合风味描述、标签与顾客/玩家的喜好和厌恶等偏好交由 AI 作主观品评。AI 不负责修改已确定的元素事实或料理材料结果。
-- **千星奇域无 AI 版**：仅用三阶段可量化强度做确定性的偏好匹配；初期不要求对标签作综合评分。具体相似度、权重、分数规则**尚未确定**。
-- 两端**只共享数值与概念设计**，实现、数据组织、运行时权限和验收独立。千星奇域权威状态仍由服务端节点图负责。
+- **本地 Lua 参赛 Demo**：可以把真实物质量、已确认的七元素感官定义、反应性状与三阶段维度的含义写入 AI 品尝提示词；在转换公式未确认前，**不得凭元素占比生成虚构的 27 项数值**，也不得将 AI 的文学描述写回游戏事实。
+- **未来规则评价**：是否将三阶段量化强度用于确定性偏好匹配，以及相似度/权重等均未决定。此设计不要求参赛 Demo 实现顾客匹配。
+- 具体映射的数值与描述方式尚待专项确认。本文只定义三阶段和感官维度的**含义、量表与数据层次**。
 
 ## 8. 本次确认与明确未确认的范围
 
@@ -122,11 +124,11 @@ FlavorRatio[e] = FruitElementAmount[e] / sum(FruitElementAmount)
 2. 五种基本味觉：甜、酸、苦、咸、鲜，各阶段独立量化 0～5。
 3. 四种口腔感官：涩、辣、麻、凉，各阶段独立量化 0～5，与五味采用相同强度范围。
 4. 不采用双极轴；特色标签可选，补充香气、质地、回甘及复杂风味。
-5. AI 评价与千星规则匹配共用感官语义，但实现独立。
+5. 三阶段感官语义可用于 AI 品尝描述及后续规则评价，但当前不要求生成已量化的 27 项数值。
 
 **尚未确认，不得由实现者自行补齐：**
 
-- 七元素 `FlavorRatio` 转为三阶段感官强度的算法和参数。
+- 由真实元素/反应物质量推导三阶段感官强度的算法和参数。
 - Taste/Oral Sensation 的采样精度、取整或量化标尺、上限以外的行为。
 - 加工与元素反应怎样产生标签、各标签如何影响 AI 或规则评价。
 - 具体的规则匹配公式、顾客口味偏好数值、AI 输入格式、评估一致性方法。
@@ -134,7 +136,7 @@ FlavorRatio[e] = FruitElementAmount[e] / sum(FruitElementAmount)
 
 ## 9. 历史稿关系
 
-- [elemental-cultivation.md](elemental-cultivation.md) 中原来的六维 `Sweet/Sour/Bitter/Astringent/Fresh/Tingle` 和示例修正数值保留为**历史设计参考**，不再是当前计划使用的 Taste 结构，不能直接迁移到新版模型。
+- 早期草稿中的六维 `Sweet/Sour/Bitter/Astringent/Fresh/Tingle` 和示例修正数值属于**历史设计参考**，并非现行 [elemental-cultivation.md](elemental-cultivation.md) 的已批准口味合同，不可直接迁移为本模型。
 - 原水草绽放的 `BloomStrength` 与 Taste 数值加成仍属延后草稿；草原核的协调融合与特殊口感是可讨论的方向，不代表反应机制或强度公式已获批准。
-- [元素反应与风味调研 PR #14](https://github.com/Ri0n72Y/idea-slime-bar/pull/14) 属于独立研究工作；本次共识不批准新的反应类型或实现任务。
+- [元素反应与风味调研 PR #14](https://github.com/Ri0n72Y/idea-slime-bar/pull/14) 属于独立的早期研究记录；现行反应结算与七元素感官以已合并的专题设计为准，本次共识不批准新反应或实现任务。
 - 未来具体制定 Taste 数值和转换公式时，应以本文件的已确认语义为基础，新开相应 Feature Spec，不隐式改变生长数值或世界状态。

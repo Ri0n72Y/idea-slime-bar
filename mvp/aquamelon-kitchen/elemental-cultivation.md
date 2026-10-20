@@ -1,6 +1,10 @@
 # 水瓜厨房 MVP：七元素培养与水瓜汁混合
 
-本设计稿保留七元素培养表现与下游料理设计记录。**当前 Sapling 生命周期、Fruit Affinity 锁定点、`FruitElementAmount[7]` 与 v0 `FlavorRatio` 的 source of truth 已迁移到 [七元素养分与生长系统](growth-system.md)。本文后半部旧六维 Taste / 绽放 / 水瓜汁公式只作为延后设计草稿，不得覆盖当前 v0 Fruit Flavor 语义。**
+本文件只记录七元素培养表现、性状与待开发的下游玩法。权威养分、生命周期、单一果实账户与采摘语义见 [七元素养分与生长系统](growth-system.md)；反应数值见 [果实元素反应结算](fruit-reaction-settlement-design.md)。最终 Flavor 在品尝时生成，不使用果实元素比例直接作为成品风味合同。
+
+**三阶段感官语义**：[Taste 与口腔感官模型](taste-model.md) 定义入口/中段/回味、每阶段五味与四项口腔感觉（均为0～5）及可选标签；仅为设计层字段定义，未批准由元素/反应产物自动计算 27 项强度。
+
+**当前已确认的果实合同**：花苞出生即开始同一份 `E_free[7]` 累计，12G开花、40G青果、90G成熟；成熟后的合法反应可以产生 `Products[]`，花期元素全部可食，采摘完整继承。现有 Web／千星运行时是否已迁移需要分别验证，本文件不授权运行时改变。
 
 **植物如何从土壤获取元素、如何形成 Growth Vector、如何经历 Stage、叶片 / 花 / 果如何持续学习亲和与分流养分，已经迁移到 [七元素养分与生长系统](growth-system.md)。本文件不再作为这些生长规则的 source of truth。**
 
@@ -34,18 +38,9 @@ Growth / Affinity 决定颜色与形态
 
 相关背景见 [千星奇域水瓜树](setting.md) 和 [水瓜厨房 MVP 需求](requirements.md)。
 
-## 生长与七元素数据来源
+## 七元素培养数据与亲和
 
-旧版曾在本文件中定义“浇灌直接写入树体、树体元素连续衰减、器官生成时做一次静态元素快照”。
-
-这些规则已经被新的养分—生长模型替代。
-
-当前应按以下文档理解：
-
-- [七元素养分与生长系统](growth-system.md)：千星奇域水瓜树的土壤、树体 Reserve、Growth Vector、Stage、叶片、花果与体验目标。
-- [开发约定](development-conventions.md)：七元素向量、Reserve / Growth / Affinity 的实现层语义。
-- [通用植物养分—生长系统](../../docs/plants/nutrient-growth-system.md)：跨项目的抽象模型。
-- [Growth Tick](../../docs/plants/growth-tick.md)：每次生长 Tick 的统一执行顺序。
+RootPreference 决定植物从 Soil 吸收哪些元素，Growth Affinity 决定各元素如何参与单通道上限与 Growth 转换。时间与养分模型共用 [uh 统一规范](../../docs/plants/uh-time-unit.md)，不能另行在本文件定义单位。
 
 ### RootPreference 与 Growth Affinity
 
@@ -161,39 +156,11 @@ SOIL_Elems[i] *= KeepRatio
 连续投同一元素会逐步替换原有组成，但不会在捕获瞬间通过“先挤旧土再加入”的旧算法处理。
 
 
-### 旧“元素锁定”规则
+### 统一 uh 时间与养分流
 
-旧版定义的“树体元素锁定后不衰减、不被挤出”建立在旧模型上。
+本文件中的培养速度统一使用 [uh 等效小时](../../docs/plants/uh-time-unit.md)，吸收上限用 V/uh，生长使用器官实际累计 Growth[7]。Seed / Seedling 直接从根系吸收形成 Growth；Sapling 先进入 Reserve，再由当前 Reserve×Tree Affinity 动态生成本次预算。每片叶优先取用本次预算、未用额度返还 Tree；花果只能从所属母叶本次所得份额取用。
 
-新的土壤—Reserve—Growth Tick 模型下，锁定究竟作用于土壤、树体 Reserve、Affinity 还是其他培养机制尚未重新设计。
-
-因此：
-
-> **元素锁定能力暂时退出当前实现 source of truth，等待后续单独设计，不要把旧锁定语义直接迁移到新系统。**
-
-### 旧连续衰减公式
-
-以下旧公式：
-
-```text
-TreeElementNew
-=
-TreeElementOld × (1 - DecayRate)^ElapsedHours
-```
-
-不再用于树体 Reserve。
-
-当前基础节奏改为统一 Growth Tick，并使用实际 dt：
-
-```text
-CFG_GrowthUpdateIntervalSeconds ≈ 60
-SoilRetentionPerHour = 0.99
-TreeGrowthRetentionPerHour = 0.99
-```
-
-在线更新周期只控制反馈频率，真实变化量按 `RatePerHour + dt` 计算。
-
-树体内部元素的减少主要来自“用于生长的实际代谢和 Tree → Leaf 第一层分流”；Flower / Fruit 只继续分流所属母叶已经获得的预算，而不是额外从整株 Tree 抽取。树体不再额外叠加统一的自然蒸发。
+元素锁定对土壤、Reserve 或亲和的具体作用尚未设计，不属于当前培养公式。
 
 ## 培养结果与玩家体验目标
 
@@ -362,345 +329,26 @@ ColorStrength = 1
 
 ## 果实与后续料理数据边界
 
-当前 v0 已确认的 Fruit 数据边界是：
+当前果实生长与反应仅使用**单一权威物质账户**：
 
 ```text
-Flower Growth 0 -> 30
-→ Growth=30 形成 Fruit，并锁定当前 Affinity
-→ 30 <= Growth < 100：Green Fruit
-→ Growth >= 100：Mature Fruit
+FlowerBud：E_free[7] 自0开始
+→ 累计12G：Flower
+→ 累计40G：GreenFruit，锁定果实 Affinity
+→ 累计90G：MatureFruit，阶段锁定
+→ 成熟时与合法后续富集事件：E_free[7] + Products[]
+→ 采摘青果／熟果：完整继承现有物质账户
+→ 加工：物质如何分配尚未决定
+→ 最终品尝：根据实际材料生成 Flavor
 ```
 
-Fruit 形成以后不再塑形 Affinity，而是累计：
-
-```text
-FruitElementAmount[7]
-```
-
-当前 v0 的 Flavor **不做额外数值转换**：
-
-```text
-FruitElementTotal = Σ FruitElementAmount[e]
-
-FlavorRatio[e]
-= FruitElementAmount[e] / FruitElementTotal
-```
-
-总量为 0 时视为尚未形成 Flavor。`FruitElementAmount[7]` 是持久化事实，`FlavorRatio[7]` 是派生解释，不应无必要重复保存。
-
-Mature Fruit 到 Growth=100 后仍可以继续低效率累积元素，因此 FlavorRatio 仍会变化。100 只表示物理成熟，不表示 Flavor locked 或元素累计停止。
-
-Green Fruit / Mature Fruit 的物理形态、采摘价值和生殖器官 nutrient sink 以 [七元素养分与生长系统](growth-system.md) 为准。
-
-**下游感官设计共识：** 料理/材料未来以 [三阶段 Taste 与口腔感官模型](taste-model.md) 描述入口（Entry）、中段（Body）、回味（Finish）；每阶段包括五味（甜、酸、苦、咸、鲜，0～5）、四种口腔感官（涩、辣、麻、凉，0～5）及可选的特色标签。此模型**不等于**现行七元素 `FlavorRatio`，尚未制定转换公式，不授权修改运行时。
-
-## 历史/延后草稿：旧六维 Taste、绽放与水瓜汁
-
-以下内容来自更早的料理层设计。**旧六维 Taste 的结构已经被 [三阶段五味四感官共识](taste-model.md) 取代**；绽放修正与水瓜汁旧公式仍是延后草稿。它们均**不属于 v0 Fruit Flavor source of truth，也不进入本轮实现**。
-
-后续如果实现感官转换、绽放、取汁或混合，需要基于当时的 `FruitElementAmount / FlavorRatio` 和新三阶段语义形成独立 Spec；**不得恢复旧六维 Taste 作为正式字段**，也不得直接把下面旧公式接入当前 Growth Tick。
-
-尤其当前不存在：
-
-```text
-FruitElementAmount
-→ six-dimensional Taste
-```
-
-这样的 v0 conversion pipeline。下面公式仅保留设计参考。
-
-## 延后草稿的历史迁移说明
-
-下面的口味、绽放和水瓜汁规则继续保留为**历史设计草稿**，不再视为当前已确定的 v0 下游结果。
-
-但它们旧文中的输入曾被写成一次性的 `OrganElement` 快照。新的果实模型已经变为：
-
-```text
-Flower Stage
-→ 持续 Growth / Affinity 学习
-→ 进入 Fruit Stage 时固定 Affinity 与外层形态
-→ Fruit Stage 继续累积汁液 / 内容物
-→ 成熟果实
-```
-
-因此未来若重新启用这些料理扩展，需要在对应 Spec 中重新明确：
-
-- 口味读取 Fruit Stage 的哪一组最终向量；
-- 绽放检测读取果皮、内容物还是两者组合；
-- 水瓜汁继承哪一层成熟数据。
-
-在这些输入尚未重新锁定前，下面的数值公式保留，但**不要直接按旧 `OrganElement` 数据源实现。**
-
-## 历史草稿：果实基础六维 Taste（已被新结构取代）
-
-以下是当时设计的六个旧口味维度，仅供比较：
-
-```text
-Sweet       甜
-Sour        酸
-Bitter      苦
-Astringent  涩
-Fresh       清爽
-Tingle      刺激
-```
-
-范围均为 0～100。
-
-普通水瓜基础值：
-
-| 口味 | 基础值 |
-| --- | ---: |
-| 甜 | 45 |
-| 酸 | 6 |
-| 苦 | 3 |
-| 涩 | 5 |
-| 清爽 | 55 |
-| 刺激 | 0 |
-
-## 延后草稿：七元素 Taste 修正
-
-下表表示某元素达到 100 时的最大修正：
-
-| 元素 | 甜 | 酸 | 苦 | 涩 | 清爽 | 刺激 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 火 | +8 | 0 | +2 | 0 | -15 | +30 |
-| 水 | +10 | -2 | -1 | -5 | +25 | 0 |
-| 风 | +2 | +8 | 0 | -3 | +20 | +6 |
-| 雷 | -3 | +15 | +2 | 0 | +2 | +25 |
-| 草 | +4 | 0 | +10 | +15 | +10 | 0 |
-| 冰 | +3 | +5 | 0 | 0 | +30 | 0 |
-| 岩 | +2 | 0 | +7 | +15 | -5 | 0 |
-
-果实口味仍按完整七元素组成共同修正，而不是只读取“主元素标签”：
-
-```text
-Taste
-=
-BaseFruitTaste
-+
-Σ(
-  FinalFruitElement[element] / 100
-  × ElementTasteModifier[element]
-)
-```
-
-`FinalFruitElement` 的正式数据来源仍需在 Fruit Spec 中与新版 Growth / Affinity / 汁液模型完成映射。
-
-最终各维度限制在 0～100。
-
-因此两个同为 Hydro Aquamelon 的果实，只要其他元素组成不同，味道仍然可以不同。玩家第一版不看到这些精确数值。口味值用于生成饮品结果及后续评价。
-
-## 延后草稿：水 + 草绽放
-
-第一版只实现水元素与草元素的“绽放”性状，不实现其他元素反应。
-
-触发条件：
-
-```text
-Hydro >= 25
-AND
-Dendro >= 25
-AND
-Hydro + Dendro >= 60
-```
-
-满足条件：
-
-```text
-Bloom = true
-```
-
-### 绽放强度
-
-```text
-BloomStrength
-=
-clamp(
-  (min(Hydro, Dendro) - 20) × 4,
-  0,
-  100
-)
-```
-
-例如：
-
-| 水 | 草 | 绽放强度 |
-| ---: | ---: | ---: |
-| 25 | 35 | 20 |
-| 30 | 30 | 40 |
-| 40 | 45 | 80 |
-| 50 | 50 | 100 |
-
-## 草种子性状体
-
-达到绽放条件的果实会形成“草种子性状体”。
-
-它不是新的水瓜树种子，也不能用于繁殖，而是水、草元素在果实中形成的稳定特殊组织。
-
-相比普通水瓜，它需要产生明显的质变：
-
-- 果实基础色仍由最强元素决定；
-- 果实内部出现可辨认的草种子状特殊组织；
-- 果肉或汁液出现柔软的种子状悬浮物；
-- 料理后仍保留明显不同于普通水瓜汁的性状表现。
-
-第一版不把草种子性状体拆成独立可采集 Item。
-
-数据上只保存：
-
-```text
-Bloom
-BloomStrength
-```
-
-## 绽放口味修正
-
-基础元素口味计算完成后，再按照 BloomStrength 加入反应修正。
-
-BloomStrength = 100 时：
-
-| 口味 | 修正 |
-| --- | ---: |
-| 甜 | +15 |
-| 酸 | 0 |
-| 苦 | -8 |
-| 涩 | -10 |
-| 清爽 | +20 |
-| 刺激 | 0 |
-
-实际修正：
-
-```text
-BloomTasteModifier
-=
-BloomConfig.TasteModifier
-× BloomStrength / 100
-```
-
-这一反应的目标是让水与草产生质变，而不是简单叠加：
-
-- 水元素提供清甜和清爽；
-- 草元素原本会增加植物性的苦涩；
-- 绽放发生后，苦涩明显降低，甜和清爽进一步提升；
-- 同时出现草种子性状体。
-
-## 延后草稿：果实与水瓜汁
-
-下面“果实直接取汁 / 水瓜汁继承果实快照”的旧写法已经被当前材料身份合同覆盖，不再作为 v0 Processing source of truth。
-
-当前已确认的 Mature Aquamelon 路线是：
-
-```text
-Aquamelon
--> AquamelonShell x2
- + AquamelonJuice x1
-```
-
-`AquamelonJuice` 是独立 world Material。Processing 时 `ElementAmount` 如何从 Aquamelon 分配到两个 Shell 与一份 Juice、`Affinity` 如何继承 / 变化，本轮明确不定义；因此不得直接把旧“整份七元素快照复制给水瓜汁”的规则接回当前实现。
-
-后续如果重新启用水瓜汁颜色、味道和元素反应，应读取当时对应 Material Spec 已锁定的数据语义，而不是恢复旧的固定料理 ID 或快照复制规则。
-
-## 延后草稿：混合水瓜汁
-
-第一版只允许混合 1～3 份等体积水瓜汁。
-
-不加入：
-
-- 水
-- 糖
-- 冰块
-- 固体配料
-- 加热
-- 其他烹饪技法
-- 自定义体积比例
-
-混合后每种元素取参与水瓜汁的算术平均：
-
-```text
-MixedElement[element]
-=
-Σ JuiceElement[element] / JuiceCount
-```
-
-随后从最终元素组成重新计算：
-
-```text
-MixedElement
-↓
-DominantElement
-↓
-主题色 + 正片叠底
-↓
-基础口味 + 七元素口味修正
-↓
-检测水草绽放
-↓
-如触发：
-  BloomStrength
-  绽放口味修正
-  草种子性状体表现
-```
-
-混合结果不保留复杂加工历史。
-
-相同最终元素组成应得到相同的基础颜色、口味和元素反应结果。
-
-## 延后草稿：料理闭环示例
-
-玩家先将水瓜树培养成偏水状态。
-
-果实在成熟过程中形成偏水的最终元素组成，并显示水元素主题色。玩家采摘后制成水系水瓜汁。
-
-之后玩家改变培养方式，获得偏草果实并制成草系水瓜汁。
-
-例如：
-
-```text
-水系汁：
-水 60
-
-草系汁：
-草 60
-```
-
-混合后：
-
-```text
-水 30
-草 30
-```
-
-满足绽放条件。
-
-饮品因此出现：
-
-- 草种子性状体；
-- 与普通水瓜汁不同的特殊质地；
-- 更高的甜和清爽；
-- 更低的苦和涩。
-
-玩家并不知道“水 30 / 草 30”这些内部数值，只能通过蓝色、绿色原料和最终发生的明显质变理解二者之间存在特殊关系。
-
-这一发现会反向推动玩家尝试直接将水瓜树培养成水、草同时富集的状态，从而完成第一版：
-
-```text
-培养
-→ 观察
-→ 采集
-→ 制作
-→ 发现
-→ 再培养
-```
-
-的核心闭环。
+所有花苞／花期 Growth 均成为可食果实物质。生殖物质在结果时不清零、不复制，也没有另一份结果后才开始的元素库存；成熟后反应改变自由元素和产物数量时不使阶段回退。物质量由 `M = ΣE_free + ΣProducts.amount` 派生；**不能再使用旧的元素占比作为最终 Flavor 的计算合同**。具体品尝和加工规则留待独立设计。成熟后仍能低速富集，但不自动生成或持久化最终 Flavor。
 
 ## 第一版边界
 
-本设计稿到此为止。
+本文件的当前职责到此为止；以下项目不由本文件直接授权平台实施：
 
-第一版不继续设计：
-
-- 第二种元素反应；
+- 已在[反应结算设计](fruit-reaction-settlement-design.md)中确定、但尚未迁移到平台运行时的各类成熟果元素反应；
 - 多元素综合色；
 - 元素 UI 和精确数值展示；
 - 叶片的口味和料理用途；

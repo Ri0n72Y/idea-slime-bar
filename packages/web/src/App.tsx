@@ -12,6 +12,7 @@ import './styles.css'
 
 export function App() {
   const [debug, setDebug] = useState(false)
+  const [resetEpoch, setResetEpoch] = useState(0)
   const runtime = useAquamelonGame()
 
   if (runtime.status === 'starting') {
@@ -48,7 +49,7 @@ export function App() {
           <PlantPanel world={world} game={game} debug={debug} />
           <BallPanel world={world} game={game} />
         </div>
-        <GroundPanel world={world} game={game} debug={debug} />
+        <GroundPanel key={resetEpoch} world={world} game={game} debug={debug} />
       </div>
       <details className="panel event-panel">
         <summary>最近事件</summary>
@@ -62,7 +63,10 @@ export function App() {
       </details>
       {debug && <DebugPanel game={game} />}
       <footer className="page-footer">
-        <button onClick={() => game.reset()}>重置世界</button>
+        <button onClick={() => {
+          game.reset()
+          setResetEpoch(value => value + 1)
+        }}>重置世界</button>
       </footer>
     </main>
   )

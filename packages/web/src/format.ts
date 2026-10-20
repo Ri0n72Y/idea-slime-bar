@@ -73,3 +73,10 @@ export function sourceText(source: string) {
     : source.includes('fruit snapshot') ? entityName(id[0]) + '结果'
       : entityName(id[0]) + '加工'
 }
+
+export function ratioText(ratio: ElementVector | null) {
+  if (!ratio) return '尚未形成'
+  return ELEMENTS.map((name, index) =>
+    ELEMENT_NAMES[name] + ' ' + (ratio[index] * 100) + '%'
+  ).join(' · ')
+}

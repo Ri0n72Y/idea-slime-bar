@@ -122,3 +122,13 @@ time { font-variant-numeric: tabular-nums; }
   .soil-elements { grid-template-columns: repeat(7, minmax(0, 1fr)); }
   .soil-element { font-size: 0.77rem; }
 }
+
+.blend-preview {
+  border-top: 1px solid #e5ece3;
+  margin-top: 16px;
+  padding-top: 4px;
+}
+.blend-preview h3 { margin-bottom: 8px; }
+.blend-preview p { margin-bottom: 8px; }
+.ground-item .actions { justify-content: flex-end; }
+.ground-item button[aria-pressed="true"] { background: #e6f1e4; border-color: #8ab78c; }

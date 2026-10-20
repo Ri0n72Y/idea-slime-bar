@@ -1,103 +1,29 @@
-# 植物材料设计原则：结构组织与生长累积组织
+# 植物材料设计原则：采摘继承与加工待定
 
-本文记录植物器官或材料在采摘 / Processing 后形成多个 Material 时，如何判断元素相关语义的 v0 方法。
+本文件仅规定已确认的材料身份、Affinity 与果实物质账户之间的边界，不建立通用物品或加工框架。水瓜的权威生长与采摘合同见 [七元素养分与生长系统](../../mvp/aquamelon-kitchen/growth-system.md)，成熟后反应记账见 [果实元素反应结算](../../mvp/aquamelon-kitchen/fruit-reaction-settlement-design.md)。
 
-它只整理已经被当前水瓜设计实际验证过的原则，不建立完整植物生物学框架，也不设计 generic item / material / processing system。
+## 1. 材料身份不同于物质量
 
-## 1. 先区分材料身份，再判断生长累积由谁承载
+青果、成熟水瓜及其未来加工产物可以具有各自独立的 biological / material identity。结构组织与生长累积组织在形态上可以区分，但**不能仅凭这种分类先行决定** `E_free[7]` 和 `Products[]` 在加工产物间的比例或归属。
 
-一个活体器官或世界材料可以在 Processing 后生成多个不同 Material。多个产物具有不同 biological / material identity，并不意味着来源器官在生长期形成的所有累积都应平均拆分、固定比例拆分或复制到每个产物。
+`Affinity[7]` 表示材料的元素倾向，是**非守恒的性质**。既有 Processing 设计中子材料可完整继承来源 Affinity；这不意味着能够重复复制其元素物质量。
 
-当前先区分两类组织：
+## 2. 青果和成熟果的采摘已确认
 
-### growth-accumulating / storage tissue
+花苞出生以后积累的全部 Growth 属于最终可食果实的同一物质账户。成熟之前以 `E_free[7]` 表示；成熟后普通反应把自由元素转化成 `Products[]`，二者共同构成果实账户：
 
-真正承担生长期持续富集、储存结果的组织。
+`M = ΣE_free[7] + ΣProducts.amount`
 
-如果来源器官在树上继续获得 growth accumulation，应先判断这份持续增加的累积实际上由哪个组织承载，再把这层语义绑定到对应材料。
+青果或成熟水瓜从活体摘下，成为独立地面世界材料时，**完整继承这一账户**以及已确认的材料身份和 Affinity。采摘不丢失花期元素、不复制第二份库存、不产生最终 Flavor，也不会因反应后物质量变化回退成熟阶段。
 
-### structural tissue
+## 3. 加工路线的身份已确定，物质分配尚未确定
 
-已经形成、已经“长好”的结构组织，例如稳定果皮、果壳或从成熟结构中剥离出的组织。
+目前存在以下明确的材料身份转换：
 
-它们可以拥有自己的 `ElementAmount[7]`、`Affinity[7]` 等材料属性，但不会仅仅因为整个果实之后继续挂树富集，就自动继续承接那份果实的 growth accumulation。
+- `GreenFruit → GreenFruitPeel + GreenFruitFlesh`
+- `Aquamelon → AquamelonShell ×2 + AquamelonJuice`
+- `AquamelonShell → AquamelonFlesh + remaining shell material`
 
-结构组织自己的基础 `ElementAmount` 从哪里来、具体是多少，当前不定义。
+这仅确认**有哪些材料**，不是其元素数量分配规则。不能预设青果肉或水瓜汁独占整份 `E_free + Products`，也不能把它完整复制给每个子材料；结构材料是否携带以及携带多少自由元素或反应产物，都属于下一轮加工设计。当前既不设固定比例，也不新建泛化的 Processing 引擎。
 
-## 2. Affinity 与 ElementAmount 是两个独立判断
-
-### Affinity
-
-`Affinity[7]` 表达材料 / 组织的元素倾向或性质。当前 v0 默认：
-
-```text
-source Material / Organ Affinity[7]
--> every derived Material inherits the full Affinity[7]
-```
-
-因此 Processing 产生多个子材料时，各子材料都完整继承来源的 Affinity。
-
-当前不做：
-
-- 按质量拆分 Affinity；
-- 按组织衰减 Affinity；
-- 按比例守恒 Affinity；
-- 为每个 Processing 产物重新计算 Affinity。
-
-### ElementAmount / growth accumulation
-
-`ElementAmount[7]` 包含数量语义。来源器官生长期持续形成的 growth accumulation，只应归属于真正承担富集 / 储存功能的组织。
-
-因此：
-
-```text
-full Affinity inheritance
-!=
-full ElementAmount copying
-```
-
-不能因为多个产物都完整继承 Affinity，就推导它们也必须复制同一份 growth accumulation。
-
-## 3. 当前设计步骤
-
-当一个植物器官会被拆成多个材料时，按以下顺序判断：
-
-1. 先识别每个产物的 biological / material identity。
-2. 判断哪个组织是真正的 growth accumulation carrier。
-3. 判断哪些组织已经是 formed structural tissue。
-4. Processing 产物的 Affinity 当前默认完整继承来源。
-5. 只把持续生长形成的 accumulation 绑定到实际承载它的组织。
-6. 没有明确玩法需求时，不提前设计复杂的 ElementAmount 分配、比例守恒或组织衰减公式。
-
-“完整继承 Affinity”和“growth accumulation 只落在特定组织”必须保持为两个独立判断。
-
-## 4. Processing 后多个材料的语义关系
-
-Processing 可以把一个来源材料转换成多个独立 Material。
-
-当前只锁定：
-
-- 子材料保持各自独立 identity；
-- 所有子材料完整继承来源材料的 `Affinity[7]`；
-- 来源器官持续生长形成的 accumulation 只跟随被识别出的 carrier；
-- formed structural tissue 不自动复制这份持续累积；
-- structural material 仍可拥有自己的 `ElementAmount[7]`，只是基础来源与数值尚未定义。
-
-当前不进一步定义固定比例拆分、mass conservation、yield、quality、cooking value、Flavor conversion 或 generic processing engine。
-
-## 5. 当前已验证示例：Aquamelon
-
-水瓜是这套方法的第一个实际例子：
-
-| 来源与产物 | 当前分类 |
-| --- | --- |
-| `GreenFruit -> GreenFruitFlesh` | Green Fruit growth accumulation carrier |
-| `GreenFruit -> GreenFruitPeel` | formed structural tissue |
-| `Aquamelon -> AquamelonJuice` | Mature Aquamelon growth accumulation carrier |
-| `Aquamelon -> AquamelonShell` | formed structural tissue |
-| `AquamelonShell -> AquamelonFlesh` | formed structural material |
-| `AquamelonShell -> remaining shell` | formed structural material |
-
-这些产物当前都完整继承各自来源材料的 Affinity。结构材料“不承载 Fruit 在树上持续增加的那份 growth accumulation”，不代表它们没有 ElementAmount。
-
-水瓜生命周期、`FruitElementAmount[7]` 与实际 Processing 路线的 source of truth 见 [水瓜厨房：七元素养分与生长系统](../../mvp/aquamelon-kitchen/growth-system.md)。
+`Flavor` 仅在最终品尝时由实际材料组成派生，不以采摘或加工时的元素占比预先固定最终味道。
