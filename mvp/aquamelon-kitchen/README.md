@@ -1,5 +1,7 @@
 # 水瓜厨房 Aquamelon Kitchen — MVP
 
+> **千星2D单机参赛版已确认规则**：见 [2D Lua Contest v3](../../docs/aquamelon-2d/README.md)（固定50V、1uh=10秒、90～150G线性富集、Lua七维混色、首次反应产物锁形与全部产物风味、冻结/燃烧、一果一汁）。本目录的历史Web/服务端运行时描述不覆盖该参赛专用合同。
+
 本目录维护 Aquamelon Kitchen 的**现行游戏设计**。千星奇域是服务端权威的正式玩法实现；Web 是同一套数值的快速时间实验，用 TypeScript + Cordis 和文字点击 UI 独立实现。两端不共享运行时代码、**不使用不同的玩法平衡**。
 
 ## 统一数值时间
