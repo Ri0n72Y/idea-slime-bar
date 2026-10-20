@@ -1,6 +1,6 @@
 # 水瓜厨房 MVP：七元素养分、生长与材料
 
-本文件为**现行玩法规则**；使用 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 作为唯一数值时间单位，吸收速率为 V/uh，Growth 由实际养分与亲和度转换累计。Tick 只表示推进 `Δuh` 的结算事件，不能定义另一套速度或要求阶段固定等待一段时间。千星默认1 uh对应现实1小时，Web默认1 uh对应现实10秒且可调；两端共享玩法数值、独立实现。
+本文件为**现行玩法规则**；使用 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 作为唯一数值时间单位，吸收速率为 V/uh，Growth 由实际养分与亲和度转换累计。Tick 只表示推进 `Δuh` 的结算事件，不能定义另一套速度或要求阶段固定等待一段时间。正式千星多人方案1uh对应现实1小时；Web及本地Lua单机参赛Demo采用1uh=现实10秒；共享玩法数值，运行时实现独立。
 
 ## 1. 总体养分流
 
@@ -42,7 +42,7 @@ Soil_Elems[i] *= SoilRetentionPerUH ** Δuh
 ## 3. 土壤与元素球
 
 - `SOIL_Elems[7]` 是元素存量，容量1000 V。玩家点击「富集」生成等概率的一个纯净元素球，点击「收集」立即将球**当前剩余量**加入 Soil 并移除该球；「清空场地」不影响已经进入 Soil 的储备。
-- 元素球没有普通玩法的自动刷新。每次「富集」生成等概率纯元素球，初始元素量**期望80 V**（具体上下限待定）；球按统一模型时间 **半衰期 0.25 uh**（对应千星的15分钟基线）衰减：`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`；总元素量 **<1 V** 时销毁。Web 时间压缩只改变这些 uh 在现实中经历多久，不改变球的生命周期数值。
+- 元素球没有普通玩法的自动刷新。每次「富集」生成等概率纯元素球，初始元素量**固定50 V**（七种元素身份等概率随机，数量不再随机）；球按统一模型时间 **半衰期 0.25 uh**（对应千星的15分钟基线）衰减：`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`；总元素量 **<1 V** 时销毁。Web 时间压缩只改变这些 uh 在现实中经历多久，不改变球的生命周期数值。
 - Soil 若总量超过1000，下一次结算开始时按 `1000 / SoilTotal` 对七维存量等比例缩放；之后自然蒸发、再被植物吸收。超量直接损失，不设置隐藏回收池。
 - RootPreference = `[0.80, 1.00, 0.85, 0.75, 1.00, 0.70, 0.90]`。
 - Tree 初始 Base Affinity = `[0.85, 1.15, 0.90, 0.75, 1.20, 0.70, 0.95]`。
@@ -186,7 +186,7 @@ Destroy Bud
 - Seed/Seedling共用一条Growth（累计45→90），45G时只切换显示阶段，90G时按逐维1G→1V转入Sapling初始Reserve并清空Sapling TreeGrowth；在Sapling出现的同一刻**生成第一枚Active Bud**，不需要等待首次概率检查或从0V Reserve强制休眠唤醒。
 - Sapling 从 Soil 读取养分进入 Reserve；按动态预算取用并向已有叶片优先分流。已形成叶上限3片；每叶第一层预算名义份额30%，0/1/2/3叶时 Tree 余额分别为100%/70%/40%/10%，若叶未实际吸收则未用份额回归 Tree。
 - 在没有 Bud 时 Tree 预算结算为 TREE_Growth，达到100完成一次亲和塑形周期；有 Active Bud 时原本属于主干自身的 GrowthGain 进入 BUD_Growth。掐芽时全部 BUD_Growth 回到 TREE_Growth；Bud 达20则形成独立 SmallLeaf，继承出生时父亲和偏移。
-- **首次Bud在Sapling生成时立即创建**；原0/1/2/3叶每日出芽概率80%/40%/1%/0不再应用于首次Bud，后续第二/第三Bud的频率合同继续待定；结算次数不能制造额外随机机会。
+- **首次Bud在Sapling生成时立即创建**；后续在每24uh固定模型日机会点（04:00）只判定一次：已有1叶40%、2叶1%、3叶0%。原0叶80%不适用于首芽，结算次数不能制造额外随机机会。
 - **移除30/80 V的Dormant/Growing休眠迟滞**：Reserve不足时只通过0～180 V连续生长预算曲线自然减速；Reserve为0时Growth Budget为0，根系仍可继续吸收。没有初次启动唤醒门槛或后续休眠触发。
 
 ## 6. Leaf → Flower → Fruit
@@ -195,11 +195,11 @@ Destroy Bud
 
 - SmallLeaf出生时继承当前Tree亲和偏移，之后用自己的Leaf Growth[7]塑形。**SmallLeaf达到26G时**固化其亲和为LargeLeaf的BaseAffinity，并且只清零叶自身阶段Growth；**LargeLeaf与附属FlowerBud同时出现**，不再额外累积18G等待花苞。新花苞的 `E_free[7]` 从0开始累计经亲和转换形成的生殖Growth；花期全部积累均成为可食果实物质，阶段转换不重置。
 - FlowerBud 的生殖账户即 `E_free[7]`；成熟之前 `M = ΣE_free`，**累计12G为Flower、40G为GreenFruit、90G为MatureFruit**。不是另一份独立的 `ReproductiveGrowth[7]` 物质库存；阶段转换时自由元素不清零。成熟达到90G后先锁定 MatureFruit 阶段，再按已确认反应规则形成 `Products[]`。
-- **FlowerBud、Flower、GreenFruit统一取得母叶本次养分预算的80%（本轮锁定）**，而每片叶从Tree获得的首层份额仍是30%。MatureFruit完成后继续低速富集的20%仍是待复核候选。LargeLeaf自身Growth保留效率60%，SmallLeaf没有同类损耗；这些不是Reserve提取比例。
+- **FlowerBud、Flower、GreenFruit统一取得母叶本次养分预算的80%（本轮锁定）**，而每片叶从Tree获得的首层份额仍是30%。MatureFruit后的**自然富集速度**按当前果实物质量M采用`0.5×clamp((150-M)/60,0,1)`倍率：90G起为成熟前同条件速度的50%，150G为0；不再采用原固定20%或指数衰减候选。LargeLeaf自身Growth保留效率60%，SmallLeaf没有同类损耗；这些不是Reserve提取比例。
 - **开花时第一次固化生殖亲和，形成GreenFruit时第二次固化并锁定果实亲和**；两次固化之间只使用新增加的Growth继续塑形，不能重复计算固化前Growth。两次固化都不清空 `E_free[7]`。花苞与花期已经积累的 `E_free[7]` 全量进入青果及熟果，不生成结果后才开始的第二套元素储备。
 - 花苞/花的可见时长由实际预算、Growth 0→12→40累计速率确定，**不引入独立倒计时**；前述57/64/76/95uh是旧0.998蒸发和`R/100`预算下的历史试算，**不属于当前M=95/W=12基线**；当前每日首果98uh，更多节点见[新校准](first-fruit-uh-calibration.md)。
-- GreenFruit 在成熟前物质量 `M=ΣE_free` 达90G时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟事件锁定阶段，随后元素反应改变 `E_free`／`Products` 或总量 `M` 也不回退。成熟后仍可以低效率继续向 `E_free` 富集，不自动采收。
-- 果实在生长、反应、采摘时均不生成或持久化最终 `Flavor`；仅最终品尝时依据当时食材本味、`E_free[7]` 与 `Products[]` 计算，具体感官映射另议。
+- GreenFruit 在成熟前物质量 `M=ΣE_free` 达90G时成为成熟 Aquamelon，母叶同步纤维化为可采的 AquamelonLeaf；成熟事件锁定阶段，随后元素反应改变 `E_free`／`Products` 或总量 `M` 也不回退。成熟后按90～150G线性递减倍率继续向 `E_free` 富集，不自动采收；150G只停止自然富集、不裁剪反应产物。
+- 果实在生长、反应、采摘时均不持久化最终品尝结论；最终按当前`E_free[7]+Products[]`及[七元素与反应风味](taste-model.md)解释，不采用旧27项Taste数值映射。
 - 收获后如果母叶仍在，可在母叶采果后的新 Growth 达标时重生 FlowerBud；其具体新增 Growth 阈值尚需正式确定，**不采用固定24 uh时钟，也不复用母叶历史 Growth 直接触发**。
 
 ## 7. 外观与采摘价值
@@ -309,7 +309,7 @@ GreenFruitPeel  != AquamelonShell
 
 当前不保留一个同时覆盖青果皮与成熟果壳的 generic `AquamelonPeel`。成熟果内部仍可在生物形态描述中存在“果壳 / 光滑内膜 / 果肉膜 / 清澈水瓜水”，但这些解剖层不自动等于可拾取 Material；`AquamelonPulpMembrane` 当前不是已经锁定的独立掉落材料。
 
-当前仅固定上文列出的具体加工路线和材料身份。**采摘完整继承果实账户；加工后的物质分配另议。**不得提前指定 `GreenFruitFlesh` 或 `AquamelonJuice` 独占 `E_free[7] + Products[]`，也不能将该账户完整复制给每一个子材料。Processing 产物的 Affinity 既有继承原则不构成元素数量的分配公式。此处不定义各产物数量、质量守恒比例、yield、quality、freshness 或通用 Processing 框架。
+上述多材料加工路线保留供完整版本；**2D Lua参赛版**确定「一颗成熟水瓜→唯一一份果汁」：旧熟果材料退出、汁材料完整承接`E_free[7]+Products[]`，不生成瓜壳/果肉副产物也不复制账本。多产物加工的物质分配仍待将来设计。不得提前指定 `GreenFruitFlesh` 或 `AquamelonJuice` 独占 `E_free[7] + Products[]`，也不能将该账户完整复制给每一个子材料。Processing 产物的 Affinity 既有继承原则不构成元素数量的分配公式。此处不定义各产物数量、质量守恒比例、yield、quality、freshness 或通用 Processing 框架。
 
 ### 8.4 采摘后的 leaf-local sink
 

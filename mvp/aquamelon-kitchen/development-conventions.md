@@ -49,12 +49,13 @@ LEAF_Growth[7]
 LEAF_BaseAffinity[7]
 LEAF_EffectiveAffinity[7]
 
-FLOWER_Growth[7]
-FLOWER_BaseAffinity[7]
-FLOWER_EffectiveAffinity[7]
+REPRODUCTIVE_E_free[7]      花苞起连续的唯一可食元素账户（无第二份Flower_Growth库存）
+REPRODUCTIVE_Products[]    成熟反应后的真实物质产物
+REPRODUCTIVE_BaseAffinity[7]
+REPRODUCTIVE_EffectiveAffinity[7]
 ```
 
-果实阶段后续还会拥有汁液 / 内容物相关向量，具体字段在对应 Spec 中确定。
+成熟前后均使用同一份`E_free[7]`，反应后并列`Products[]`；采摘完整转移，参赛一果一汁不复制该账户。
 
 ## Reserve 与 Growth 不得混用
 
@@ -83,7 +84,7 @@ Soil
 
 进入 Sapling 后才开始使用 `TREE_Elems[7]` / Reserve。
 
-Seed / Seedling 升级时清空当前 Stage 的 Growth Vector，不清空 Reserve。Sapling 不再继续升级到 Mature；`TREE_Growth` 达到 100 只触发一次树体亲和更新 / 固化，并开始下一轮主干 Growth 累积。
+Seed→Seedling累计45G时**不清空Growth**；同一Tree Growth累计到90G进入Sapling，逐维1G→1V形成初始Reserve，再清零Sapling本体Tree Growth。Sapling 不再继续升级到 Mature；`TREE_Growth` 达到 100 只触发一次树体亲和更新 / 固化，并开始下一轮主干 Growth 累积。
 
 ## RootPreference 与 Affinity 的边界
 
@@ -186,12 +187,7 @@ BaseAffinity
 → EffectiveAffinity
 ```
 
-Seed / Seedling 进入下一 Stage 时：
-
-```text
-BaseAffinity = 当前 EffectiveAffinity
-Growth = zero vector
-```
+Seed→Seedling：连续Tree Growth不清零；Seedling→Sapling：90G逐维转换初始Reserve后才清零Sapling Tree Growth。花果12/40/90G转换同样不清零`E_free`，只有叶自身26G转换清零本叶阶段Growth。
 
 Sapling 没有下一 Stage。当前主干每累计满 100 Growth，按本轮 Growth 组成更新 / 固定自身 Affinity，然后开始下一轮主干 Growth 累积。
 
@@ -244,15 +240,15 @@ range = [0, 1]
 
 ## 配置及时间字段
 
-所有速率以 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 计算；结算 Tick 仅表示推进对应的 `Δuh`。千星现实3600秒推进1 uh，Web当前10秒推进1 uh；细分结算使用 `Δuh`，不复制整 uh 的养分预算。
+所有速率以 [uh（等效小时）](../../docs/plants/uh-time-unit.md) 计算；结算 Tick 仅表示推进对应的 `Δuh`。正式千星多人方案3600秒/uh，Web与本地Lua参赛版均10秒/uh；细分结算使用 `Δuh`，不复制整 uh 的养分预算。
 
-规范配置应包含：SoilRetentionPerUH=0.99、容量100V、RootPreference[7]、Affinity[7]、根系总吸收V/uh上限、单元素基础通道份额0.30、种子/器官Growth阈值与平台现实秒数/uh映射。
+规范配置应包含：SoilRetentionPerUH=0.99、容量1000V、RootPreference[7]、Affinity[7]、根系总吸收V/uh上限、单元素基础通道份额0.30、种子/器官Growth阈值与平台现实秒数/uh映射。
 
-- 统一吸收上限的最终值正在4/5/6 V/uh之间校准，不预先固定成一个历史值。
-- Sapling TreeReserve[7] 必须依据当次 Reserve 与 Tree Affinity 动态生成成长预算；取用系数/额外上限尚未确认，不存在正式的固定 Reserve 抽取百分比。
+- 根系阶段上限为Seed/Seedling/Sapling = 2/1.85/16 V/uh；B0=5.4 V/uh，Reserve180V，M95/W12无休眠S曲线。
+- Sapling根系在R≤100V时不限流、100～180V乘`ln(1+(180-R)/80)/ln2`，R≥180V停止吸收；与Reserve→Growth预算函数不同。
 - 每片叶可优先实际取用树本次预算的30%，未用额度归还 Tree；附属 Flower/Fruit 只从本叶当次预算分流。
-- Seed/Seedling阈值45/90；Sapling主干塑形100；Bud20；Leaf26/18；生殖同一 Growth 26/40/90。花开和结果不清零该生殖向量。
-- 出芽机会按0/1/2/3叶概率0.80/0.40/0.01/0计；**按 uh 如何触发和细分机会次数**需统一确认，不假定每次结算都重复投概率，也不使用硬性每日固定时刻作为 Growth 阶段条件。
+- Seed/Seedling阈值45/90；Sapling主干塑形100；Bud20；Leaf26且同时生出FlowerBud；生殖同一`E_free`累计12/40/90。花开和结果不清零该生殖向量。
+- 首次Bud进入Sapling同步出生；后续1叶40%、2叶1%、3叶0%，每24uh在04:00模型日机会点判定一次，不随结算频率重复投签。
 
 时间持久化记录实际世界更新时间及必要的离散事件去重状态，恢复时从上次时间推进累计 `Δuh` 并在真正的 Growth 跨阈值时处理阶段事件；不得另行使用按每次 Tick 累加固定一小时的近似器。
 
@@ -271,7 +267,11 @@ range = [0, 1]
 
 离线结算按每一实际 Growth 状态边界分段；出芽随机机会须按正式确认的 uh 风险频率去重。FlowerBud、Flower、GreenFruit、MatureFruit 从花苞诞生沿同一生殖 Growth[7] 持续增长。
 
-## 节点图实现原则
+## 实现原则（正式多人方案与2D Lua Demo分开）
+
+**2D Lua参赛版：**本地Lua持有唯一状态并负责全部数值、动态UI、RGB叠色、收获和提示词。编辑器只预布置控件/导入图片；不使用服务端节点图或同步层。
+
+### 正式多人方案的节点图原则（非参赛版）
 
 涉及七元素的批量逻辑优先使用固定索引：
 
