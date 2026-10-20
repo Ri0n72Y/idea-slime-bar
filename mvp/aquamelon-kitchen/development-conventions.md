@@ -124,7 +124,7 @@ CFG_TreeRootPreference[7]
 最终吸收还需要同时考虑：
 
 - 当前 Soil 可用元素；
-- 按模型统一的 `MaxRootAbsorbVPerUH` 总吸收上限（4/5/6 V/uh仍在校准）；
+- 按当前阶段`MaxRootAbsorbVPerUH`总吸收上限（Seed/Seedling/Sapling = 2/1.85/16 V/uh）；
 - 单元素有效吸收上限；
 - 实际 dt。
 
@@ -138,7 +138,7 @@ MaxRootAbsorbVPerUH × 0.30 × Affinity[i] × Δuh
 
 因此 Growth Affinity 虽然不再充当“RootPreference / 提取权重”，但会影响对应元素通道的最大吸收量。单一元素不能独自撑满根系总吸收上限；同一 uh 内的上限不会因结算频率改变。
 
-尚未最终锁定：ElementCap 使用 BaseAffinity 还是实时 EffectiveAffinity，以及多元素预算在 RootPreference / Cap / Soil 可用量之间的最终重分配算法。
+当前单元素吸收通道基础cap按该元素Tree BaseAffinity计算；多通道候选总和超过共享根系cap时等比例缩放。具体实现应对齐[生长系统](growth-system.md)，不得另行增加竞争算法。
 
 ### Affinity：吃进去以后长得多有效
 

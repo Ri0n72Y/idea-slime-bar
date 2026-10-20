@@ -19,7 +19,7 @@ Web 只是压缩同一模型的实际耗时，不存在另一套专属吸收、G
 
 ## 结算合同
 
-- 设 `Δuh = elapsedSeconds / realSecondsPerUH`，其中千星 `realSecondsPerUH=3600`，Web 默认 `10`。
+- 设 `Δuh = elapsedSeconds / realSecondsPerUH`，其中千星正式多人方案`realSecondsPerUH=3600`，Web与千星本地2D单机参赛Demo为`10`。
 - **速率线性上限**：`MaxAbsorbThisStep = MaxRootAbsorbVPerUH × Δuh`。实际七元素吸收另受 Soil 存量、RootPreference、单元素 Affinity 通道上限约束。
 - **土壤自然蒸发**：`Soil[i] *= SoilRetentionPerUH ** Δuh`，当前校准保留率为 `0.99/uh`；土壤容量1000V、超量按七元素比例压缩。
 - **树体生长预算**：根系吸收进入 `TreeReserve[7]`，由当前 `Reserve[7]` 和 Tree Affinity 动态形成本次 `GrowthNutrientBudget[7]`。本轮M=95/W=12、B0=5.4V/uh为设计校准，实际实现仍待验收；每元素实际取用不得超过自身储备；不可把土壤自然蒸发系数借用作树体代谢。
