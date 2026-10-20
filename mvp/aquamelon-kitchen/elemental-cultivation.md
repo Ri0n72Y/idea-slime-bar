@@ -34,7 +34,7 @@ Growth / Affinity 决定颜色与形态
 
 生长与养分流的 source of truth 见 [七元素养分与生长系统](growth-system.md) 和根目录 [Growth Tick](../../docs/plants/growth-tick.md)。
 
-本版本不扩展第二种元素反应，不设计复杂料理、多人互动、顾客经营和生产系统。
+当前2D Lua参赛版按已确认的§6.18支持全部已纳入的元素反应；不扩展复杂料理、多人互动、顾客经营或生产系统。
 
 相关背景见 [千星奇域水瓜树](setting.md) 和 [水瓜厨房 MVP 需求](requirements.md)。
 
