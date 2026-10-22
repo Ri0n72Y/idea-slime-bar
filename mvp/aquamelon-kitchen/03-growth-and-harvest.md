@@ -31,7 +31,8 @@
 - FlowerBud 出生时创建唯一七维自由元素库存 `E_free[7]`，从0开始。
 - 花苞、花、青果、成熟水瓜连续使用这一账户；12G、40G、90G是阶段边界而非分开的三笔 Growth。
 - 直到初次成熟前：`M = ΣE_free`；反应之后：`M = ΣE_free + ΣProducts.amount`。
-- 开花时与结果时各有一次 Affinity 固化；固化之间只用**新增** Growth 继续塑形，不能重复把历史量计算一次。
+- **花苞出生亲和**：在SmallLeaf达到26G时，先以该叶**升级前**的`LeafEffectiveAffinity−LeafBaseAffinity`计算`FlowerBudBaseAffinity[i] = FlowerTemplateAffinity[i] + 0.5×(LeafEffectiveAffinity[i]−LeafBaseAffinity[i])`，再固化叶亲和、重置**叶自身** Growth 并形成LargeLeaf。FlowerBud从0开启生殖`E_free[7]`。
+- **12G／40G 固化**：花苞从0到12G累计的七元素组成只用于开花时第一次亲和塑形；开花后新增的12→40G组成用于结果时第二次亲和塑形，形成GreenFruit后锁定。每段按`EffectiveAffinity[i] = BaseAffinity[i] + ExtraAffinity × 该段新增Growth[i]/Σ该段新增Growth`计算（该段总量为0则保留Base）；固化时将Effective作为下一段Base。**12G与40G不是重置或消费生殖库存的事件**，应使用只读阶段起点快照/累计增量计算新增Growth，不持有第二份可消费七维库存。
 - GreenFruit 形成时锁定结果亲和；后来改变的是自由元素量和反应产物，不再次修改果实亲和。
 - 成熟先锁定形态与阶段，反应可以改变元素自由量或 M，但不能让 MatureFruit 倒退成 GreenFruit。
 - 成熟后自然富集依 [参赛线性倍率](02-data-and-balance.md)：M=90G时生殖速度降为成熟前50%，M=150G时降至0；反应造成的物质量变化不回退成熟阶段。

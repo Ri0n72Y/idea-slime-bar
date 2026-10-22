@@ -44,9 +44,10 @@
 | GreenFruit | 生殖G/90 | 不清零 |
 | MatureFruit | 已成熟/可采，实际 M 与生殖成熟里程碑分清 | 成熟 Stage 锁存，无升级分母 |
 
-- **近期平均速率**：基于同一账户覆盖最近完整 `1 uh` 的真实 G 差值；采样不足显示「采样中」。
+- **近期平均速率**：基于同一器官**自然生长新增的Growth事件量**，在最近完整`1uh`窗口内累计`ΔG_natural/1uh`；Seed、Bud、叶等无反应阶段可直接使用同一成长账户差值，采样不足显示「采样中」。
+- **成熟果反应与速率分离**：果实`M = ΣE_free + ΣProducts`用于显示当前物质量；风扩散可改变M，普通反应改变自由/产物构成。这些均**不是自然Growth速度**，不能以成熟后窗口末M减窗口初M计算`G/uh`。可用领域已有的自然输入事件累计量作**只读统计**，不新增第二份可消费物质账本。
 - **趋势**：连续两个完整1uh窗口才比较 ↑/↓/→；阶段重置后重新采样，不显示由阶段转换产生的负速度。
-- **当前 Growth 状态**：任何一次真实结算完成后立即刷新 G，不因为缺1uh趋势历史而停更。
+- **当前 Growth 状态**：每次真实结算后立即刷新合法阶段累计G或果实当前M，不因趋势采样不足停更；成熟后应把“自然富集速率”与“当前物质量M”分别标注。
 - **普通模式**：可读总 G、阶段、定性元素倾向、合法下一目标；不暴露七维精确分量、Reserve、Affinity、内部预算、概率与模拟技术 Tick。
 - **果实成熟后**：反应扣减可能改变 M；不要用反应后 M 倒推为未成熟，当前 M 不能代替首次成熟时的生殖累计 G。
 
@@ -59,6 +60,8 @@
 建议控件命名前缀 `WK_C_`，例如 `WK_C_TreeStage`、`WK_C_TreeG`、`WK_C_TreeRate`、`WK_C_Leaf01`、`WK_C_Repro01`、`WK_C_BallSlot01_Icon`、`WK_C_MaterialSlot01`、`WK_C_PromptText`、`WK_C_DebugPanel`。
 
 图标对象键：除上方对象名外，七元素 `Fire/Hydro/Anemo/Electro/Dendro/Cryo/Geo`；P1 预留 `tool_inspect`、`tool_harvest`，P0 不必创建不可用的工具控件。
+
+**首产物图标/名称的稳定数据键**：`vaporize_fire_to_hydro`、`vaporize_hydro_to_fire`、`melt_fire_to_cryo`、`melt_cryo_to_fire`、`overload`、`superconduct`、`freeze`、`electro_charged`、`burning`、`crystallize_hydro/pyro/electro/cryo`、`bloom`、`hyperbloom`、`burgeon`、`quicken`、`aggravate`、`spread`。这些是**UI资源和文本占位键**，不是新产物公式；按首个`Products`的实际类型和方向选取键。没有对应美术时统一使用占位图片与该键的可读中文名，P0不必为每种反应提交PNG。
 
 固定槽位（如 `BallSlot01..04`、`MaterialSlot01..04`）只是可视容器，真实对象按 `ballId/materialId` 绑定；翻页或对象删除时更新绑定，不把“第3槽”永远等于“第3材料”。
 

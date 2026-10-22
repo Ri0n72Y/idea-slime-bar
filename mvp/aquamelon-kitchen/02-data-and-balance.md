@@ -46,7 +46,9 @@
 
 - 七维 Soil 的总量记 `S`，唯一共享土壤效率系数：`F_soil(S) = ln(1 + S/200) / ln(6)`。
 - 各通道候选量受实际 Soil 分量、RootPreference、亲和通道上限约束；通道基础上限份额为 `0.30 × 对应 Tree BaseAffinity`。
-- 本步根系合计不能超过 `StageRootCap × F_soil(S) × Δuh`，如果通道候选合计超限则等比例缩减。
+- **七维吸收候选公式**（土壤已完成本步容量裁剪及自然蒸发之后；各量均非负）：对每个元素`i`，令 `StageCap` 为所在阶段的根系V/uh上限，`C_i = min(Soil[i] × RootPreference[i], StageCap × 0.30 × TreeBaseAffinity[i] × Δuh)`。RootPreference影响能从本次土壤获得的量，单通道基础cap只使用**当前Tree BaseAffinity**而非实时EffectiveAffinity。
+- **共享根系预算**：`RootLimit = StageCap × F_soil(S) × Δuh × F_root(R)`，Seed/Seedling取`F_root=1`，Sapling按下文Reserve分段函数；若`ΣC_i>RootLimit`则全部候选同乘`RootLimit/ΣC_i`，否则实际吸收等于候选。各元素从土壤扣除的恰为实际吸收量，不能将根系系数二次施加或令任一维变负。
+- **结算口径**：这一候选算法已存在于已完成的 Seed/Seedling Lua 根系切片；Sapling在共享上限乘已确定的Reserve充盈因子，仍只有一次共享土壤效率。实际一步分数uh可与整uh存在数值积分误差，需验收。
 - 参赛基线阶段根系总 cap：Seed `2.0`、Seedling `1.85`、Sapling `16` V/uh；为本地 Demo **设计采用值**，不等于已通过实机校准。
 - 参赛版 Sapling 根系充盈系数 `F_root(R)=1 (R≤100)`；`ln(1+(180-R)/80)/ln(2) (100<R<180)`；`0 (R≥180)`，其中 `R=ΣTreeReserve`；只作用于根系吸收上限，不替代 Reserve→Growth 的 S 曲线。
 - Soil 蒸发、根系吸收、Tree Reserve → Growth 是三个独立步骤，不共享“0.99 保留率”。
@@ -58,7 +60,8 @@
 - Reserve 总量 `R` 范围 0～180 V；采用归一化宽 S 曲线，`sig(x)=1/(1+e^(-x))`，`F_growth(R)=[sig((R−95)/12)−sig(−95/12)]/[sig((180−95)/12)−sig(−95/12)]`。
 - 中点 `M=95 V`，宽度 `W=12 V`；随 Reserve 连续变化，`R=0` 时预算为0，`R=180` 时达到曲线最大值。
 - 参赛版采用基准预算速率 **`B0=5.4 V/uh`**；这是当前设计定值，实际产率仍需复测，不能声称千星实机已验证。
-- Tree Affinity>1 可以真实放大元素 Growth 提取，不额外将七维亲和归一化；实际逐元素取用不能超过其真实 Reserve。
+- Tree Affinity>1 可以真实放大元素 Growth 转换，不额外将七维亲和归一化；实际逐元素取用不能超过其真实 Reserve。
+- **当前尚缺独立可执行定义**：`B0×F_growth(R)×Δuh`定义成长预算的总量尺度，但**尚未签发把它按七维Reserve分到`GrowthNutrientBudget[i]`的唯一公式**（如按Reserve比例或逐通道独立提取会产生不同结果）。因此不得擅自选用一种分配方案并称为已确认设计；该公式是Sapling数值实现前需要明确的设计接口。之后的 Growth 转换遵守`GrowthGain[i] = 已实际分配且扣除的养分[i] × 该器官EffectiveAffinity[i]`，不重复消耗 Reserve。
 - 每叶最多名义取 Tree 本步预算 30%；多叶时 Tree 名义余额分别为 0叶100%、1叶70%、2叶40%、3叶10%。
 - FlowerBud、Flower 和 GreenFruit 只在所属母叶的当次预算内再取得 80%；不能对其他叶与 Tree 二次扣费。
 - 无 Active Bud 时 Tree 自身份额形成 `TREE_Growth`；有 Active Bud 时该份额进入 `BUD_Growth`。
