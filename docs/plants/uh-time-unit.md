@@ -22,8 +22,8 @@ Web 只是压缩同一模型的实际耗时，不存在另一套专属吸收、G
 - 设 `Δuh = elapsedSeconds / realSecondsPerUH`，其中千星正式多人方案`realSecondsPerUH=3600`，Web与千星本地2D单机参赛Demo为`10`。
 - **速率线性上限**：`MaxAbsorbThisStep = MaxRootAbsorbVPerUH × Δuh`。实际七元素吸收另受 Soil 存量、RootPreference、单元素 Affinity 通道上限约束。
 - **土壤自然蒸发**：`Soil[i] *= SoilRetentionPerUH ** Δuh`，当前校准保留率为 `0.99/uh`；土壤容量1000V、超量按七元素比例压缩。
-- **树体生长预算**：根系吸收进入 `TreeReserve[7]`，由当前 `Reserve[7]` 和 Tree Affinity 动态形成本次 `GrowthNutrientBudget[7]`。本轮M=95/W=12、B0=5.4V/uh为设计校准，实际实现仍待验收；每元素实际取用不得超过自身储备；不可把土壤自然蒸发系数借用作树体代谢。
-- **分流**：每片叶优先取本次树预算中的既定份额；叶片未实际用到的部分交还树的当次预算；每片叶的花/果只在本叶所得预算内继续分流，不影响其他叶；剩余预算用于 Tree Growth 或活跃 Bud Growth。
+- **树体生长预算**：根系吸收进入 `TreeReserve[7]`；M=95/W=12归一化S曲线与B0=5.4V/uh给出本次可分流 V 预算尺度，七维预算选取需遵守真实储备上限，其确切算法仍需明确。预算不是预先生成的 Tree Growth；同一次结算中由最终使用者按自身亲和转换一次，Reserve 仅扣该次真正使用的 V。
+- **分流与转换**：每片叶先取得本次预算中可使用的 V 份额，花/果仅在其母叶取得的 V 内继续分流；未用 V 返还父级本次预算，剩余 V 交由 Tree/Bud 使用。只有最终使用者将其实际消耗 V 乘以自己的 Growth Affinity 一次，不在父子之间重复叠乘。
 - **离散事件**：按对应 Growth 门槛、已经确认的事件条件触发。将结算间隔细分不能让随机判定重复获得额外机会；出芽检查频率及由原每日概率换算连续风险的方案需另行确认。
 - **元素球**：仅由玩家主动「富集」生成，单球随机纯元素初始**固定50 V**（只随机元素类型），半衰期 **0.25 uh**，`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`，剩余七元素总量 **<1 V** 则销毁。15分钟对应的是千星1 uh=现实1小时的时间基准；Web加速后仍以0.25 uh衰减，不沿用15分钟现实等待。
 - **高精度**：分数 `Δuh` 小步计算时，容量压缩、活性边界、吸收竞争和 Growth 阶段跨越的顺序可能影响结果；不得只替换参数名就宣称整步与细步等价。
@@ -47,6 +47,6 @@ Seed与Seedling共用连续TreeGrowth（累计45→90），Seedling时不清零�
 
 同一套 V/uh 模型面对不同的玩家上线频率，**唯一预期变化是 Soil[7] 的真实供给历史**。体验校准参考：积极玩家第2/3/4/5次上线（24/48/72/96uh）分别看见Seedling/SmallLeaf/Flower/可采成熟水瓜；每周首次168 uh回访时应有至少一颗成熟水瓜且生长预算接近零（不再存在休眠状态）；稳定期每日维护约每168 uh有4–6果、间歇维护2–4果、每周维护约2果。这是目标，不是已实现的产量承诺。
 
-根系上限按Seed/Seedling/Sapling分别采用2/1.85/16 V/uh；B0=5.4V/uh，固定50V新输入下的首果时间仍需验算。Reserve容量180V，Growth Budget采用无休眠0～180V归一化S曲线（M=95V、W=12V）；**Reserve100V满速平台与30/80V休眠迟滞均已移除**。根系七元素共享Soil总量对数吞吐系数`ln(1+sum(Soil)/200)/ln(6)`；根系自身在Reserve100～180V乘`ln(1+(180-R)/80)/ln2`限流（R≤100时因子1，R≥180时0）。**Tree Affinity>1可以真实增加提取预算总额**，不额外归一化削弱这一收益。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
+根系上限按Seed/Seedling/Sapling分别采用2/1.85/16 V/uh；B0=5.4V/uh，固定50V新输入下的首果时间仍需验算。Reserve容量180V，Growth Budget采用无休眠0～180V归一化S曲线（M=95V、W=12V）；**Reserve100V满速平台与30/80V休眠迟滞均已移除**。根系七元素共享Soil总量对数吞吐系数`ln(1+sum(Soil)/200)/ln(6)`；根系自身在Reserve100～180V乘`ln(1+(180-R)/80)/ln2`限流（R≤100时因子1，R≥180时0）。**Affinity>1可以使最终 Growth 超过所消耗的 V**，但不能先按父器官亲和放大一份 Growth，再将它作为子器官可使用的 V 重复转换。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
 权威详细规则：[水瓜生长系统](../../mvp/aquamelon-kitchen/03-growth-and-harvest.md)、[数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。

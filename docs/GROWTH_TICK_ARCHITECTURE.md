@@ -98,10 +98,16 @@ Calculate Absorption (Composite Node)
 增加 Tree 元素储备
         |
         v
-Convert Nutrient To Growth (Composite Node)
+确定本次可分流养分预算（V）
         |
         v
-更新 Growth / Stage / Affinity
+子器官取得实际用量 / 未用V回父级
+        |
+        v
+最终使用器官转换一次 Growth
+        |
+        v
+按实际使用V扣费、更新 Growth / Stage / Affinity
 ```
 
 ## 复合节点规范
@@ -126,13 +132,13 @@ Convert Nutrient To Growth (Composite Node)
 
 输入：
 
-- Tree_Elems
-- Tree_Affinity
+- 最终使用器官取得的养分V
+- 该器官自己的 EffectiveAffinity
 
 输出：
 
-- GrowthVector
-- GrowthValue
+- 该器官 GrowthVector 增量
+- 对应的实际消耗V（供本次统一扣费）
 
 主流程节点图只调用这些复合节点。
 
@@ -157,7 +163,7 @@ TemporaryGrowthConversion
 TemporaryRatio
 ```
 
-这些属于单次 Tick 的局部计算，应通过节点连接传递。
+这些属于单次 Tick 的局部计算，应通过节点连接传递。养分预算始终以 V 分流，每份最终使用 V 只转换一次 Growth；父器官已形成的 Growth 不作为子器官的可消费养分。
 
 ## 设计理由
 
