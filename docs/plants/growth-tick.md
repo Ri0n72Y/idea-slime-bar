@@ -7,7 +7,9 @@
 ```text
 元素球 → Soil[7] → 根系吸收 → TreeReserve[7]
                                  ↓
-                       充盈度 → 本次V预算
+                  充盈度 → 七元素基准V
+                                 ↓
+                  每维乘Tree Affinity取量
                                  ↓
                        GrowthNutrientBudget[7]
                          ↓             ↓
@@ -15,8 +17,8 @@
                          ↓             ↓
                    叶自身/花果     Tree/Active Bud
                          ↘             ↙
-                     各实际使用器官按自身亲和
-                       一次转换为 Growth[7]
+                   Tree/Bud直接累加V为Growth
+                 其余器官按自身生长规则转换
 ```
 
 - Seed / Seedling 按现有设计直接从根系吸收形成自身 Growth，不建立 Reserve。

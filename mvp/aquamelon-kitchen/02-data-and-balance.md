@@ -60,13 +60,14 @@
 - Reserve 总量 `R` 范围 0～180 V；采用归一化宽 S 曲线，`sig(x)=1/(1+e^(-x))`，`F_growth(R)=[sig((R−95)/12)−sig(−95/12)]/[sig((180−95)/12)−sig(−95/12)]`。
 - 中点 `M=95 V`，宽度 `W=12 V`；随 Reserve 连续变化，`R=0` 时预算为0，`R=180` 时达到曲线最大值。
 - 参赛版采用基准预算速率 **`B0=5.4 V/uh`**；这是当前设计定值，实际产率仍需复测，不能声称千星实机已验证。
-- **亲和增益仅在最终使用的器官形成 Growth 时应用一次**。树自用或 Bud 使用树份额时按 Tree `EffectiveAffinity[i]` 转换；叶/花果使用份额时按对应器官自己的 `EffectiveAffinity[i]` 转换。任何份额都不能先按 Tree Affinity 形成 Growth，再按子器官 Affinity 二次转换。亲和>1可以让最终 Growth 大于消耗的 V，但不可使可重复分配的 V 库存增加。
-- `B0×F_growth(R)×Δuh`给出本次**可供分流的 V 基准预算尺度**，不是已经亲和放大的 Growth。七维预算怎样依据真实 `Reserve[7]` 与 Tree 的元素选择倾向分配、某维不足是否重分配仍须确定；每维实际使用不得超过对应 `Reserve[i]`，不把未经批准的候选式写成正式公式。
-- **一次结算中的完整顺序**：形成待分流的 `BudgetV[7]` → 各叶优先实际取得自己的 V 份额 → 叶在本叶与花果间分流 → **真正未被取用的 V** 返还父级本次预算 → Tree/Bud 使用剩余 V → **每个最终生长器官仅一次**执行 `GrowthGain[i]=GrowthUsedV[i]×OwnEffectiveAffinity[i]` → 将所有真实去向的 V（**用于 Growth 的 V + 明确的环境逸散 V**）从 Reserve **统一只扣一次**。预算分流、实际消耗与 Growth 转换属于同一次生长结算，既不重复亲和增益，也不能先扣整份 Reserve 后又把未使用额度另存成新库存。
+- **Tree Affinity 用于决定本次七元素养分取出量**，不是树干自身 Growth 的额外倍率。Tree/Bud 将自身实际取得的 V 直接累加到对应 Growth 维度，**不再乘 Tree Affinity**。叶、花、果取得分流后的真实 V，按自身器官 Growth 亲和规则转换；这一步不可重新施加 Tree Affinity，也不能将上游 Budget 当成已生成的 Growth 再转换。
+- **七维 Budget 计算**：令 `B_ref=B0×F_growth(R)×Δuh`，七种元素各有相同的基准份额 `BaseV[i]=B_ref/7`。本次对每个元素直接按树的当前亲和调整取出额度：`BudgetV[i]=min(Reserve[i], BaseV[i]×max(0,TreeEffectiveAffinity[i]))`。例如参考预算7V/次时，七维基准各1V；若火亲和1.5、水亲和0.8，且库存充足，则本次可取火1.5V、水0.8V，其余各按自己的亲和倍率计算。
+- **预算总额随 Tree Affinity 变化**：不按七维亲和总和重新归一化来保持`ΣBudgetV=B_ref`；`B_ref`只是七元素的基准尺度。每一维实际取出不超过自身 Reserve；某维库存不足形成的缺额不自动转移给另一种元素，避免改变已经确定的逐元素基准及亲和倍率。
+- **一次结算中的完整顺序**：按七种元素的基准份额与 Tree Affinity 形成待分流的 `BudgetV[7]`（仍是 V）→ 各叶取得各自 V 份额 → 叶在本叶与花果间分流 → 未实际取用的 V 返还父级本次预算 → Tree/Bud 取得剩余 V，按 `TreeGrowthGain[i]=TreeUsedV[i]` 直接结算，**不重复乘 Tree Affinity** → 其他器官按各自生长合同转换其实际用于生长的 V → 真实用于生长或环境逸散的 V 从 Reserve 统一扣一次。
 - 子器官 `ExtractionAffinity=min(Affinity,1)` 如用于接受父级预算，只影响它能取得多少真实 V；最终 `GrowthGain` 使用完整自身亲和。树自身亲和绝不再次乘到子器官已取得的份额上。
 - 每叶最多名义取 Tree 本步预算 30%；多叶时 Tree 名义余额分别为 0叶100%、1叶70%、2叶40%、3叶10%。
 - FlowerBud、Flower 和 GreenFruit 只在所属母叶的当次预算内再取得 80%；不能对其他叶与 Tree 二次扣费。
-- 无 Active Bud 时 Tree 自身份额形成 `TREE_Growth`；有 Active Bud 时该份额进入 `BUD_Growth`。
+- 无 Active Bud 时，剩余树份额逐维直接进入 `TREE_Growth`；有 Active Bud 时，逐维进入 `BUD_Growth`。两者均不再次乘 Tree Affinity。
 
 ## 6. 成熟后线性富集（参赛已定）
 

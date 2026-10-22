@@ -104,7 +104,7 @@ Calculate Absorption (Composite Node)
 子器官取得实际用量 / 未用V回父级
         |
         v
-最终使用器官转换一次 Growth
+树自身V直接形成Growth，其他器官按自身规则转换
         |
         v
 按实际使用V扣费、更新 Growth / Stage / Affinity
@@ -163,7 +163,7 @@ TemporaryGrowthConversion
 TemporaryRatio
 ```
 
-这些属于单次 Tick 的局部计算，应通过节点连接传递。养分预算始终以 V 分流，每份最终使用 V 只转换一次 Growth；父器官已形成的 Growth 不作为子器官的可消费养分。
+这些属于单次 Tick 的局部计算，应通过节点连接传递。养分预算以 V 分流，水瓜的七维取量先用 Tree Affinity 调整；Tree/Bud 不再次乘这一亲和，叶和生殖器官各按自身规则成长，也不重复施加树倍率。父器官已经形成的 Growth 不作为子器官可消费的 V。
 
 ## 设计理由
 
