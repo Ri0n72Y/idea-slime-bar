@@ -1,6 +1,6 @@
 # 千星 Lua：模块结构与已验证编辑器经验
 
-> 当前千星2D参赛版本全部游戏计算与动态UI均在**本地Lua**，不使用服务端节点图或多人同步。原模块化Seed切片来自已合并[PR #30](https://github.com/Ri0n72Y/idea-slime-bar/pull/30)，并不等于整个器官和反应链已实机完成。
+> 千星2D参赛版本全部游戏计算与动态UI均在**本地Lua**，不使用服务端节点图或多人同步。当前编辑器验证仅覆盖基础控件交互与Seed切片，器官和元素反应链需要独立实机验收。
 
 - **实机验证**：`script.object`可取得已挂载`ClientUIContainerControl`，`FindChild`可定位预先布置的子控件，Lua已能更新基础文字、响应最小点击。
 - **模块设计证据**：现有`WK2_Entry.lua`和`WK2/{config,vector,curves,state,soil,seed,step,present}.lua`作为小型职责分离范例，源码只覆盖到Seed→Sapling切片；Sapling后续结算未实现的状态不能冒称完成。
