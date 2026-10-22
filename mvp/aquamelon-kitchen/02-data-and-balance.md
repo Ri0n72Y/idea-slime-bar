@@ -61,7 +61,7 @@
 - 中点 `M=95 V`，宽度 `W=12 V`；随 Reserve 连续变化，`R=0` 时预算为0，`R=180` 时达到曲线最大值。
 - 参赛版采用基准预算速率 **`B0=5.4 V/uh`**；这是当前设计定值，实际产率仍需复测，不能声称千星实机已验证。
 - **Tree Affinity 用于决定本次七元素养分取出量**，不是树干自身 Growth 的额外倍率。Tree/Bud 将自身实际取得的 V 直接累加到对应 Growth 维度，**不再乘 Tree Affinity**。叶、花、果取得分流后的真实 V，按自身器官 Growth 亲和规则转换；这一步不可重新施加 Tree Affinity，也不能将上游 Budget 当成已生成的 Growth 再转换。
-- **七维 Budget 计算**：令 `B_ref=B0×F_growth(R)×Δuh`，七种元素各有相同的基准份额 `BaseV[i]=B_ref/7`。本次对每个元素直接按树的当前亲和调整取出额度：`BudgetV[i]=min(Reserve[i], BaseV[i]×max(0,TreeEffectiveAffinity[i]))`。例如参考预算7V/次时，七维基准各1V；若火亲和1.5、水亲和0.8，且库存充足，则本次可取火1.5V、水0.8V，其余各按自己的亲和倍率计算。
+- **七维 Budget 计算**：令 `B_ref=B0×F_growth(R)×Δuh`，七种元素各有相同的基准份额 `BaseV[i]=B_ref/7`。本次对每个元素直接按树的当前亲和调整取出额度：`BudgetV[i]=min(Reserve[i], BaseV[i]×max(0,TreeEffectiveAffinity[i]))`。**`/7` 仅指七种元素，不表示每次固定取7V或各维固定1V**。`B_ref` 随本次真实 `R`、`Δuh` 连续变化：以 `Δuh=1`、当前 `B0=5.4V/uh` 为例，`R=95V` 时参考预算约 `2.70V`（每元素基准约 `0.386V`），`R=120V` 时约 `4.81V`（每元素约 `0.687V`）；各维再乘当步 Tree EffectiveAffinity 并由实际库存截断。
 - **预算总额随 Tree Affinity 变化**：不按七维亲和总和重新归一化来保持`ΣBudgetV=B_ref`；`B_ref`只是七元素的基准尺度。每一维实际取出不超过自身 Reserve；某维库存不足形成的缺额不自动转移给另一种元素，避免改变已经确定的逐元素基准及亲和倍率。
 - **一次结算中的完整顺序**：按七种元素的基准份额与 Tree Affinity 形成待分流的 `BudgetV[7]`（仍是 V）→ 各叶取得各自 V 份额 → 叶在本叶与花果间分流 → 未实际取用的 V 返还父级本次预算 → Tree/Bud 取得剩余 V，按 `TreeGrowthGain[i]=TreeUsedV[i]` 直接结算，**不重复乘 Tree Affinity** → 其他器官按各自生长合同转换其实际用于生长的 V → 真实用于生长或环境逸散的 V 从 Reserve 统一扣一次。
 - 子器官 `ExtractionAffinity=min(Affinity,1)` 如用于接受父级预算，只影响它能取得多少真实 V；最终 `GrowthGain` 使用完整自身亲和。树自身亲和绝不再次乘到子器官已取得的份额上。
