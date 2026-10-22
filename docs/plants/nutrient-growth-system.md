@@ -381,7 +381,7 @@ Inherited Parent Modifier
 
 一个器官进入生长代谢时，根据本次实际推进的 `Δuh`、可用 Reserve 与器官亲和，确定**当次**准备用于生长的养分预算。一次结算事件本身不决定预算总量，也不会因为结算次数增加而产生额外资源。
 
-这些养分预算始终保留 V 单位。通用植物可按器官的生长亲和转换真实使用的 V；水瓜树的Tree Affinity在**Reserve→动态七维Budget取量**中逐元素生效：本步根系吸收入账后，按`B_ref=5.4×F_growth(R)×Δuh`计算参考V，每维实际候选为`min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`。`/7`代表七元素等基准份额，并非固定7V/次；各维不足不跨元素重分配。树自身及Bud将剩余V直接累加Growth，不再乘树亲和；叶、花、果按自身规则生长。完整S曲线和根系限流见[水瓜数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
+这些养分预算始终保留V单位。通用植物可按器官生长亲和转换实际使用V；水瓜树的Tree Affinity在**Reserve→动态七维Budget取量**中逐元素生效：根系吸收入账后按`B_ref=5.4×F_growth(R)×Δuh`给出参考V，每维`min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`，不足不跨元素重分配。Tree/Bud将取用V直接按1:1转为G而不再乘树亲和；叶和生殖器官按自身规则把V转换为G，**果实只积累G，不另设V库存**。水瓜花苞/花/青果在母叶预算内取80%，MatureFruit取40%并进一步按本果物质量M的线性倍率减速。完整公式见[水瓜数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
 ```text
 Parent Growth Nutrient Budget
