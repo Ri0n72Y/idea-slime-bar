@@ -138,7 +138,7 @@ Calculate Absorption (Composite Node)
 输出：
 
 - 该器官 GrowthVector 增量
-- 对应的实际消耗V（供本次统一扣费）
+- 对应的生长用V（与该器官明确的环境逸散V合并，供本次统一扣费）
 
 主流程节点图只调用这些复合节点。
 
