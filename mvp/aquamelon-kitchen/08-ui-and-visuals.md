@@ -61,7 +61,7 @@
 
 图标对象键：除上方对象名外，七元素 `Fire/Hydro/Anemo/Electro/Dendro/Cryo/Geo`；P1 预留 `tool_inspect`、`tool_harvest`，P0 不必创建不可用的工具控件。
 
-**首产物图标/名称的稳定数据键**：`vaporize_fire_to_hydro`、`vaporize_hydro_to_fire`、`melt_fire_to_cryo`、`melt_cryo_to_fire`、`overload`、`superconduct`、`freeze`、`electro_charged`、`burning`、`crystallize_hydro/pyro/electro/cryo`、`bloom`、`hyperbloom`、`burgeon`、`quicken`、`aggravate`、`spread`。这些是**UI资源和文本占位键**，不是新产物公式；按首个`Products`的实际类型和方向选取键。没有对应美术时统一使用占位图片与该键的可读中文名，P0不必为每种反应提交PNG。
+**首产物图标/名称的稳定数据键**：`vaporize_fire_to_hydro`、`vaporize_hydro_to_fire`、`melt_fire_to_cryo`、`melt_cryo_to_fire`、`overload`、`superconduct`、`freeze`、`electro_charged`、`burning`、`crystallize_hydro`、`crystallize_fire`、`crystallize_electro`、`crystallize_cryo`、`bloom`、`hyperbloom`、`burgeon`、`quicken`、`aggravate`、`spread`。这些是**UI资源和文本占位键**，不是新产物公式；按首个`Products`的实际类型和方向选取键。没有对应美术时统一使用占位图片与该键的可读中文名，P0不必为每种反应提交PNG。
 
 固定槽位（如 `BallSlot01..04`、`MaterialSlot01..04`）只是可视容器，真实对象按 `ballId/materialId` 绑定；翻页或对象删除时更新绑定，不把“第3槽”永远等于“第3材料”。
 
