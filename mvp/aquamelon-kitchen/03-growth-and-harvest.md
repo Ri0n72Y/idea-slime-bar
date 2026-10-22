@@ -1,0 +1,63 @@
+# 植物生命周期、亲和与收获
+
+## 1. Growth 达标事件
+
+| 事件 | 阈值 | 当前账户的处理 |
+| --- | ---: | --- |
+| Seed → Seedling | Tree 累计 45G | 不清零，继续累计同一Growth与亲和状态 |
+| Seedling → Sapling | **同一 Tree 累计 90G** | 七维逐项 1G→1V 初始 Reserve；重开 Sapling Tree Growth；同时创建首 Bud |
+| Sapling 主干塑形 | Tree 本周期 100G | 固化亲和、重新累积本轮；**不升级 Mature Tree** |
+| Active Bud → SmallLeaf | Bud 20G | 生成独立叶；芽销毁 |
+| SmallLeaf → LargeLeaf + FlowerBud | 本叶 26G | **同步**成肥厚叶与所属花苞；只重置本叶 Growth |
+| FlowerBud → Flower | 生殖累计 **12G** | 花果自由元素账户不清零，亲和第一次固化 |
+| Flower → GreenFruit | 生殖累计 **40G** | 不清零，亲和第二次固化并锁果实亲和 |
+| GreenFruit → MatureFruit | 生殖累计 **90G** | 锁定成熟，母叶同步纤维化，随后才结算首次合法元素反应 |
+
+不同器官各有自己的成长账户；**Tree、Leaf、Bud 与生殖账户不能彼此相加或混成整树总 G**。数值达到阈值才发生状态变化，没有硬性小时倒计时。
+
+## 2. Tree 与 Leaf 的遗传
+
+- 基础亲和 `BaseAffinity[7]` 是本阶段基线；有效亲和 `EffectiveAffinity[7]` 由本阶段 Growth 元素份额产生偏移。
+- 当阶段 Growth 总量非零时，`EffectiveAffinity[i] = BaseAffinity[i] + ExtraAffinity × Growth[i] / ΣGrowth`；总量为零则等于 BaseAffinity；当前 `ExtraAffinity=1`。
+- Sapling 主干每完成一轮 100G 亲和塑形，只更新自身基线与周期，不改变 Tree 阶段。
+- SmallLeaf 出生时一次性继承当前 Tree 的亲和偏移：`LeafBase[i] = LeafTemplate[i] + 0.5 × (TreeEffective[i] − TreeBase[i])`。
+- SmallLeaf 出生后独立学习亲和；Tree 后续变化不自动回写它的 Affinity。
+- Bud 不长期维护单独 Affinity；它用 `BUD_Growth[7]` 累积芽期倾向。
+- 玩家掐芽时，芽内每一维 Growth **全部回流 Tree Growth**，不额外损耗。
+- 叶自己的 Growth 到26G时可重开自身阶段账户；这**不意味着**所属生殖成长账户清零。
+
+## 3. Flower / Fruit 的唯一物质账户
+
+- FlowerBud 出生时创建唯一七维自由元素库存 `E_free[7]`，从0开始。
+- 花苞、花、青果、成熟水瓜连续使用这一账户；12G、40G、90G是阶段边界而非分开的三笔 Growth。
+- 直到初次成熟前：`M = ΣE_free`；反应之后：`M = ΣE_free + ΣProducts.amount`。
+- 开花时与结果时各有一次 Affinity 固化；固化之间只用**新增** Growth 继续塑形，不能重复把历史量计算一次。
+- GreenFruit 形成时锁定结果亲和；后来改变的是自由元素量和反应产物，不再次修改果实亲和。
+- 成熟先锁定形态与阶段，反应可以改变元素自由量或 M，但不能让 MatureFruit 倒退成 GreenFruit。
+- 成熟后自然富集依 [参赛线性倍率](02-data-and-balance.md)：M=90G时生殖速度降为成熟前50%，M=150G时降至0；反应造成的物质量变化不回退成熟阶段。
+- 花苞产生后的全部生殖 Growth 均属于同一份可食物质账户。
+- `Flavor` 只在最终品尝时从实际材料派生，不在每次生长、采摘和反应时持久化另一套风味值。
+
+## 4. 芽、叶、果的数量与营养竞争
+
+- 同时已形成叶片最多三片，已有叶片优先得到各自的名义 30% Tree 预算。
+- 每片 Leaf 的花果只消耗**该叶自己的本次预算**；花苞/花/青果取母叶所得的80%。
+- 某叶及附属器官没有实际用完的本步预算，应归还对应父级，不能因“保留30%名义份额”凭空蒸发。
+- 第一枚 Bud 在进入 Sapling 的同一事件产生。
+- 之后每24uh进行至多一次额外出芽抽签：已有1叶40%、已有2叶1%、已有3叶0%；不允许按UI帧或每次结算重复投掷。
+- 采果后如叶仍存在可以复花，但必须来自**采果后的新增 Growth**；新阈值尚未批准，不得用固定等待时长或采果前 Growth 替代。
+
+## 5. 采摘与材料身份
+
+| 活体对象 | 采摘成的独立材料 |
+| --- | --- |
+| SmallLeaf | `TenderLeaf` |
+| LargeLeaf | `ThickLeaf` |
+| 成熟果同步纤维化的母叶 | `AquamelonLeaf` |
+| GreenFruit | `GreenFruit` |
+| MatureFruit | `Aquamelon` |
+
+- GreenFruit 青绿、柔软、内部未稳定分层；成熟果有木质硬壳、内膜、果肉膜和清澈水瓜水的形态线索。
+- 采摘是活体→**独立地面材料**，采后停止根系与叶片分流、Growth 和挂果富集；不会自动放入背包。
+- 青果和熟果采摘时完整转移 `E_free[7]`、`Products[]` 与必要材料身份和 Affinity；转移不能产生一份额外库存。
+- 参赛快捷加工合同见 [07-juice-and-ai-prompt.md](07-juice-and-ai-prompt.md)：熟果唯一转换为一份水瓜汁；其他材料路线不在本次 P0 流程中。
