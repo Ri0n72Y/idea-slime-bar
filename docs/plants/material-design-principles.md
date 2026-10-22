@@ -1,6 +1,6 @@
 # 植物材料设计原则：采摘继承与加工待定
 
-本文件仅规定已确认的材料身份、Affinity 与果实物质账户之间的边界，不建立通用物品或加工框架。水瓜的权威生长与采摘合同见 [七元素养分与生长系统](../../mvp/aquamelon-kitchen/growth-system.md)，成熟后反应记账见 [果实元素反应结算](../../mvp/aquamelon-kitchen/fruit-reaction-settlement-design.md)。
+本文件仅规定已确认的材料身份、Affinity 与果实物质账户之间的边界，不建立通用物品或加工框架。水瓜的权威生长与采摘合同见 [七元素养分与生长系统](../../mvp/aquamelon-kitchen/03-growth-and-harvest.md)，成熟后反应记账见 [果实元素反应结算](../../mvp/aquamelon-kitchen/04-elemental-reactions.md)。
 
 ## 1. 材料身份不同于物质量
 

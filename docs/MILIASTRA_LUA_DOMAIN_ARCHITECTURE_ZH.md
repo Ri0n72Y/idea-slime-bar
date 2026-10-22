@@ -9,4 +9,4 @@
 - **时间**：参赛1uh=现实10秒，单一Lua调度累计`Δuh`；Debug快进使用同一计算入口，随机机会按模型日去重，不能按UI帧率结算。
 - **编辑器边界**：控件位置/尺寸/锚点由创作者手工确定；Lua负责内容、名称、图片资源ID与颜色；PNG路径不能直接当`SetImage`可用的编辑器图片ID。
 - **证据限制**：`SetVisible`、图片更换/染色、TextWindow完整长文本、手机触控、系统复制与多文件模块的最终运行，还不能以官方API存在或Web CI通过代替千星编辑器实机证据。
-- **玩法合同**：直接使用[Growth](../mvp/aquamelon-kitchen/growth-system.md)、[元素/视觉](../mvp/aquamelon-kitchen/elemental-cultivation.md)、[反应§6.18](../mvp/aquamelon-kitchen/fruit-reaction-settlement-design.md)、[风味](../mvp/aquamelon-kitchen/taste-model.md)，不沿用历史80V球或旧27项Taste。
+- **玩法合同**：直接使用[Growth](../mvp/aquamelon-kitchen/03-growth-and-harvest.md)、[元素/视觉](../mvp/aquamelon-kitchen/08-ui-and-visuals.md)、[反应§6.18](../mvp/aquamelon-kitchen/04-elemental-reactions.md)、[风味](../mvp/aquamelon-kitchen/06-flavor-contract.md)，不沿用历史80V球或旧27项Taste。

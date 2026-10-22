@@ -47,6 +47,6 @@ Seed与Seedling共用连续TreeGrowth（累计45→90），Seedling时不清零�
 
 同一套 V/uh 模型面对不同的玩家上线频率，**唯一预期变化是 Soil[7] 的真实供给历史**。体验校准参考：积极玩家第2/3/4/5次上线（24/48/72/96uh）分别看见Seedling/SmallLeaf/Flower/可采成熟水瓜；每周首次168 uh回访时应有至少一颗成熟水瓜且生长预算接近零（不再存在休眠状态）；稳定期每日维护约每168 uh有4–6果、间歇维护2–4果、每周维护约2果。这是目标，不是已实现的产量承诺。
 
-根系上限按Seed/Seedling/Sapling分别采用2/1.85/16 V/uh；B0=5.4V/uh，固定50V新输入下的首果时间仍需验算。Reserve容量180V，Growth Budget采用无休眠0～180V归一化S曲线（M=95V、W=12V）；**Reserve100V满速平台与30/80V休眠迟滞均已移除**。根系七元素共享Soil总量对数吞吐系数`ln(1+sum(Soil)/200)/ln(6)`；根系自身在Reserve100～180V乘`ln(1+(180-R)/80)/ln2`限流（R≤100时因子1，R≥180时0）。**Tree Affinity>1可以真实增加提取预算总额**，不额外归一化削弱这一收益。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/first-fruit-uh-calibration.md)。
+根系上限按Seed/Seedling/Sapling分别采用2/1.85/16 V/uh；B0=5.4V/uh，固定50V新输入下的首果时间仍需验算。Reserve容量180V，Growth Budget采用无休眠0～180V归一化S曲线（M=95V、W=12V）；**Reserve100V满速平台与30/80V休眠迟滞均已移除**。根系七元素共享Soil总量对数吞吐系数`ln(1+sum(Soil)/200)/ln(6)`；根系自身在Reserve100～180V乘`ln(1+(180-R)/80)/ln2`限流（R≤100时因子1，R≥180时0）。**Tree Affinity>1可以真实增加提取预算总额**，不额外归一化削弱这一收益。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
-权威详细规则：[水瓜生长系统](../../mvp/aquamelon-kitchen/growth-system.md)、[数值基线](../../mvp/aquamelon-kitchen/growth-balance-baseline.md)。
+权威详细规则：[水瓜生长系统](../../mvp/aquamelon-kitchen/03-growth-and-harvest.md)、[数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
