@@ -75,13 +75,13 @@ TotalGrowth = Σ Growth[i]
 
 植物和器官可以拥有多个 Stage。
 
-Stage 升级时：
+Stage 转换时由**具体器官的阶段合同**决定哪些 Growth 连续保留、哪些用于塑形后重置：
 
-1. 当前 Stage 的生长条件成立；
-2. 进入下一 Stage；
-3. 清空 Growth Vector；
-4. 当前连续学习得到的亲和度被固定下来，成为下一 Stage 的 Base Affinity；
-5. 下一 Stage 从新的基准亲和和空 Growth Vector 重新开始积累。
+1. 当前 Stage 达到真实 Growth 条件并切换阶段；
+2. 按该器官规则固化必要的 Effective Affinity；
+3. 仅重置该器官明确要求重置的阶段 Growth，其他持续性物质账户保持连续。
+
+水瓜 Seed→Seedling 的45G继续累计到90G，花苞→花→青果在同一生殖账户内12/40/90G连续；SmallLeaf→LargeLeaf 只重置叶自身阶段 Growth，具体见[生命周期](../../mvp/aquamelon-kitchen/03-growth-and-harvest.md)。
 
 Stage 不因为 Growth 被消耗或清零而回退。
 
@@ -104,7 +104,7 @@ MaxAbsorbVPerUH(stage)
 MaxAbsorbThisStep(stage) = MaxAbsorbVPerUH(stage) × Δuh
 ```
 
-这可用于表现其他植物根系、输导系统与器官规模的成长；**它只是通用模型的可选扩展，水瓜厨房 Seed / Seedling / Sapling 使用同一根系 V/uh 总吸收上限（具体数值仍待校准），不因 Stage 自动增加吞吐。**
+这可用于表现植物根系、输导系统与器官规模的成长。水瓜树采用分阶段根系总上限：Seed 2、Seedling 1.85、Sapling 16 V/uh；实际吸收还受 Soil、元素通道与储备状态约束，具体见[数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
 典型方向：
 
@@ -122,11 +122,13 @@ MaxAbsorbThisStep(stage) = MaxAbsorbVPerUH(stage) × Δuh
 
 ### 1. 从来源提取养分
 
-提取时：
+器官**从父级本次养分预算**实际取得 V 时，默认按下面的提取系数约束（具体器官仍可有自身上限）：
 
 ```text
 ExtractionAffinity[i] = min(Affinity[i], 1)
 ```
+
+Soil→根系是单独的土壤吸收模型，使用[水瓜根系配额](../../mvp/aquamelon-kitchen/02-data-and-balance.md)，不能将此子器官提取系数额外叠乘到根系通道上。
 
 Affinity 超过 1 不允许凭空多拿养分。
 

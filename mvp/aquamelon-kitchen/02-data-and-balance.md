@@ -23,7 +23,7 @@
 | Tree Reserve 容量 | 180 V | Sapling 起才有 Reserve |
 | 每叶名义预算份额 | 30% | 最多三片叶；未使用部分回 Tree |
 | 花苞/花/青果份额 | 母叶当次预算的 80% | 不是再扣一份 Tree 总预算 |
-| LargeLeaf 自身 Growth 效率 | 60% | SmallLeaf 无同类损耗 |
+| LargeLeaf 自身 Growth 效率 | 60% | 自身取得且留用的 V 中60%形成 Growth，40%作为明确环境逸散，不是未使用额度 |
 | 成熟后富集效率 | **在90G降为成熟前生殖成长速度的50%；150G线性降至0** | 用当前总物质量 `M=ΣE_free+ΣProducts.amount` 判断 |
 | 继承率 | 0.5 | 继承父器官的亲和偏移 |
 | ExtraAffinity | 1 | Growth 组成所造成的亲和偏移系数 |
@@ -62,7 +62,7 @@
 - 参赛版采用基准预算速率 **`B0=5.4 V/uh`**；这是当前设计定值，实际产率仍需复测，不能声称千星实机已验证。
 - **亲和增益仅在最终使用的器官形成 Growth 时应用一次**。树自用或 Bud 使用树份额时按 Tree `EffectiveAffinity[i]` 转换；叶/花果使用份额时按对应器官自己的 `EffectiveAffinity[i]` 转换。任何份额都不能先按 Tree Affinity 形成 Growth，再按子器官 Affinity 二次转换。亲和>1可以让最终 Growth 大于消耗的 V，但不可使可重复分配的 V 库存增加。
 - `B0×F_growth(R)×Δuh`给出本次**可供分流的 V 基准预算尺度**，不是已经亲和放大的 Growth。七维预算怎样依据真实 `Reserve[7]` 与 Tree 的元素选择倾向分配、某维不足是否重分配仍须确定；每维实际使用不得超过对应 `Reserve[i]`，不把未经批准的候选式写成正式公式。
-- **一次结算中的完整顺序**：形成待分流的 `BudgetV[7]` → 各叶优先实际取得自己的 V 份额 → 叶在本叶与花果间分流 → 未使用 V 返还父级的**本次预算** → Tree/Bud 使用剩余 V → **每个最终使用者仅一次**执行 `GrowthGain[i]=UsedV[i]×OwnEffectiveAffinity[i]` → 从 Reserve 对本次实际使用的 V **只扣一次**。预算分流、V 的实际消耗与 Growth 转换是同一次生长结算的不同记账位置，不是两次独立的亲和增益；不能先扣整份 Reserve 又把未使用预算另存成新库存。
+- **一次结算中的完整顺序**：形成待分流的 `BudgetV[7]` → 各叶优先实际取得自己的 V 份额 → 叶在本叶与花果间分流 → **真正未被取用的 V** 返还父级本次预算 → Tree/Bud 使用剩余 V → **每个最终生长器官仅一次**执行 `GrowthGain[i]=GrowthUsedV[i]×OwnEffectiveAffinity[i]` → 将所有真实去向的 V（**用于 Growth 的 V + 明确的环境逸散 V**）从 Reserve **统一只扣一次**。预算分流、实际消耗与 Growth 转换属于同一次生长结算，既不重复亲和增益，也不能先扣整份 Reserve 后又把未使用额度另存成新库存。
 - 子器官 `ExtractionAffinity=min(Affinity,1)` 如用于接受父级预算，只影响它能取得多少真实 V；最终 `GrowthGain` 使用完整自身亲和。树自身亲和绝不再次乘到子器官已取得的份额上。
 - 每叶最多名义取 Tree 本步预算 30%；多叶时 Tree 名义余额分别为 0叶100%、1叶70%、2叶40%、3叶10%。
 - FlowerBud、Flower 和 GreenFruit 只在所属母叶的当次预算内再取得 80%；不能对其他叶与 Tree 二次扣费。

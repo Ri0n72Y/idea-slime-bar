@@ -2,7 +2,7 @@
 
 `uh` = **unit hour（等效小时）**，是水瓜厨房与千星奇域共享数值模型中唯一的时间量纲。养分流量、Growth 生成速度、元素衰减和生命周期校准都按 **V/uh** 或 **Growth/uh** 描述，不按一次结算事件描述。
 
-**旧的 `dtTick`、`dtHours`、`per Tick`、`RatePerHour` 和「游戏小时」计算口径已被本规范替代。** 代码中尚未迁移的字段名不是新的规范，不能再被引用为设计事实。所有旧式按结算次数乘固定数值的速率，在移植前必须换算到每 uh 的速率；既有数据若来源于不同旧参数，不得自动声明数值等价。
+全部养分与 Growth 速率用 V/uh、G/uh 表示；一次 Tick 只负责推进真实 `Δuh`，不能把每次执行都算成一个完整 uh。
 
 ## 同一模型，不同时间映射
 
@@ -47,6 +47,6 @@ Seed与Seedling共用连续TreeGrowth（累计45→90），Seedling时不清零�
 
 同一套 V/uh 模型面对不同的玩家上线频率，**唯一预期变化是 Soil[7] 的真实供给历史**。体验校准参考：积极玩家第2/3/4/5次上线（24/48/72/96uh）分别看见Seedling/SmallLeaf/Flower/可采成熟水瓜；每周首次168 uh回访时应有至少一颗成熟水瓜且生长预算接近零（不再存在休眠状态）；稳定期每日维护约每168 uh有4–6果、间歇维护2–4果、每周维护约2果。这是目标，不是已实现的产量承诺。
 
-根系上限按Seed/Seedling/Sapling分别采用2/1.85/16 V/uh；B0=5.4V/uh，固定50V新输入下的首果时间仍需验算。Reserve容量180V，Growth Budget采用无休眠0～180V归一化S曲线（M=95V、W=12V）；**Reserve100V满速平台与30/80V休眠迟滞均已移除**。根系七元素共享Soil总量对数吞吐系数`ln(1+sum(Soil)/200)/ln(6)`；根系自身在Reserve100～180V乘`ln(1+(180-R)/80)/ln2`限流（R≤100时因子1，R≥180时0）。**Affinity>1可以使最终 Growth 超过所消耗的 V**，但不能先按父器官亲和放大一份 Growth，再将它作为子器官可使用的 V 重复转换。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
+根系上限按Seed/Seedling/Sapling分别采用2/1.85/16 V/uh；B0=5.4V/uh，固定50V新输入下的首果时间仍需验算。Reserve容量180V，Growth Budget采用无休眠0～180V归一化S曲线（M=95V、W=12V）；Growth预算随 R 在0～180V按当前S曲线连续变化，Sapling不设置休眠迟滞。根系七元素共享Soil总量对数吞吐系数`ln(1+sum(Soil)/200)/ln(6)`；根系自身在Reserve100～180V乘`ln(1+(180-R)/80)/ln2`限流（R≤100时因子1，R≥180时0）。**Affinity>1可以使最终 Growth 超过所消耗的 V**，但不能先按父器官亲和放大一份 Growth，再将它作为子器官可使用的 V 重复转换。土壤容量1000V和固定比例自然蒸发仍需与不同上线习惯联合校准；详见[第一周期望值复算](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
 权威详细规则：[水瓜生长系统](../../mvp/aquamelon-kitchen/03-growth-and-harvest.md)、[数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
