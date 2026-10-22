@@ -9,4 +9,4 @@
 - **时间**：参赛1uh=现实10秒，单一Lua调度累计`Δuh`；Debug快进使用同一计算入口，随机机会按模型日去重，不能按UI帧率结算。
 - **编辑器边界**：控件位置/尺寸/锚点由创作者手工确定；Lua负责内容、名称、图片资源ID与颜色；PNG路径不能直接当`SetImage`可用的编辑器图片ID。
 - **证据限制**：`SetVisible`、图片更换/染色、TextWindow完整长文本、手机触控、系统复制与多文件模块的最终运行，还不能以官方API存在或Web CI通过代替千星编辑器实机证据。
-- **玩法合同**：直接使用[Growth](../mvp/aquamelon-kitchen/03-growth-and-harvest.md)、[元素/视觉](../mvp/aquamelon-kitchen/08-ui-and-visuals.md)、[反应§6.18](../mvp/aquamelon-kitchen/04-elemental-reactions.md)、[风味](../mvp/aquamelon-kitchen/06-flavor-contract.md)，不沿用历史80V球或旧27项Taste。
+- **玩法合同**：按[动态根系与七维预算](../mvp/aquamelon-kitchen/02-data-and-balance.md)、[Growth/器官](../mvp/aquamelon-kitchen/03-growth-and-harvest.md)、[元素/视觉](../mvp/aquamelon-kitchen/08-ui-and-visuals.md)、[反应结算](../mvp/aquamelon-kitchen/04-elemental-reactions.md)、[风味](../mvp/aquamelon-kitchen/06-flavor-contract.md)实现。根系实际吸收先入Reserve，生长Budget按当前R与Δuh动态计算；`/7`只表示元素数量，不能按固定7V执行，也不能把树倍率重复乘到Growth。

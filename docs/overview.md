@@ -24,7 +24,7 @@
 
 玩家可以开垦农田，种植不同作物，并通过培育和育种获得新的品种。
 
-植物生长模型采用“养分来源 → 内部储备 → 本次可用V预算 → 器官分流 → Tree/Bud与子器官按各自规则形成Growth → 亲和学习 → 阶段固化 → 后代继承”的结构，见[植物养分—生长系统](plants/nutrient-growth-system.md)与[Growth Tick](plants/growth-tick.md)。水瓜的Tree Affinity在七维取量时生效，树自身不重复乘同一倍率。
+植物生长模型采用“养分来源 → 内部储备 → 本次可用V预算 → 器官分流 → Tree/Bud与子器官按各自规则形成Growth → 亲和学习 → 阶段固化 → 后代继承”的结构，见[植物养分—生长系统](plants/nutrient-growth-system.md)与[Growth Tick](plants/growth-tick.md)。水瓜根系实际吸收与树体生长预算分别动态计算；Reserve入账后按其充盈度生成参考预算，再将七元素**各1/7参考份额**乘Tree Affinity并受各维库存限制，7仅为元素数量，不是固定7V，树自身不重复乘该倍率。具体公式见[水瓜数值基线](../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
 作物不仅用于制作食物和饮品，也可能成为工具、设备、药剂或其他工艺品的材料。随着技术发展，种植和培育过程可以逐步自动化。
 

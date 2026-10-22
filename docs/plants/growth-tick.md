@@ -22,7 +22,7 @@
 ```
 
 - Seed / Seedling 按现有设计直接从根系吸收形成自身 Growth，不建立 Reserve。
-- Sapling 根系吸收进入 Tree Reserve。用Reserve180V、M95/W12归一化S曲线与B0=5.4V/uh计算本次参考V预算；每种元素取参考预算的1/7、乘当前Tree EffectiveAffinity，并以该维真实Reserve为上限。不按七维总量归一化，预算用于分流而非预先形成Growth；固定50V球下的实际产率仍需验算。
+- Sapling 根系实际吸收由Soil供应、阶段cap、通道和Reserve限流共同决定，先进入Tree Reserve。然后读取本步入账后的`R`，用M95/W12的S曲线与`B0=5.4V/uh`计算动态`B_ref=B0×F_growth(R)×Δuh`；各维取`min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`。`/7`只指七元素，不是每次固定取7V或每维固定1V；不按七维总量归一化，也不将缺额转给其它元素。固定50V球下的产率仍需验算。
 - 叶片所获当次预算再在本叶和附属花果内部进行第二层分流；未实际取用的额度返回上游父器官，不能凭空丢弃或跨叶重分配。
 - 器官 Growth[7] 决定真实阶段转换；重要的阈值集中在 [uh 规范](uh-time-unit.md)，不以出生以来经过多少小时作为触发条件。
 
@@ -31,7 +31,7 @@
 1. 对土壤超额容量做七元素等比例归一化；自然蒸发使用 `SoilRetentionPerUH ** Δuh`。
 2. 元素球按其 **以 uh 计的半衰期**衰减；玩家的收集/清场是独立的即时操作。
 3. 计算 `MaxRootAbsorbVPerUH × Δuh` 对应的根系总上限，再受七元素偏好、通道上限与实际供应约束。
-4. Seed/Seedling 将根系实际取得的 V 按本器官亲和形成 Growth；Sapling 将根系所得 V 加入 Reserve，以当前充盈度和元素选择条件确定可供分流的 V 预算，此处不预先生成 Tree Growth。
+4. Seed/Seedling将根系实际取得的V按本器官亲和形成Growth；Sapling先将本步实际根系吸收加入Reserve，再按更新后的R和当步`Δuh`计算七维动态可分流V预算，此处不预先生成Tree Growth，也不直接拿根系吸收总量充当Growth Budget。
 5. 同一预算内叶片优先取 V，花果仅从所属母叶取 V，未使用份额返还当次父级预算。Tree/Bud 将自身实际用量直接记入 Growth，不再次乘 Tree Affinity；叶和生殖器官按各自的生长亲和规则处理，不能重新乘树亲和。统一从 Reserve 扣除真实用于生长与环境逸散的 V，并更新相应 Affinity。
 6. 按真实 Growth 门槛处理 Seed、Sapling、Bud、叶片、花苞、花、青果和成熟水瓜事件。
 7. 第一Bud在进入Sapling时同步出生；后续在每24uh模型日机会点（04:00）**至多一次**出芽判定，已有1叶40%、2叶1%、3叶0%，不能因Tick频率重复抽签。

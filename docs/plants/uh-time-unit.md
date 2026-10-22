@@ -22,7 +22,7 @@ Web 只是压缩同一模型的实际耗时，不存在另一套专属吸收、G
 - 设 `Δuh = elapsedSeconds / realSecondsPerUH`，其中千星正式多人方案`realSecondsPerUH=3600`，Web与千星本地2D单机参赛Demo为`10`。
 - **速率线性上限**：`MaxAbsorbThisStep = MaxRootAbsorbVPerUH × Δuh`。实际七元素吸收另受 Soil 存量、RootPreference、单元素 Affinity 通道上限约束。
 - **土壤自然蒸发**：`Soil[i] *= SoilRetentionPerUH ** Δuh`，当前校准保留率为 `0.99/uh`；土壤容量1000V、超量按七元素比例压缩。
-- **树体生长预算**：根系吸收进入 `TreeReserve[7]`；M=95/W=12归一化S曲线与B0=5.4V/uh计算 `B_ref`，七元素基准份额各为 `B_ref/7`，分别按当前 Tree EffectiveAffinity 调整并以对应 Reserve 限额得到 `BudgetV[i]`。不做七维总额归一化或跨元素缺额重分配。预算仍为 V，未用预算不扣费；实际生长及环境逸散的 V 从 Reserve 统一扣一次。
+- **树体生长预算**：本步实际根系吸收先进入`TreeReserve[7]`；以入账后的`R=ΣReserve`和本次`Δuh`，使用M95/W12归一化S曲线计算`B_ref=5.4V/uh×F_growth(R)×Δuh`。七种元素基准份额各为`B_ref/7`，分别乘当步Tree EffectiveAffinity并以对应Reserve限额得到`BudgetV[i]`。**7是元素数量，不是固定7V；B_ref也不等于实际根系吸收量**。不做七维总额归一化或跨元素缺额重分配。预算仍为 V，未用预算不扣费；实际生长及环境逸散的 V 从 Reserve 统一扣一次。
 - **分流与转换**：每片叶取得预算中可使用的 V 份额，花/果只在所属母叶份额内分流；未用 V 返还父级本次预算。Tree/Bud 直接将其实际用量累加 Growth，不能再乘 Tree Affinity；叶、花、果按各自的 Growth 转换规则处理所得 V，不对同一份预算重复施加 Tree Affinity。
 - **离散事件**：按对应 Growth 门槛、已经确认的事件条件触发。将结算间隔细分不能让随机判定重复获得额外机会；出芽检查频率及由原每日概率换算连续风险的方案需另行确认。
 - **元素球**：仅由玩家主动「富集」生成，单球随机纯元素初始**固定50 V**（只随机元素类型），半衰期 **0.25 uh**，`BALL_Elems[i] *= 0.5 ** (Δuh / 0.25)`，剩余七元素总量 **<1 V** 则销毁。0.25uh在本地Lua单机Demo中对应现实2.5秒，按当前时间尺度衰减。

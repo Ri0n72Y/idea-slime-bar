@@ -98,7 +98,7 @@ Calculate Absorption (Composite Node)
 增加 Tree 元素储备
         |
         v
-确定本次可分流养分预算（V）
+按入账后Reserve动态计算B_ref和逐元素BudgetV（仍是V）
         |
         v
 子器官取得实际用量 / 未用V回父级
@@ -163,7 +163,7 @@ TemporaryGrowthConversion
 TemporaryRatio
 ```
 
-这些属于单次 Tick 的局部计算，应通过节点连接传递。养分预算以 V 分流，水瓜的七维取量先用 Tree Affinity 调整；Tree/Bud 不再次乘这一亲和，叶和生殖器官各按自身规则成长，也不重复施加树倍率。父器官已经形成的 Growth 不作为子器官可消费的 V。
+这些属于单次 Tick 的局部计算，应通过节点连接传递。水瓜根系吸收与树体预算是两段不同的动态取量：根系实际吸收先进入Reserve，随后按当前R、Δuh计算`B_ref=B0×F_growth(R)×Δuh`，各维`BudgetV[i]=min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`，其中7仅为元素个数。预算保持V单位；Tree/Bud不再乘树亲和，子器官使用自身成长规则；未取用V返还、实际消费V统一扣费。
 
 ## 设计理由
 

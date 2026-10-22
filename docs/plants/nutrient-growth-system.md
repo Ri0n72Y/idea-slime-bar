@@ -381,7 +381,7 @@ Inherited Parent Modifier
 
 一个器官进入生长代谢时，根据本次实际推进的 `Δuh`、可用 Reserve 与器官亲和，确定**当次**准备用于生长的养分预算。一次结算事件本身不决定预算总量，也不会因为结算次数增加而产生额外资源。
 
-这些养分预算始终保留 V 单位。通用植物可按器官的生长亲和转换真实使用的 V；水瓜树的 Tree Affinity 已在 **Reserve→七维 Budget 取量**中逐元素生效，树自身及 Bud 使用剩余预算时直接形成等量 Growth，不再次乘 Tree Affinity。叶、花、果遵守自己的生长亲和规则，不重复套用上游 Tree Affinity。整个过程是一轮生长结算。
+这些养分预算始终保留 V 单位。通用植物可按器官的生长亲和转换真实使用的 V；水瓜树的Tree Affinity在**Reserve→动态七维Budget取量**中逐元素生效：本步根系吸收入账后，按`B_ref=5.4×F_growth(R)×Δuh`计算参考V，每维实际候选为`min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`。`/7`代表七元素等基准份额，并非固定7V/次；各维不足不跨元素重分配。树自身及Bud将剩余V直接累加Growth，不再乘树亲和；叶、花、果按自身规则生长。完整S曲线和根系限流见[水瓜数值基线](../../mvp/aquamelon-kitchen/02-data-and-balance.md)。
 
 ```text
 Parent Growth Nutrient Budget
