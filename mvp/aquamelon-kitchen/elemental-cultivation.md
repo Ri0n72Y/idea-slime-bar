@@ -187,7 +187,7 @@ min(Affinity, 1)
 
 ## 元素颜色与 Lua 显色
 
-七元素主体色及PNG名称只使用[元素视觉参考](../../docs/visual/element-reference.md)，不再采用本文件原先的旧色号，也不设置`VariantThreshold`阈值。
+七元素主体色及 PNG 名称见[元素视觉参考](../../docs/visual/element-reference.md)。显色按七维向量加权混合，不设置额外阈值。
 
 - 将器官出生/阶段固化后的 `BaseAffinity[7]` 归一成权重`a[i]=Affinity[i]/ΣAffinity`，得到`C_base=Σa[i]RGB[i]`。
 - 将当前器官实际 `Growth[7]`（生殖器官使用`E_free[7]`）归一成`g[i]=Growth[i]/ΣGrowth`，得到`C_growth=Σg[i]RGB[i]`。
