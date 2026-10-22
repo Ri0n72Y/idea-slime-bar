@@ -5,7 +5,7 @@
 所有七维数组固定顺序：`Fire / Hydro / Anemo / Electro / Dendro / Cryo / Geo`（火、水、风、雷、草、冰、岩）。
 
 - `V`：可吸收的元素养分量（如 Soil、Tree Reserve）。
-- `G`：经生长与亲和作用形成的 Growth/果实元素物质量。
+- `G`：真实养分被最终使用器官按自身亲和转换一次后形成的 Growth；花果生殖 Growth 同时构成可食物质量。
 - `uh`：模型等效小时；**参赛单机版本 1 uh = 10 秒现实时间**。
 - 一次结算事件可以推进分数 `Δuh`；UI 每帧绘制不等于多次成长事件。
 - `1 U = 30 G` 是**反应份额**，不是 Growth 阶段阈值或真实时间。
@@ -56,12 +56,14 @@
 ## 5. Sapling Reserve → Growth Budget
 
 - Seed / Seedling：根系吸收直接进入 Tree Growth，不创建 Tree Reserve。
-- Sapling：根系吸收先进入 `TreeReserve[7]`，再由当前 Reserve 与 Tree Affinity 生成本步七维 Growth Nutrient Budget。
+- Sapling：根系吸收先进入 `TreeReserve[7]`。每次生长结算基于储备充盈度确定本步可用的 `GrowthNutrientBudget[7]`；**预算每一维仍是 V 单位的未转换养分**。它先在树与子器官之间分流，随后由实际使用者形成 Growth，不能在生成预算时预先生成 Tree Growth。
 - Reserve 总量 `R` 范围 0～180 V；采用归一化宽 S 曲线，`sig(x)=1/(1+e^(-x))`，`F_growth(R)=[sig((R−95)/12)−sig(−95/12)]/[sig((180−95)/12)−sig(−95/12)]`。
 - 中点 `M=95 V`，宽度 `W=12 V`；随 Reserve 连续变化，`R=0` 时预算为0，`R=180` 时达到曲线最大值。
 - 参赛版采用基准预算速率 **`B0=5.4 V/uh`**；这是当前设计定值，实际产率仍需复测，不能声称千星实机已验证。
-- Tree Affinity>1 可以真实放大元素 Growth 转换，不额外将七维亲和归一化；实际逐元素取用不能超过其真实 Reserve。
-- **当前尚缺独立可执行定义**：`B0×F_growth(R)×Δuh`定义成长预算的总量尺度，但**尚未签发把它按七维Reserve分到`GrowthNutrientBudget[i]`的唯一公式**（如按Reserve比例或逐通道独立提取会产生不同结果）。因此不得擅自选用一种分配方案并称为已确认设计；该公式是Sapling数值实现前需要明确的设计接口。之后的 Growth 转换遵守`GrowthGain[i] = 已实际分配且扣除的养分[i] × 该器官EffectiveAffinity[i]`，不重复消耗 Reserve。
+- **亲和增益仅在最终使用的器官形成 Growth 时应用一次**。树自用或 Bud 使用树份额时按 Tree `EffectiveAffinity[i]` 转换；叶/花果使用份额时按对应器官自己的 `EffectiveAffinity[i]` 转换。任何份额都不能先按 Tree Affinity 形成 Growth，再按子器官 Affinity 二次转换。亲和>1可以让最终 Growth 大于消耗的 V，但不可使可重复分配的 V 库存增加。
+- `B0×F_growth(R)×Δuh`给出本次**可供分流的 V 基准预算尺度**，不是已经亲和放大的 Growth。七维预算怎样依据真实 `Reserve[7]` 与 Tree 的元素选择倾向分配、某维不足是否重分配仍须确定；每维实际使用不得超过对应 `Reserve[i]`，不把未经批准的候选式写成正式公式。
+- **一次结算中的完整顺序**：形成待分流的 `BudgetV[7]` → 各叶优先实际取得自己的 V 份额 → 叶在本叶与花果间分流 → 未使用 V 返还父级的**本次预算** → Tree/Bud 使用剩余 V → **每个最终使用者仅一次**执行 `GrowthGain[i]=UsedV[i]×OwnEffectiveAffinity[i]` → 从 Reserve 对本次实际使用的 V **只扣一次**。预算分流、V 的实际消耗与 Growth 转换是同一次生长结算的不同记账位置，不是两次独立的亲和增益；不能先扣整份 Reserve 又把未使用预算另存成新库存。
+- 子器官 `ExtractionAffinity=min(Affinity,1)` 如用于接受父级预算，只影响它能取得多少真实 V；最终 `GrowthGain` 使用完整自身亲和。树自身亲和绝不再次乘到子器官已取得的份额上。
 - 每叶最多名义取 Tree 本步预算 30%；多叶时 Tree 名义余额分别为 0叶100%、1叶70%、2叶40%、3叶10%。
 - FlowerBud、Flower 和 GreenFruit 只在所属母叶的当次预算内再取得 80%；不能对其他叶与 Tree 二次扣费。
 - 无 Active Bud 时 Tree 自身份额形成 `TREE_Growth`；有 Active Bud 时该份额进入 `BUD_Growth`。
