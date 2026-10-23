@@ -10,7 +10,7 @@ import {
   ELEMENT_NAMES,
   MATERIAL_NAMES,
   entityName,
-  flavorText,
+  elementShareText,
   ratioText,
   sourceText,
   vectorText
@@ -62,7 +62,7 @@ export function GroundPanel({ world, game, debug }: GroundPanelProps) {
                     <p>道具编号：{entityName(item.id)}</p>
                     <p>亲和：{vectorText(item.affinity, 2)}</p>
                     <p>元素累积：{vectorText(item.elementAmount)}</p>
-                    <p>风味比例：{flavorText(item.elementAmount)}</p>
+                    <p>元素占比：{elementShareText(item.elementAmount)}</p>
                   </div>
                 )}
               </div>
@@ -97,7 +97,7 @@ export function GroundPanel({ world, game, debug }: GroundPanelProps) {
             {debug && (
               <div className="debug-vectors">
                 <p>混合元素量：{vectorText(preview.elementAmount, 4)}</p>
-                <p>混合风味比例：{ratioText(preview.flavorRatio)}</p>
+                <p>混合元素占比：{ratioText(preview.elementShare)}</p>
               </div>
             )}
           </>
