@@ -1,182 +1,49 @@
 # Growth Tick Architecture
 
-## Overview
+本文件描述植物生长的一次结算过程。当前千星2D单机实现由**本地Lua**持有世界状态和执行计算，UI只呈现快照及提交玩家操作。具体数值见[水瓜数值基线](../mvp/aquamelon-kitchen/02-data-and-balance.md)，生命周期见[生长与收获](../mvp/aquamelon-kitchen/03-growth-and-harvest.md)。
 
-本文记录水瓜厨房植物生长系统当前确定的运行时架构约定。
+## 结算单位和状态
 
-目标：在千星奇域节点图环境中，实现可扩展的植物生长系统，同时保持节点图职责单一、减少公共状态传递。
+1uh是模型等效小时；当前2D单机演示映射为现实10秒。Growth Tick推进实际的`Δuh`，不是按帧重复计算一次完整uh。
 
-## 核心原则
+- 元素球、`Soil[7]`、`TreeReserve[7]`保存真实待生长养分**V**。
+- 树、芽、叶、花果只有经过生长转换的元素**G**；花果唯一物质账户为`E_free[7]+Products[]`，单位均为G。
+- `GrowthNutrientBudget[7]`仅是本次待分流V额度，不是第二份持久库存。
+- `Affinity[7]`表示元素倾向，不是可消费物质量。
 
-- 实体变量保存长期状态。
-- 节点连线传递短期计算结果。
-- 复杂数学公式独立编写为节点图，并手动打包为复合节点。
-- 业务流程节点图负责调用复合节点和更新实体状态。
-- 避免为了节点图拆分而制造大量临时公共变量。
+## 一次结算
 
-## 器官模型
-
-当前 MVP 只考虑两个器官：
-
-```
-Soil
- |
- v
-AquamelonTree
-```
-
-后续扩展：
-
-```
-Tree
- ├─ Leaf
- ├─ Flower
- └─ Fruit
-```
-
-养分流方向遵循消费者主动获取原则：
-
-```
-Leaf -> Tree
-Flower -> Leaf
-Tree -> Soil
+```text
+本次真实Δuh
+   ↓
+元素球衰减 / Soil蒸发及容量约束
+   ↓
+根系从Soil实际吸收V → 加入Sapling TreeReserve
+   ↓
+按入账后R与Δuh计算动态参考预算B_ref
+   ↓
+七维各按 B_ref/7 × TreeEffectiveAffinity[i]
+并以真实Reserve[i]截断，得到BudgetV[7]
+   ↓
+各叶取得当次预算份额 → 母叶内再向花果分流
+未实际取用V退回本次父级预算
+   ↓
+Tree/Bud按1V→1G形成Growth
+叶及生殖器官按各自亲和与效率将取用V转为G
+   ↓
+明确逸散及实际消耗的V统一从Reserve结账一次
+   ↓
+按Growth门槛触发阶段变化、亲和固化与出芽
+   ↓
+用唯一世界状态更新UI
 ```
 
-来源器官只保存资源，不负责管理消费者。
+`B_ref=B0×F_growth(R)×Δuh`，`BudgetV[i]=min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`。这里7是元素个数，**不是固定7V/次**；不按总预算重新归一化，不跨元素转移不足的V。
 
-## Growth Tick 流程
+## 主干、叶片和果实
 
-Growth Tick 由关卡统一触发。
+- 进入Sapling的同一事件生成首枚Bud；Tree每完成100G塑形周期，若还有叶位且无活跃Bud，同一事件生成一枚。模型日04:00另有一次按当前叶数的出芽机会，不能重复创建；芽被掐掉时，其G返还Tree并照常检查100G边界。
+- 最多三片成叶；各叶获取本次Tree预算30%，花苞/花/青果取母叶预算80%。成熟水瓜从已纤维化母叶获得40%，**成熟后新G**按其当前物质量`M=ΣE_free+ΣProducts.amount`逐渐降低富集倍率，M达到150G后自然富集停止。
+- 熟果被采摘后停止母叶供给，其全部自由G与反应产物成为独立材料的唯一物质账户。加工仅按[一果一汁合同](../mvp/aquamelon-kitchen/07-juice-and-ai-prompt.md)转换。
 
-当前设计：
-
-```
-WORLD_GROWTH_TICK
-        |
-        v
-Soil Update
-        |
-        v
-Tree Growth Update
-        |
-        v
-Future Child Organ Update
-```
-
-事件/信号主要负责控制流程，不负责传递业务数据。
-
-## Soil
-
-Soil 是资源容器。
-
-负责：
-
-- 保存元素向量
-- 元素容量归一化
-- 元素蒸发
-
-不负责：
-
-- 判断植物需求
-- 主动分配养分
-- 管理消费者列表
-
-## Tree Growth Update
-
-Tree 主动读取 Soil 状态。
-
-流程：
-
-```
-读取 Soil_Elems
-        |
-        v
-Calculate Absorption (Composite Node)
-        |
-        v
-扣除 Soil 元素
-增加 Tree 元素储备
-        |
-        v
-按入账后Reserve动态计算B_ref和逐元素BudgetV（仍是V）
-        |
-        v
-子器官取得实际用量 / 未用V回父级
-        |
-        v
-树自身V直接形成Growth，其他器官按自身规则转换
-        |
-        v
-按实际使用V扣费、更新 Growth / Stage / Affinity
-```
-
-## 复合节点规范
-
-复杂公式不直接堆在主流程节点图中。
-
-例如：
-
-### Calculate Absorption
-
-输入：
-
-- Soil_Elems
-- Tree_Affinity
-- Tree_AbsorbLimit
-
-输出：
-
-- AbsorbElems
-
-### Convert Nutrient To Growth
-
-输入：
-
-- 最终使用器官取得的养分V
-- 该器官自己的 EffectiveAffinity
-
-输出：
-
-- 该器官 GrowthVector 增量
-- 对应的生长用V（与该器官明确的环境逸散V合并，供本次统一扣费）
-
-主流程节点图只调用这些复合节点。
-
-## 状态边界
-
-持久状态示例：
-
-```
-SOIL_Elems[7]
-
-TREE_Elems[7]
-TREE_Growth[7]
-TREE_Stage
-TREE_Affinity[7]
-```
-
-不建议保存：
-
-```
-TemporaryAbsorbResult
-TemporaryGrowthConversion
-TemporaryRatio
-```
-
-这些属于单次 Tick 的局部计算，应通过节点连接传递。水瓜根系吸收与树体预算是两段不同的动态取量：根系实际吸收先进入Reserve，随后按当前R、Δuh计算`B_ref=B0×F_growth(R)×Δuh`，各维`BudgetV[i]=min(Reserve[i],B_ref/7×max(0,TreeEffectiveAffinity[i]))`，其中7仅为元素个数。预算保持V单位；Tree/Bud不再乘树亲和，子器官使用自身成长规则；未取用V返还、实际消费V统一扣费。
-
-## 设计理由
-
-代码中常见：
-
-```ts
- tree.growth(soil)
-```
-
-节点图环境无法自然表达对象递归调用，因此采用：
-
-- 事件驱动流程
-- 消费者主动读取来源
-- 复合节点封装复杂计算
-
-避免构造大量中间实体和通信变量。
+完整结算顺序、分数uh与事件边界以[Growth Tick](plants/growth-tick.md)为准。实现时不要另外持有一份UI状态、临时物质库存，或为未来多人开发新增服务端节点图。
