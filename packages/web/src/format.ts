@@ -46,7 +46,7 @@ export function vectorText(vector: ElementVector | null, digits = 1) {
   ).join(' · ')
 }
 
-export function flavorText(vector: ElementVector | null) {
+export function elementShareText(vector: ElementVector | null) {
   if (!vector || sumVector(vector) <= 0) return '尚未形成'
   const ratio = normalizeVector(vector)
   if (!ratio) return '尚未形成'

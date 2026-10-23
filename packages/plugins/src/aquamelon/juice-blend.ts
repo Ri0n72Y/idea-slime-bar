@@ -3,7 +3,7 @@ import { dominantElement, sumVector, zeroVector } from './vector'
 
 export interface JuiceBlendPreview {
   elementAmount: ElementVector
-  flavorRatio: ElementVector | null
+  elementShare: ElementVector | null
   dominantElement: number | null
 }
 
@@ -40,13 +40,13 @@ export function previewJuiceBlend(
   const total = sumVector(mixed)
   if (!Number.isFinite(total)) return null
   // Divide components directly: 1 / total can overflow for subnormal values.
-  const flavorRatio = total > 0
+  const elementShare = total > 0
     ? mixed.map(value => value / total) as ElementVector
     : null
 
   return {
     elementAmount: mixed,
-    flavorRatio,
+    elementShare,
     dominantElement: dominantElement(mixed)
   }
 }
