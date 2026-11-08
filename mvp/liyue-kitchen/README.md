@@ -1,4 +1,4 @@
-# 璃月厨房：还得自己种 — 独立 MVP v0.3（设计草案）
+# 璃月厨房：还得自己种 — 独立 MVP v0.4（设计草案）
 
 > 状态：玩法与界面重构草案，供 Lead 审查。尚未批准替代原有参赛范围、尚未实现。
 > 平台：原神·千星奇域；本地 Lua 单机。暂定英文名 Liyue Kitchen: Grow It Yourself。
@@ -34,12 +34,17 @@
 
 现有一果一汁仍为产出数量合同；新增显式的 **完整水瓜→剥壳→果肉→榨汁→未装杯果汁→装杯果汁** 实物链。七维 E_free/Products 从原果完整传至果肉、果汁和杯装果汁，前态逐步消耗，果壳暂作无 G 载荷的物理副产物；该最小分账提案待 Lead 批准。原果直接交付水瓜订单。煮锅、研钵、复杂料理均在后续版本。
 
+## UI-driven 开发原则
+
+本版以实际 UI 对象和玩家操作为实施入口，采用「看见对象→点击/操作→Lua 领域状态真实变化→画面反馈→千星编辑器实机验收」的小型垂直切片。**开发任务与进度按 UI-00～UI-08 可玩清单追踪**，禁止仅以纯逻辑模块、静态原型截图或占位按钮宣称功能完成。UI-00 先建立主屏与可操作七格，UI-01 完成访客赠种和真实种植，随后逐步接入元素/昼夜、生长/收获、加工、订单、仙力和探索地图。完整入口：[05-ui-driven-implementation.md](05-ui-driven-implementation.md)。
+
 ## 范围与实施入口
 
 - [01-day-loop-and-ui.md](01-day-loop-and-ui.md)：七格水晶球、右侧委托/探索地图、底部仓储/加工、按日到期订单与昼夜节奏。
 - [02-discovery-map-and-technology.md](02-discovery-map-and-technology.md)：探索图谱、证据解锁、科技引入及初始内容。
 - [03-production-and-lua.md](03-production-and-lua.md)：生产链、状态模型、自动化原则与 P0 验收。
 - [04-adeptal-energy-and-plots.md](04-adeptal-energy-and-plots.md)：官方「洞天仙力」用词、有效互动/种植/交单/采摘奖励、仙力支出和七格开垦。
+- **[05-ui-driven-implementation.md](05-ui-driven-implementation.md)：本轮 UI-driven 开发主清单、逐屏互动验收、千星实机证据和 Done 标准。**
 
 官方中文用词：《原神》官方 1.5 版本「玉扉绕尘歌」https://www.hoyolab.com/article/328446。原作「洞天仙力」作为仙力等阶依据，「洞天宝钱」用于兑换商品；璃月厨房将「洞天仙力」改造为单一可消费养成资源，**此为本游戏独立设计**。
 
