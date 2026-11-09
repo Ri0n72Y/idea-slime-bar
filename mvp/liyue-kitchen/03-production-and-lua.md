@@ -1,4 +1,4 @@
-# 七格洞天、加工链、订单与 Lua 实施 v0.5
+# 七格洞天、加工链、订单与 Lua 实施 v0.6
 
 ## 1. 生产链
 
@@ -52,7 +52,7 @@ Game = {
   looseBalls = {},        -- 全洞天每日共用 N 次凝聚，球有稳定 id 与 V
   items = {},             -- 新游戏初始化一次种子到 inventory；物品/容器带稳定 ID 和 location
   machines = {},          -- MVP 剥壳、榨汁、装杯；未来设备夜间进度
-  visitors = {},          -- UI-10 最后接入；开局/种植/订单无需此状态
+  visitors = {},          -- U9 最后接入；开局/种植/订单无需此状态
   orders = {},            -- acceptedDay/dueDay/itemKind/quantity/state
   adeptalEnergy = { balance = 0, earnedTotal = 0, spentTotal = 0, rewardedIds = {} }, -- 洞天仙力唯一可消费账本
   discoveries = {},       -- completed + evidence
@@ -75,7 +75,7 @@ Game = {
 
 ## 4. UI-driven 实施顺序
 
-**正式开发工作按 [05-ui-driven-implementation.md](05-ui-driven-implementation.md) 的 UI-00～UI-10 切片进行。** 每个任务以可见 UI 物体、玩家动作、领域 Guard、真实 Game 状态变化和可见反馈为输入/验收；内层 Lua 逻辑随对应互动开发，不单独以「编写完模块」作为完成标志。先交付可点击柜台；**UI-01 实现新游戏物品栏内一枚真实种子，UI-02 专项实机验证将其拖拽进合法开放地格完成播种**。访客对话、赠物和递单留到 UI-10。
+**正式开发工作按 [05-ui-driven-implementation.md](05-ui-driven-implementation.md) 的 U1～U9 执行。** 每个任务以可见 UI 物体、玩家实际操作、领域 Guard、真实 Game 状态变化和画面反馈为输入/验收；内层 Lua 逻辑随对应互动开发，不单独以「编写完模块」算完成。**U1 只建立可点击主屏。U2 将开局唯一种子、真实拖拽播种、随机元素凝聚与浇灌、结束今日推进 K uh、次晨真实成长合并为一个可玩切片，全部实机验收才可标记完成。** U3～U8 按生产路径推进；访客对话、赠物和递单最后在 U9 接入。
 
 编辑器静态布局与对象命名首先固化到绑定清单；Lua 域保持唯一权威状态。**U2 拖拽播种必须真实实机验证；无法实现时标记 Blocked，不得以「选中→点击」替代其 Done**。其他未验证的高级拖放/图谱缩放可按阶段采用可玩的降级控件。所有完成标记须有当前关卡真实截图/录屏 + 操作步骤 + 领域状态/关键事件证据。详细 checklist 不在本文件复制，防止维护两份互相冲突的进度。
 
