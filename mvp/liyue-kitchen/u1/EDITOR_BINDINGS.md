@@ -61,7 +61,7 @@
 
 ## 4. 离线测试与平台 API 来源
 
-`tests/mock_click.lua` 使用假控件树触发 Lua 回调，验证七个地格映射、中心选择/取消、锁定拒绝、渲染和监听清理，以及漏绑时不注册监听。该测试不加载编辑器资源，不测试真实光标、视觉/分辨率或平台存档能力。
+从仓库根目录运行 `lua5.3 mvp/liyue-kitchen/u1/tests/mock_click.lua`（需本机有 Lua 5.3）。本轮实际使用可用的 **Lua 5.4 共享库**完成该模拟测试，Lua 5.3 千星运行时仍未验证。\n\n`tests/mock_click.lua` 使用假控件树触发 Lua 回调，验证七个地格映射、中心选择/取消、锁定拒绝、渲染和监听清理，以及漏绑时不注册监听。该测试不加载编辑器资源，不测试真实光标、视觉/分辨率或平台存档能力。
 
 本轮使用的 Lua 接口：`script.object`、`OnStart`/`OnDestroy`、`GetChild`、`AddCursorEventListener`/`RemoveCursorEventListener`、`SetVisible`、文本 `.text`、`showCursor`、`raycastTarget`。参考：
 - 官方 7.1 文档：https://act.mihoyo.com/ys/ugc/tutorial/detail/mhtakr07vej4
