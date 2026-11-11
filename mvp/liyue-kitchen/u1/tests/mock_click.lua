@@ -12,10 +12,20 @@ local function addControl(name)
         self.visible = value
     end
     function control:AddCursorEventListener(event, callback)
-        self.callbacks[event] = callback
+        self.callbacks[event] = self.callbacks[event] or {}
+        table.insert(self.callbacks[event], callback)
     end
     function control:RemoveCursorEventListener(event, callback)
-        if self.callbacks[event] == callback then
+        local listeners = self.callbacks[event]
+        if not listeners then
+            return
+        end
+        for i = #listeners, 1, -1 do
+            if listeners[i] == callback then
+                table.remove(listeners, i)
+            end
+        end
+        if #listeners == 0 then
             self.callbacks[event] = nil
         end
     end
@@ -44,6 +54,26 @@ script = { object = root }
 Enum = { CursorEventType = { CursorClick = 8 } }
 
 dofile("mvp/liyue-kitchen/u1/client_main.lua")
+
+local function listenerCount(index)
+    local area = controls["LK_C_Plot" .. string.format("%02d", index)]
+    local listeners = area.callbacks[8]
+    return listeners and #listeners or 0
+end
+
+local function assertAllListenerCounts(expected, message)
+    for i = 1, 7 do
+        assert(listenerCount(i) == expected, message .. " plot " .. i .. " count=" .. listenerCount(i))
+    end
+end
+
+local function click(index)
+    local area = controls["LK_C_Plot" .. string.format("%02d", index)]
+    local listeners = area.callbacks[8]
+    assert(listeners and #listeners > 0, "no click listener for plot " .. index)
+    listeners[1]()
+end
+
 OnStart()
 assert(root.showCursor, "root cursor should be enabled")
 assert(controls.LK_T_Day.text == "第 1 天")
@@ -52,14 +82,8 @@ assert(controls.LK_T_Plot01State.text == "P01 已开垦")
 assert(controls.LK_T_Plot02State.text == "P02 未开垦")
 assert(controls.LK_T_Inventory.text:find("空"))
 assert(controls.LK_T_EndDay.text:find("U2"))
-for i = 1, 7 do
-    local suffix = string.format("%02d", i)
-    assert(controls["LK_C_Plot" .. suffix].callbacks[8], "unbound " .. suffix)
-end
+assertAllListenerCounts(1, "initial start should register one listener")
 
-local function click(index)
-    controls["LK_C_Plot" .. string.format("%02d", index)].callbacks[8]()
-end
 click(1)
 assert(controls.LK_T_SelectedPlot.text == "当前地格：P01")
 assert(controls.LK_I_Plot01Selected.visible)
@@ -73,16 +97,41 @@ assert(not controls.LK_I_Plot01Selected.visible)
 click(7)
 assert(controls.LK_T_Feedback.text:find("P07"), "plotId mapping failed")
 assert(controls.LK_T_Day.text == "第 1 天", "click advanced day")
-OnDestroy()
-for i = 1, 7 do
-    assert(not controls["LK_C_Plot" .. string.format("%02d", i)].callbacks[8], "event not removed")
-end
 
--- 任一必需控件缺失时，不注册部分监听。
+-- 正常重复 OnStart 必须先移除旧回调，不能累积订阅。
+OnStart()
+assertAllListenerCounts(1, "repeated start must not duplicate listeners")
+
+-- 缺失 script.object 重入时，先前成功启动的监听必须清除。
+script.object = nil
+OnStart()
+assertAllListenerCounts(0, "missing host must clear previous listeners")
+assert(outputs[#outputs]:find("no_script_object"), "missing host failure not logged")
+
+-- 恢复宿主并启动，再移除 Enum；清理不能依赖当前全局 Enum。
+script.object = root
+OnStart()
+assertAllListenerCounts(1, "start after host recovery should bind once")
+local savedEnum = Enum
+Enum = nil
+OnStart()
+assertAllListenerCounts(0, "missing Enum must clear previous listeners")
+assert(outputs[#outputs]:find("no_cursor_click_enum"), "missing Enum failure not logged")
+
+-- 恢复 Enum 后可以再次启动；漏绑控件也必须先清掉旧监听。
+Enum = savedEnum
+OnStart()
+assertAllListenerCounts(1, "start after Enum recovery should bind once")
+local savedFeedback = controls.LK_T_Feedback
 controls.LK_T_Feedback = nil
 OnStart()
-for i = 1, 7 do
-    assert(not controls["LK_C_Plot" .. string.format("%02d", i)].callbacks[8])
-end
-assert(outputs[#outputs]:find("binding_failed"))
-originalPrint("PASS U1 mock: 7 bindings, center select/deselect, locked rejection, render, teardown, missing control")
+assertAllListenerCounts(0, "missing control must not leave previous listeners")
+assert(outputs[#outputs]:find("binding_failed"), "missing control failure not logged")
+
+controls.LK_T_Feedback = savedFeedback
+OnStart()
+assertAllListenerCounts(1, "start after control recovery should bind once")
+OnDestroy()
+assertAllListenerCounts(0, "OnDestroy must remove all listeners")
+
+originalPrint("PASS U1 mock: plot click behavior, repeated start, missing host/Enum/control cleanup, and OnDestroy")
