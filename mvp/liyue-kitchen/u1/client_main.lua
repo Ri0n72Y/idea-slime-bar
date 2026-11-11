@@ -31,11 +31,11 @@ local TEXT_KEYS = {
 local Ui = { root = nil, controls = {}, listeners = {} }
 
 local function detachListeners()
-    if not Enum or not Enum.CursorEventType then
-        return
-    end
+    -- 清理依赖注册时保存的事件类型，不读取当前全局 Enum。
     for _, listener in ipairs(Ui.listeners) do
-        listener.area:RemoveCursorEventListener(Enum.CursorEventType.CursorClick, listener.callback)
+        if listener.area and listener.area.RemoveCursorEventListener then
+            listener.area:RemoveCursorEventListener(listener.eventType, listener.callback)
+        end
     end
     Ui.listeners = {}
 end
@@ -104,7 +104,7 @@ local function bindControls(root)
         local isPlotArea = string.sub(name, 1, 9) == "LK_C_Plot"
         local isSelection = string.sub(name, 1, 9) == "LK_I_Plot"
         if not control
-            or (isPlotArea and not control.AddCursorEventListener)
+            or (isPlotArea and (not control.AddCursorEventListener or not control.RemoveCursorEventListener))
             or (isSelection and not control.SetVisible)
             or (not isPlotArea and not isSelection and type(control.text) ~= "string") then
             missing[#missing + 1] = name
@@ -131,20 +131,28 @@ local function bindControls(root)
 end
 
 function OnStart()
+    -- 必须先清理上一次成功启动的监听，再检查本次启动环境。
+    -- 即使 script.object 或全局 Enum 已失效，也不能遗留旧订阅。
+    detachListeners()
+    Ui.root = nil
+    Ui.controls = {}
+
     local root = script and script.object
     if not root then
         log("binding_failed reason=no_script_object")
         return
     end
-    if not Enum or not Enum.CursorEventType or not Enum.CursorEventType.CursorClick then
+
+    local eventType = Enum and Enum.CursorEventType and Enum.CursorEventType.CursorClick
+    if not eventType then
         log("binding_failed reason=no_cursor_click_enum")
         return
     end
 
-    detachListeners()  -- 允许 OnStart 被重复触发而不叠加监听。
     Ui.root = root
-    Ui.controls = {}
     if not bindControls(root) then
+        Ui.root = nil
+        Ui.controls = {}
         return
     end
 
@@ -156,8 +164,12 @@ function OnStart()
         local callback = function(_)
             clickPlot(id)
         end
-        area:AddCursorEventListener(Enum.CursorEventType.CursorClick, callback)
-        Ui.listeners[#Ui.listeners + 1] = { area = area, callback = callback }
+        area:AddCursorEventListener(eventType, callback)
+        Ui.listeners[#Ui.listeners + 1] = {
+            area = area,
+            eventType = eventType,
+            callback = callback,
+        }
     end
     render()
     log("ready plots=7 unlocked=P01 input=CursorClick")
@@ -165,4 +177,6 @@ end
 
 function OnDestroy()
     detachListeners()
+    Ui.root = nil
+    Ui.controls = {}
 end
