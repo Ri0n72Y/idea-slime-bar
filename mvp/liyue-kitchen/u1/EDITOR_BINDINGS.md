@@ -1,75 +1,53 @@
-# U1 — 千星 16:9 主场景与 Lua 绑定
+# 璃月厨房 U1 — Lua 动态布局与编辑器最小配置
 
-状态：**待实际千星奇域编辑器搭建 / 待实机复测**。本目录提供游戏 Lua 脚本与编辑器控件清单，**不包含编辑器关卡存档或真实游戏截图**。
+当前源码：`mvp/liyue-kitchen/u1/client_main.lua`。状态：**待千星编辑器注册真实模板、DSH 模拟器运行与用户实机验证**。旧 U1 模拟器 PASS 针对静态控件版，不能转移至本版本。
 
-## 1. 加载和静态布局
+## 编辑器只需提供的资源
 
-1. 在千星奇域创建 16:9 横屏客户端 UI 页面，推荐以 **1920×1080** 作为静态布局参考尺寸；锚点适配其他同宽高比的分辨率。创建名为 `LK_C_Root` 的**根容器节点控件**，启用 `showCursor`，保持根容器 `active`，不能把根挂载的 Lua 宿主关闭。
-2. 将本目录 `client_main.lua` 导入客户端脚本资源，创建相应 **Lua 脚本映射**，挂在 `LK_C_Root` 上。不得将脚本当作服务器节点图或 Node/网页程序运行。
-3. 以下全部 `LK_*` 控件必须是 `LK_C_Root` 的**直接子控件**，名称逐字匹配；脚本使用 `root:GetChild(name)` 查找，不依赖屏幕坐标或控件 ID 的偶然顺序。
-4. UI 图片、文字、布局、字体、边框和颜色由编辑器手动配置；Lua 只更新已存在文本与地格选中边框显隐。所需的水晶球、六边形、柜台、设备贴图资源尚未随 U1 导入，不能视为已经完成静态场景。
+1. 在「界面布局」创建并激活一个全屏**客户端控件容器**；其中保留一个名为 `LK_C_Root` 的客户端**容器节点**，将 `client_main.lua` 的客户端脚本映射绑定到这个节点。根节点覆盖整个画布，保持激活、可见；脚本依赖 `script.object` 指向该容器。移除旧版根下手工放置的 `LK_T_*`、`LK_C_Plot*` 等静态 U1 控件，避免重影。
+2. 在「客户端控件模板」库各建立**以下八个父节点模板**。模板内部不挂 Lua 脚本；实例化只能使用已注册模板的父节点，不能将布局里的服务器控件或模板的子节点 ID 直接作为实例化来源。
+3. 进入客户端脚本资源的「编辑脚本变量」，创建下表八个**整数**参数，分别填写编辑器中该客户端控件模板的真实**模板索引**。索引来自编辑器选中模板时显示的索引，不能使用运行时控件 ID 或猜测值。`script:GetParam` 读取该整数并传给 `game.InstantiateClientUIControl`。
 
-### 静态区域（1920×1080 参考像素）
-
-| 区域 | 建议范围/位置 | 编辑器要求 |
+| Lua 参数 | 编辑器客户端模板类型 | 视觉/交互配置 |
 | --- | --- | --- |
-| 顶栏 | x=40～1880, y=24～112 | 游戏名称、`LK_T_Day`、`LK_T_AdeptalEnergy`、`LK_T_Condense`、`LK_T_EndDay`；结束今日灰显且**无交互事件** |
-| 左侧访客留白 | x=40～390, y=150～715 | 只放 `LK_T_Visitor` 文本与空位；不创建对话或发放物品控件 |
-| 中央水晶球 | 中心约 (960,430)，可视直径约 620 | 透明圆球视觉、球内空地与**七个可见的六边形**（一中心＋六外围）；`LK_T_Ground` |
-| 水晶球正下方 | x=460～1450, y=755～1050 | `LK_T_Inventory`、`LK_T_Storage`，分别有**空的物品槽**及仓储容器，无种子图标 |
-| 左下剥壳工作区 | x=45～400, y=755～1050 | `LK_T_ShellStation`，仅设备预留/不可加工 |
-| 右下榨汁／装杯工作区 | x=1500～1870, y=755～1050 | `LK_T_Juicer`，仅设备预留/不可加工 |
-| 右侧委托/探索 | x=1510～1875, y=150～715 | `LK_T_OrderPanel`、`LK_T_Discovery`，没有真实订单、交单或探索结果 |
-| 反馈区 | 水晶球下缘或上缘 | `LK_T_SelectedPlot`、`LK_T_Feedback`，鼠标点击后可清楚读到状态 |
+| `LK_TPL_CONTAINER` | 容器节点 | 空白、无子节点；运行时作为 `LK_U1_Runtime`，占满根画布 |
+| `LK_TPL_FRAME` | 图片 | 透明/半透明底 + 连续矩形边框；可按目标尺寸拉伸；仅装饰、**不抢光标** |
+| `LK_TPL_ORB` | 图片 | 透明水晶球圆形边缘；仅装饰、**不抢光标** |
+| `LK_TPL_HEX_OPEN` | 图片 | 已开垦六边形地格；装饰层 |
+| `LK_TPL_HEX_LOCKED` | 图片 | 锁定六边形地格；装饰层 |
+| `LK_TPL_SELECTION` | 图片 | 金色六边形空心高亮环，中央透明；默认隐藏；不能挡文字与点击 |
+| `LK_TPL_TEXT` | 文本框 | 左对齐，文字背景透明、无射线交互；字号与内容由 Lua 修改 |
+| `LK_TPL_HIT` | 光标检测区域 | 无可见图片，开启射线检测；仅七块地格可触发点击 |
 
-### 七格蜂巢地块（全是可见六边形）
+**没有统一的固定 `templateIndex` 值。** 每个奇域的实际模板索引由编辑器资源确定。现有仓库不包含这八个实际模板及其已注册索引；完成编辑器配置前，脚本会输出 `binding_failed reason=missing_template_index ...` 并拒绝构造假界面。
 
-| 地格 | 稳定 `plotId` | 参考中心坐标 | U1 状态 | 必须存在的三个直接子控件 |
-| --- | --- | --- | --- | --- |
-| 中心 | `P01` | (960,430) | 已开垦 | `LK_C_Plot01` / `LK_T_Plot01State` / `LK_I_Plot01Selected` |
-| 上方 | `P02` | (960,263) | 未开垦 | `LK_C_Plot02` / `LK_T_Plot02State` / `LK_I_Plot02Selected` |
-| 右上 | `P03` | (1105,346) | 未开垦 | `LK_C_Plot03` / `LK_T_Plot03State` / `LK_I_Plot03Selected` |
-| 右下 | `P04` | (1105,514) | 未开垦 | `LK_C_Plot04` / `LK_T_Plot04State` / `LK_I_Plot04Selected` |
-| 下方 | `P05` | (960,597) | 未开垦 | `LK_C_Plot05` / `LK_T_Plot05State` / `LK_I_Plot05Selected` |
-| 左下 | `P06` | (815,514) | 未开垦 | `LK_C_Plot06` / `LK_T_Plot06State` / `LK_I_Plot06Selected` |
-| 左上 | `P07` | (815,346) | 未开垦 | `LK_C_Plot07` / `LK_T_Plot07State` / `LK_I_Plot07Selected` |
+## 布局与事件
 
-每格需额外在编辑器创建**静态六边形底图**，中心使用开放色调，外围六格使用锁定/灰调。`LK_C_PlotNN` 必须使用 **光标检测区域控件**，覆盖该格六边形内部、开启射线检测，建议初始命中矩形约 105×105；不要扩大到与相邻地格重叠。`LK_T_PlotNNState` 用 **文本框控件**，置于命中区不拦截输入的图层。`LK_I_PlotNNSelected` 使用 **图片控件**，编辑器预置透明高亮边框、初始隐藏，始终不阻挡光标射线。检查水晶球其他前景美术是否挡住点击。
+所有布局都由 `client_main.lua` 内的 `LAYOUT` 声明，参考画布 **1920×1080**，坐标原点位于左上角。运行时通过官方 `game.GetUICanvasSize()` 获取当前画布，以 `min(width/1920, height/1080)` 统一缩放并居中；使用 `SetAnchorMin/Max(0.5,0.5)`、`SetPivot(0.5,0.5)`、`SetAnchoredPosition`、`SetSizeDelta` 和字体字号缩放。PC 1600×900 与手机 1280×720 同属 16:9，缩放倍率分别为 5/6 与 2/3；画布发生变化时 `OnUpdate` 重排现有实例，不重新创建。千星控制器安全区和屏幕刘海区仍需实机检查。
 
-其他 14 个动态文字控件（均为文本框）：
+Lua 运行时创建十个可见、独立边界的区域：**顶栏、访客、洞天水晶球、委托、探索、剥壳、物品栏、仓储、榨汁/装杯、反馈**。九个矩形区域用 `LK_TPL_FRAME`，中央水晶球以 `LK_TPL_ORB` 的圆形轮廓作为边框。区域文本与边框位置使用同一份 `LAYOUT` 数据，物品栏/仓储共 14 个空槽位边框。
 
-`LK_T_Day`、`LK_T_AdeptalEnergy`、`LK_T_Condense`、`LK_T_Visitor`、`LK_T_Inventory`、`LK_T_Storage`、`LK_T_Ground`、`LK_T_ShellStation`、`LK_T_Juicer`、`LK_T_OrderPanel`、`LK_T_Discovery`、`LK_T_EndDay`、`LK_T_SelectedPlot`、`LK_T_Feedback`。
+七格中心与顺时针顺序：`P01` 中心 `(930,407)`，外围依次 `P02` `(930,252)`、`P03` `(1063,330)`、`P04` `(1063,484)`、`P05` `(930,561)`、`P06` `(797,484)`、`P07` `(797,330)`（均为参考画布左上坐标）。每格创建独立地块图片、透明高亮环、状态文字与 `LK_C_PlotNN` 光标检测区域。**热区在最上层创建**，环与底图为装饰层，不应阻止热区接收点击。
 
-**固定图形与空物品槽**均由编辑器布局，不得根据本脚本 `Game` 中的空库存自动假设真实创建了种子或物品。
+实际状态：P01 已开垦，可选中或取消；P02～P07 锁定，点击只提示拒绝。顶部初始第 1 天、仙力 0。结束今日、访客、凝聚、仓储、加工、委托及探索均仅显示禁用/待开发文本，**不接入 U2～U9**。
 
-## 2. 点击调用与权威状态
+生命周期：每次 `OnStart` 先移除旧监听，销毁上次的同名 `LK_U1_Runtime`，再用八个模板索引构建场景。`OnDestroy` 清理该场景与七个监听；实例销毁使用官方 `game.DestroyClientUIControl`。各控件通过运行时返回值管理，不再要求编辑器预放 35 个命名控件。
 
-- 每个光标检测区域按 `Enum.CursorEventType.CursorClick` 绑定一次，闭包固定对应 `P01..P07`；无需读取鼠标坐标来猜测 `plotId`。
-- `Game.plots[P01].unlocked = true`；其余六格 `unlocked = false`。这是 U1 初始显示状态，**未实现**消耗仙力开垦。
-- 点击 `P01`：`Game.selectedPlotId = "P01"`，选中框可见，文本提示“已选中”。再次点击：清除选中与高亮。
-- 点击任一锁定格：对应 `plotId` 出现在拒绝反馈中，**不改变**当前已选地格；不会扣仙力或开垦。控制台输出 `[LK/U1] plot_click ...` 可复核。
-- 顶栏显示第 1 天、仙力 0，属于 **U1 显示初始化值**，未接入存档、订单、凝聚额度或结算；“结束今日”必须呈现禁用，不绑定点击函数。其余生产与探索区域同理。
-- 一旦必需控件缺失，脚本输出 `[LK/U1] binding_failed missing=...`，不注册半套事件；可先依据日志补齐编辑器对象。
-- `OnStart` 在检查宿主与事件枚举前先清理旧监听；每条监听保存注册时的事件类型，清理时不读取当前全局 `Enum`。重复启动、启动条件失效和 `OnDestroy` 都应移除旧订阅。
+## DSH / 千星验证步骤
 
-## 3. 实机操作与应保存的证据
+DSH 模拟器中需要将**真实 U1 Lua 原文件**配置到对应客户端脚本映射，并在测试存档注册与编辑器一致的模板索引，确认模拟器支持 `game.InstantiateClientUIControl`、`game.DestroyClientUIControl`、`game.GetUICanvasSize`、`script:GetParam`、尺寸与锚点 API。若沙箱缺少正式 API，应保留明确的阻塞日志和原因，**不得使用沙箱专有 Lua 创建方法替代**。
 
-1. 在千星编辑器完成脚本映射、控件布局、运行 16:9 关卡并截图全景；七格、所有固定区域及空物品槽应同时可见。建议再以另一种 16:9 分辨率复核锚点。
-2. 点击中心 `P01`，截图选中框与“当前地格 P01”，记录控制台 `status=selected`。再次点击中心确认 `status=deselected`、高亮消失。
-3. 先选中中心再依次点击外围 `P02..P07`，记录六条 `status=locked` 的日志，每次确认 `selected=P01`、仙力仍为 0、天数仍为 1。
-4. 点击空物品栏、仓储、工作台、委托、探索、结束今日区域，确认**没有错误成功反馈**，没有凭空创建物品、订单或跨日。
-5. 保存实机截图、10～30 秒屏幕录制、脚本控制台日志、编辑器布局对象列表与当前游戏版本。没有这些证据，U1 验收状态保持 **Unverified**。
+- PC 1600×900、手机 1280×720：检查十个完整区域边框、七格可见、文字不溢出（特别是右下工作区）、金色环不压状态文字；保存两端截图。
+- 点击 P01、再次 P01，再点击 P02～P07：确认选中/取消/锁定拒绝及 `[LK/U1] plot_click` 日志；水晶球边缘、背景图片与状态文字不能抢点击。
+- 重复 `OnStart`、退出重进：确认 `LK_U1_Runtime` 仅一份，每个 `LK_C_PlotNN` 仅一条点击监听；旧对象销毁，没有资源或按钮重复创建。
+- 点击禁用功能区：不能产生种子、订单、生产物、仙力或游戏日推进。模拟器运行结果与真实千星编辑器运行结果分别记录，不以模拟器截图替代用户实机验收。
 
-## 4. 客户端接口
+此次环境能执行 Lua 5.3 **语法解析**，没有连接千星编辑器，也没有可调用的 DSH 模拟器。故**动态模板创建、运行时布局、真实点击、图层和 PC/手机视觉均 UNVERIFIED**，原先 U1 沙箱 PASS 不适用于本版。按 Request 不恢复 `mock_click.lua`，不提交新的假控件 Lua 测试。
 
-游戏脚本使用的客户端 Lua 接口：`script.object`、`OnStart`/`OnDestroy`、`GetChild`、`AddCursorEventListener`/`RemoveCursorEventListener`、`SetVisible`、文本 `.text`、`showCursor`、`raycastTarget`。
+## API 依据
 
-接口参考：
-- 官方 7.1 文档：https://act.mihoyo.com/ys/ugc/tutorial/detail/mhtakr07vej4
-- API 辅助索引：https://haminpants.github.io/miliastra-lua-api/class/ClientUICursorEventAreaControl.html
-
-## 5. 未实现与未验证
-
-- 未执行编辑器导入、贴图制作、静态对象配置及真实 16:9 渲染；没有截图与录屏。
-- 未验证新关卡客户端脚本映射、`GetChild` 实际树结构、真实控件命中区、遮挡/鼠标行为与脚本重入。
-- 未创建种子、物品 ID、拖动或种植；未实现元素、昼夜、采摘、生产、订单、经济、探索或访客。下一阶段 U2 的全部工作必须由 Lead 另行分派。
+- 千星官方客户端控件与脚本说明：https://act.mihoyo.com/ys/ugc/tutorial/detail/mhbgxf0nynww
+- 社区从千星 Lua 注释生成的 API 索引：`game`（`InstantiateClientUIControl` / `DestroyClientUIControl` / `GetUICanvasSize`）：https://haminpants.github.io/miliastra-lua-api/global/game.html
+- 控件通用锚点、位置、尺寸、销毁前状态：https://haminpants.github.io/miliastra-lua-api/class/ClientUIBaseControl.html
+- `Script:GetParam`：https://haminpants.github.io/miliastra-lua-api/class/Script.html
+- 模拟器支持范围（仅可行性线索，实际环境版本仍待验证）：https://github.com/1475505/miliastra-beyond-simulator/blob/master/studio/docs/control-support.md
