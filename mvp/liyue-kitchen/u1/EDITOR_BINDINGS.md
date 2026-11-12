@@ -1,6 +1,6 @@
 # U1 — 千星 16:9 主场景与 Lua 绑定
 
-状态：**待实际千星奇域编辑器搭建 / 待实机复测**。本目录提供可映射 Lua 脚本、编辑器控件清单和本地模拟测试，**不包含编辑器关卡存档或真实游戏截图**。
+状态：**待实际千星奇域编辑器搭建 / 待实机复测**。本目录提供游戏 Lua 脚本与编辑器控件清单，**不包含编辑器关卡存档或真实游戏截图**。
 
 ## 1. 加载和静态布局
 
@@ -60,18 +60,15 @@
 4. 点击空物品栏、仓储、工作台、委托、探索、结束今日区域，确认**没有错误成功反馈**，没有凭空创建物品、订单或跨日。
 5. 保存实机截图、10～30 秒屏幕录制、脚本控制台日志、编辑器布局对象列表与当前游戏版本。没有这些证据，U1 验收状态保持 **Unverified**。
 
-## 4. 离线测试与平台 API 来源
+## 4. 客户端接口
 
-从仓库根目录运行 `texlua mvp/liyue-kitchen/u1/tests/mock_click.lua`（或 `lua5.3 mvp/liyue-kitchen/u1/tests/mock_click.lua`）。本轮实际使用 LuaTeX 附带的 **Lua 5.3** 执行，输出：`PASS U1 mock: plot click behavior, repeated start, missing host/Enum/control cleanup, and OnDestroy`。测试覆盖成功启动后重复启动、缺失 `script.object` 重入、缺失全局 `Enum` 重入、控件漏绑重入及 `OnDestroy` 清理；千星客户端运行时和编辑器行为仍未验证。
+游戏脚本使用的客户端 Lua 接口：`script.object`、`OnStart`/`OnDestroy`、`GetChild`、`AddCursorEventListener`/`RemoveCursorEventListener`、`SetVisible`、文本 `.text`、`showCursor`、`raycastTarget`。
 
-`tests/mock_click.lua` 使用假控件树触发 Lua 回调，验证七个地格映射、中心选择/取消、锁定拒绝、渲染和监听清理，以及漏绑时不注册监听。该测试不加载编辑器资源，不测试真实光标、视觉/分辨率或平台存档能力。
-
-本轮使用的 Lua 接口：`script.object`、`OnStart`/`OnDestroy`、`GetChild`、`AddCursorEventListener`/`RemoveCursorEventListener`、`SetVisible`、文本 `.text`、`showCursor`、`raycastTarget`。参考：
+接口参考：
 - 官方 7.1 文档：https://act.mihoyo.com/ys/ugc/tutorial/detail/mhtakr07vej4
 - API 辅助索引：https://haminpants.github.io/miliastra-lua-api/class/ClientUICursorEventAreaControl.html
-- 仓库内只读参考：`mvp/aquamelon-kitchen/09-lua-editor-notes.md`（已验证 Lua 宿主/文字/鼠标，未确认完整新关卡）
 
-## 5. 本轮明确未实现／未验证
+## 5. 未实现与未验证
 
 - 未执行编辑器导入、贴图制作、静态对象配置及真实 16:9 渲染；没有截图与录屏。
 - 未验证新关卡客户端脚本映射、`GetChild` 实际树结构、真实控件命中区、遮挡/鼠标行为与脚本重入。
