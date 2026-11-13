@@ -1,55 +1,24 @@
-# Repository Guidelines
+# Repository guidance
 
-This template bootstraps a Genshin-TS project. Maintain it with user workflow and compile outputs in mind.
+## Active project
 
-## Read First
-- `README.md`: full usage flow, constraints, and global function cheat sheet.
-- `README_ZH.md`: Chinese template guide and terminology reference when working in Chinese.
-- `docs/EDITOR_BOUNDARIES.md`: English decision rules for code-vs-editor responsibilities.
-- `docs/EDITOR_BOUNDARIES_ZH.md`: Chinese boundary rules and preferred editor terminology.
+Current development is **《璃月厨房：还得自己种》 Web MVP**, scoped to `mvp/liyue-kitchen/` design docs and the future `packages/liyue-kitchen/` application.
 
-## Layout
-- `src/main.ts`: default entry example
-- `gsts.config.ts`: compile config (entries/outDir/inject)
-- `dist/`: build outputs (generated)
-- `README.md`: user guide
-- `CLAUDE.md`: AI rules
+Read first:
+- `mvp/liyue-kitchen/README.md` — game intent, technology and design rules
+- `mvp/liyue-kitchen/05-ui-driven-implementation.md` — U1–U9 feature/acceptance contracts
+- Team Index #7 and the assigned Member/Work Issue — role and actual task
 
-## Typical Workflow
-1. Update the NodeGraph ID in `src/main.ts`
-2. Add `inject` in `gsts.config.ts` when needed
-3. Run `npm run dev` for incremental compile
+## Implementation boundaries
 
-## Hard Rules
-- Prefer implementing gameplay logic in code, but do not assume editor-authored resources already exist.
-- Separate every substantial feature into `code changes` and `editor setup required`.
-- Call out blockers clearly when a requested feature needs editor work first.
-- When responding in Chinese, prefer the wording and domain terms from `README_ZH.md` and `docs/EDITOR_BOUNDARIES_ZH.md`.
-- Update `entries` when adding new entry files.
-- Entry events use `g.server({ id }).on(...)`; same ID entries merge automatically.
-- `gstsServer*` must be top-level and only allow a single trailing `return`.
-- Avoid Promise/async/recursion/JSON/Object in graph scope.
-- Conditions must be `boolean`; use `bool(...)` when needed.
-- Use `bigint` for integer ops; avoid modulo/bitwise on `number`.
-- `while(true)` is capped; use timers or explicit counters.
-- Empty arrays must have inferable element types.
-- Logging: use `print(str(...))` or `console.log(x)` (single argument).
-- Use type helpers when needed: `int/float/str/bool/vec3/configId/prefabId/entity`.
+- React + TypeScript + Vite for HUD, menus and ordinary panels; PixiJS 8 for the 2D game scene, drawables and pointer/touch interaction.
+- Keep game state, simulation, unique IDs and domain commands independent of React, PixiJS and DOM nodes.
+- A visible feature is complete only after real browser interaction and state evidence. Use Playwright for user-facing operations. Test numerical rules deterministically where useful; do not create fake UI tests that replace actual interaction.
+- Implement only the assigned U stage. Never claim an unimplemented UI, visual asset, feature, platform build or test is complete.
+- Use an independent implementation PR; Coder does not self-review or merge. Independent Reviewer reports findings; Lead decides integration.
+- Do not inherit other projects' roles or tasks. Existing packages are separate reference code; they are not the Web MVP application.
+- Tauri v2 is future packaging. Do not introduce Rust business logic or mobile packaging into the initial Web stage.
 
-## Node Graph Variables
-- Declare with `g.server({ variables: { ... } })`.
-- Read/write via `f.get` / `f.set`, keep types aligned.
+## Other repository areas
 
-## Debugging Outputs
-- `.gs.ts`: verify compiled node calls
-- `.json`: verify connections and types
-- `.gia`: final injectable output
-
-## Common Scripts
-- `npm run dev`
-- `npm run build`
-- `npm run maps`
-- `npm run backup`
-
-## Reference Definitions
-- Search function/event comments in `node_modules/genshin-ts/dist/src/definitions/`.
+When explicitly assigned work in another module, follow its module-specific contracts and documentation. This root guide does not reassign such work to the Liyue Kitchen team.
