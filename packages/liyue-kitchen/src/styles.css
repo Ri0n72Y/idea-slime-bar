@@ -1,0 +1,87 @@
+:root {
+  font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  color: #e6e9da;
+  background: #101716;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button { font: inherit; }
+#root { min-height: 100dvh; display: grid; place-items: center; }
+.game-shell {
+  width: min(100vw, 177.7778dvh);
+  aspect-ratio: 16 / 9;
+  max-height: 100dvh;
+  display: grid;
+  grid-template-rows: 10% 55% 28% 7%;
+  background: #16201d;
+  border: 2px solid #688d7b;
+  box-shadow: 0 0 48px #0009;
+  overflow: hidden;
+  font-size: clamp(11px, 1.1vw, 17px);
+}
+.region {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #587a6b;
+  background: linear-gradient(150deg, #1d2b27, #17221e);
+  padding: clamp(6px, 0.75vw, 14px);
+  overflow: hidden;
+}
+.region h2 { font-size: 1em; color: #d9c88e; letter-spacing: .08em; margin: 0 0 .65em; font-weight: 650; }
+.region small, .hint { color: #a7b8aa; font-size: .77em; }
+.header-area { display: flex; align-items: center; justify-content: space-between; gap: 1.1vw; padding: .45% 1.5%; border-bottom: 2px solid #8b916e; }
+.brand { flex: 0 0 auto; }
+.brand-kicker { font-size: .62em; letter-spacing: .24em; color: #9eae96; }
+.brand h1 { font-size: 1.5em; line-height: 1.4; font-weight: 700; margin: 0; color: #e6d8ac; }
+.brand h1 small { font-size: .55em; color: #e0e4d2; font-weight: 400; }
+.header-stats { display: flex; align-items: center; gap: 1vw; margin-left: auto; }
+.pill { white-space: nowrap; background: #2b4036; border: 1px solid #6f9c85; padding: .4em .85em; border-radius: 999px; }
+button { padding: .45em .75em; border: 1px solid #749886; color: #e8f2dd; background: #365445; border-radius: 4px; }
+button:disabled { cursor: not-allowed; opacity: .55; }
+button:not(:disabled) { cursor: pointer; }
+.header-area .action { white-space: nowrap; }
+.main-area, .bottom-area { display: grid; grid-template-columns: 22% 51% 27%; min-height: 0; }
+.visitors { display: flex; flex-direction: column; }
+.quiet-panel { flex: 1; min-height: 0; border: 1px dashed #51675e; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1vw; color: #c9d8c9; }
+.icon-disc { display: grid; place-items: center; width: 4.3em; height: 4.3em; border-radius: 50%; border: 2px solid #7a8c76; color: #c8b984; background: #2d4036; }
+.quiet-panel p { margin: .8em 0 .3em; }
+.crystal-region { position: relative; padding: 0; background: radial-gradient(circle at center, #27483c 0%, #1a2d27 57%, #14231e 100%); }
+.crystal-title { position: absolute; top: 3%; left: 3%; right: 3%; display: flex; justify-content: space-between; align-items: center; gap: 1em; pointer-events: none; z-index: 1; }
+.crystal-title h2 { margin: 0; }
+.crystal-title span { font-size: .78em; color: #b7cbbc; }
+.crystal-host { position: absolute; inset: 0; touch-action: none; }
+.crystal-host canvas { display: block; }
+.crystal-footer { position: absolute; bottom: 2%; left: 3%; right: 3%; display: flex; justify-content: space-between; pointer-events: none; gap: 1em; font-size: .8em; color: #d5eadc; }
+.renderer-error { position: absolute; z-index: 3; top: 40%; left: 4%; right: 4%; color: #ffb1a3; font-size: .85em; text-align: center; }
+.right-column, .bottom-center { min-height: 0; display: grid; }
+.right-column { grid-template-rows: 55% 45%; }
+.bottom-center { grid-template-rows: 48% 52%; }
+.orders, .exploration, .peeling, .juicing { display: flex; flex-direction: column; }
+.empty-state { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; color: #b6c6bd; border: 1px dashed #4d685a; background: #21362b; text-align: center; }
+.orders .hint, .exploration .hint { margin: .5em 0; }
+.orders button, .exploration button { align-self: flex-start; }
+.bottom-area .region { padding-top: .65em; }
+.workbench-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; border: 1px dashed #506a59; color: #afbeac; min-height: 0; }
+.workbench-placeholder span { font-size: 2em; color: #a4c3aa; line-height: 1; }
+.workbench-placeholder p { font-size: .77em; margin: .3em 0; text-align: center; }
+.peeling button { align-self: flex-start; margin-top: .4em; }
+.actions { display: flex; gap: .5em; margin-top: .45em; }
+.inventory .hint, .storage .hint { margin: -.25em 0 .45em; }
+.inventory-slots, .storage-slots { display: flex; gap: .65em; }
+.inventory-slots i, .storage-slots i { width: 2.3em; height: 2.3em; background: #263a31; border: 1px solid #526f5e; border-radius: 4px; }
+.inventory h2 small { font-size: .74em; font-weight: 400; margin-left: .5em; }
+.status-area { display: flex; align-items: center; gap: 1em; padding: 0 1%; border-top: 2px solid #8b916e; background: #243c31; }
+.status-area strong { white-space: nowrap; color: #d8c283; }
+.status-area span[data-testid="feedback"] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-area.notice-locked { background: #493729; }
+.status-area.notice-success { background: #244936; }
+.version { margin-left: auto; color: #91a59b; font-size: .7em; white-space: nowrap; }
+@media (max-width: 800px) {
+  .game-shell { font-size: 10px; }
+  .region { padding: 4px; }
+  .crystal-region { padding: 0; }
+  .header-area { padding: 2px 8px; }
+  .region h2 { margin-bottom: 4px; }
+  .version { display: none; }
+}
