@@ -9,7 +9,7 @@ on:
       - 'pnpm-lock.yaml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   u1:
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: pnpm/action-setup@v4
         with:
           version: 12.9.1
@@ -26,18 +26,7 @@ jobs:
         with:
           node-version: '22'
           cache: pnpm
-      - name: Resolve dependencies for new workspace
-        run: pnpm install --no-frozen-lockfile
-      - name: Bootstrap lockfile once on this same-repository implementation branch
-        if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'feat/liyue-web-u1-pixijs'
-        run: |
-          if ! git diff --quiet -- pnpm-lock.yaml; then
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add pnpm-lock.yaml
-            git commit -m 'chore(liyue): generate frozen workspace lockfile'
-            git push origin HEAD:feat/liyue-web-u1-pixijs
-          fi
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen typecheck
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen test:domain
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen build
