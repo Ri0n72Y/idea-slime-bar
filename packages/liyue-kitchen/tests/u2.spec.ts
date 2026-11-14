@@ -36,6 +36,7 @@ async function ballPoint(page: Page, slot = 0) {
 }
 
 test("desktop 1600x900: actual pointer seed drag, reject invalid, condense collect water, night and persistence", async ({ page }, info) => {
+  test.setTimeout(90_000); // Full U2 chain: several pointer drags, nightly simulation, and IndexedDB write.
   await page.setViewportSize({ width: 1600, height: 900 });
   await start(page);
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
@@ -79,6 +80,7 @@ test("desktop 1600x900: actual pointer seed drag, reject invalid, condense colle
 });
 
 test("touch 1280x720: genuine press-move-release DOM seed to Pixi target", async ({ browser }, info) => {
+  test.setTimeout(90_000); // Includes CDP touch sequence and full seed-to-night flow.
   const context = await browser.newContext({
     viewport: { width: 1280, height: 720 }, isMobile: true, hasTouch: true,
     deviceScaleFactor: 1,
