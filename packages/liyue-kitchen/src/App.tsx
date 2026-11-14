@@ -212,7 +212,8 @@ export function App() {
           <div className="dialog-pane report-pane">
             <h2>第 {report.toDay} 天 · 次晨简报</h2>
             <p>昨夜经过 {report.toUH - report.fromUH} uh。根系已实际吸收养分，土壤保留率与器官成长按小时结算。</p>
-            <p data-testid="report-stage">中心地格：{state.plots.P01.plant ? stageLabel(state, "P01") : "尚未播种"}</p>
+            <p data-testid="report-stage">中心地格：{report.plots.P01.stageBefore ?? "空地"} → {report.plots.P01.stageAfter ?? "空地"}；叶片 {report.plots.P01.leafCountBefore} → {report.plots.P01.leafCountAfter}</p>
+            <p>果实进度：当前 {report.plots.P01.fruitCountAfter} 个生殖器官；具体成长事件见下方。</p>
             <ul className="event-list">{(report.events.length ? report.events.slice(-12) : ["昨夜没有新的阶段转换"]).map((item, i) => <li key={`${i}-${item}`}>{item}</li>)}</ul>
             <p className="hint">凝聚额度已重置，可继续培育。</p>
             <button type="button" data-testid="close-report" onClick={() => setReportDismissed(report.toDay)}>继续劳动</button>

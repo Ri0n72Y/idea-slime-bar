@@ -67,6 +67,7 @@ test("desktop 1600x900: actual pointer seed drag, reject invalid, condense colle
   await expect(page.getByTestId("night-report")).toBeVisible();
   await expect(page.getByTestId("quota")).toContainText("8/8");
   await expect(page.getByTestId("report-stage")).toContainText("Seed");
+  await expect(page.getByTestId("report-stage")).toContainText("→");
   await page.getByTestId("close-report").click();
   await expect(page.getByTestId("save-status")).toContainText("已保存");
   await page.screenshot({ path: info.outputPath("u2-desktop-1600x900.png") });
