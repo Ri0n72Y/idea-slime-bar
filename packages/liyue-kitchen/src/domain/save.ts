@@ -16,7 +16,7 @@ export function validateSave(value: unknown): GameState | null {
   if (rec.version !== SAVE_VERSION || !rec.game || rec.game.schemaVersion !== SAVE_VERSION) return null;
   const g = rec.game;
   if (!Number.isSafeInteger(g.day) || g.day < 1 || !Number.isSafeInteger(g.worldUH) || g.worldUH < 0 ||
-    g.worldUH !== (g.day - 1) * 24 || !Number.isSafeInteger(g.nextObjectSeq) ||
+    !Number.isSafeInteger(g.nextObjectSeq) ||
     !Number.isSafeInteger(g.dayCondenseLimit) || !Number.isSafeInteger(g.dayCondenseUsed) ||
     g.dayCondenseUsed > g.dayCondenseLimit || !Number.isSafeInteger(g.randomState) ||
     !isVector(g.heldElements) || !g.plots || !g.items || !g.looseBalls || !Array.isArray(g.eventLog)) return null;

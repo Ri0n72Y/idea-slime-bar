@@ -1,6 +1,6 @@
 import "./u2.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
-import { ELEMENTS, ELEMENT_VIEW } from "./domain/config";
+import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
 import { remainingCondenses, stageLabel, type PlotId } from "./domain/game";
 import { CrystalScene } from "./scene/CrystalScene";
@@ -199,7 +199,7 @@ export function App() {
         <div className="dialog-backdrop" role="dialog" aria-modal="true" aria-label="确认结束今日" data-testid="end-day-dialog">
           <div className="dialog-pane">
             <h2>结束第 {state.day} 天？</h2>
-            <p>将推进 {state.lastNightReport ? "下一轮 " : ""}24uh。未收集元素球会消散，随后进入次晨。</p>
+            <p>将推进 {state.lastNightReport ? "下一轮 " : ""}{U2_CONFIG.nightUH}uh。未收集元素球会消散，随后进入次晨。</p>
             <div className="dialog-actions">
               <button type="button" data-testid="cancel-day" onClick={() => gameStore.dispatch({ type: "CANCEL_END_DAY" })}>继续今日</button>
               <button type="button" data-testid="confirm-day" onClick={() => gameStore.dispatch({ type: "CONFIRM_END_DAY", expectedDay: state.day })}>确认结算</button>

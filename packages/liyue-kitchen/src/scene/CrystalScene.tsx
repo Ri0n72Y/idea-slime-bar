@@ -92,7 +92,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
 
   // Every loose ball is a real world item with a stable identity, rendered and collected by Pixi.
   for (const ball of Object.values(state.looseBalls)) {
-    const angle = -Math.PI / 2 + (ball.slot / 8) * 2 * Math.PI + 0.18;
+    const angle = -Math.PI / 2 + (ball.slot / Math.max(1, state.dayCondenseLimit)) * 2 * Math.PI + 0.18;
     const bx = cx + Math.cos(angle) * (orbRadius + 18);
     const by = cy + Math.sin(angle) * (orbRadius + 18);
     const info = ELEMENT_VIEW[ball.element];
