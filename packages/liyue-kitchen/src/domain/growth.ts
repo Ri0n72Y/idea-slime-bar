@@ -145,6 +145,15 @@ export function advancePlotOneUH(plot: GardenPlot, hour: number, random: () => n
   for (const leaf of tree.leaves) {
     const leafAffinity = effectiveAffinity(leaf.baseAffinity, leaf.growth);
     const newFruitGrowth = zeros();
+    // Every channel in this uh uses the SAME pre-input fruit mass and affinity.
+    // Sequential per-element recomputation would make enrichment depend on element order.
+    const fruit = leaf.fruit;
+    const fruitMassAtStepStart = fruit ? reproductiveMass(fruit.free, fruit.reaction) : 0;
+    const fruitAffinityAtStepStart = fruit
+      ? (fruit.lockedAffinity ?? effectiveAffinity(fruit.baseAffinity,
+        fruit.free.map((v, i) => Math.max(0, v - fruit.stageStart[i])) as Vector)) : null;
+    const enrichmentAtStepStart = fruit?.stage === "MatureFruit"
+      ? 0.5 * Math.max(0, Math.min(1, (150 - fruitMassAtStepStart) / 60)) : 1;
     for (let i = 0; i < 7; i++) {
       const grant = budget[i] * 0.30 * Math.min(1, Math.max(0, leafAffinity[i]));
       if (grant <= 0) continue;
@@ -163,14 +172,8 @@ export function advancePlotOneUH(plot: GardenPlot, hour: number, random: () => n
         ledger.newOrganGrowthG += gained;
         if (leaf.stage === "LargeLeaf") ledger.leafEnvironmentalLossV += leafV * 0.4;
       }
-      if (fruitV > 0 && leaf.fruit) {
-        const fruit = leaf.fruit;
-        const affinity = fruit.lockedAffinity ?? effectiveAffinity(fruit.baseAffinity,
-          fruit.free.map((v, j) => Math.max(0, v - fruit.stageStart[j])) as Vector);
-        const existingM = reproductiveMass(fruit.free, fruit.reaction);
-        const enrich = fruit.stage === "MatureFruit"
-          ? 0.5 * Math.max(0, Math.min(1, (150 - existingM) / 60)) : 1;
-        const gained = fruitV * affinity[i] * enrich;
+      if (fruitV > 0 && fruit && fruitAffinityAtStepStart) {
+        const gained = fruitV * fruitAffinityAtStepStart[i] * enrichmentAtStepStart;
         fruit.free[i] += gained;
         newFruitGrowth[i] += gained;
         ledger.newOrganGrowthG += gained;

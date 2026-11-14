@@ -223,3 +223,39 @@ test("store emits once and serializes persisted revisions without Seed duplicati
   assert.equal(Object.keys(store.getSnapshot().items).length, 0);
   assert.ok(calls >= 2);
 });
+
+test("mature fruit's 7D enrichment uses one pre-growth mass snapshot per uh", async () => {
+  const { advancePlotOneUH, newTree, newLedger } = await import("./growth.ts");
+  const { LEAF_TEMPLATE, FRUIT_TEMPLATE } = await import("./config.ts");
+  const plot = structuredClone(newGame().plots.P01);
+  const plant = newTree("plant:test");
+  plant.stage = "Sapling";
+  plant.reserve = [0, 0, 45, 0, 0, 0, 45]; // only Anemo and Geo: no legal ordinary/swirl target
+  plant.budGrowth = null;
+  plant.leaves.push({
+    id: "leaf:test", stage: "FibrousLeaf", growth: zeros(), baseAffinity: [...LEAF_TEMPLATE],
+    fruit: { stage: "MatureFruit", free: [0, 0, 45, 0, 0, 0, 45],
+      baseAffinity: [...FRUIT_TEMPLATE], lockedAffinity: [...FRUIT_TEMPLATE],
+      stageStart: zeros(), reaction: newReactionState() },
+  });
+  plot.plant = plant;
+  const before = [...plant.reserve];
+  advancePlotOneUH(plot, 1, () => 0.99, [], newLedger());
+  const free = plant.leaves[0].fruit!.free;
+  const spend = before.map((v, i) => v - plant.reserve[i]);
+  const total = spend.reduce((a, b) => a + b, 0);
+  assert.ok(total > 0);
+  // One mother leaf, extraction affinity Anemo=1, Geo=.8, mature share40%.
+  // Tree remainder and leaf share give per-element budgets; derive from actual
+  // per-channel total spend, without making a second fake material account.
+  const treeAffinity = [0.85, 1.15, 0.9, 0.75, 1.2, 0.7, 0.95];
+  const nominalShare = (i: number) => 0.30 * Math.min(1, LEAF_TEMPLATE[i]) * 0.4;
+  for (const i of [2, 6]) {
+    // Each used V in reserve spent comprises mother fruit part plus tree part.
+    // The tree budget equals total reserve spent, so the fruit is that share.
+    const expected = spend[i] * nominalShare(i) * 0.5 * FRUIT_TEMPLATE[i];
+    assert.ok(Math.abs((free[i] - 45) - expected) < 1e-9,
+      `element ${i} uses a different M snapshot`);
+    assert.ok(treeAffinity[i] > 0);
+  }
+});
