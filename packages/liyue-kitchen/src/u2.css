@@ -1,0 +1,40 @@
+/* U2 interaction surfaces. A drag ghost is visual only; Pixi owns plot hit testing. */
+.game-shell { position: relative; }
+.header-area { gap: .5vw; }
+.header-stats { gap: .4vw; }
+.header-area .pill { padding: .3em .5em; }
+.inventory-line { display: flex; gap: .65em; align-items: center; flex-wrap: wrap; min-height: 2.6em; }
+.seed-item { display: inline-flex; align-items: center; gap: .4em; padding: .28em .55em; background: #355746;
+  border: 1px solid #d7c38a; color: #e8f2dc; border-radius: 5px; cursor: grab; touch-action: none; user-select: none; }
+.seed-item:active { cursor: grabbing; }
+.seed-item span { font-size: 1.3em; }
+.seed-item small { color: #f0e5af; font-size: .8em; }
+.held-elements { display: flex; gap: .4em; flex-wrap: wrap; align-items: center; }
+.held-elements button { padding: .28em .5em; font-size: .83em; white-space: nowrap; }
+.held-elements .hint { margin: 0; }
+.drag-ghost { position: fixed; z-index: 1000; transform: translate(-50%, -50%); pointer-events: none;
+  display: grid; place-items: center; width: 40px; height: 40px; font-size: 29px;
+  border: 2px solid #d4b888; border-radius: 50%; background: #344938dd; }
+.drag-ghost.valid-target { border-color: #9feaab; background: #35694bdd; }
+.dialog-backdrop { position: absolute; inset: 0; z-index: 60; background: #07100bbf;
+  display: grid; place-items: center; }
+.dialog-pane { width: min(520px, 76%); max-height: 85%; overflow-y: auto;
+  padding: 1.5em; background: #233a30; border: 2px solid #bba876; box-shadow: 0 16px 55px #000c; }
+.dialog-pane h2 { color: #eedba9; margin: 0 0 .7em; font-size: 1.3em; }
+.dialog-actions { display: flex; gap: 1em; justify-content: flex-end; }
+.report-pane { width: min(720px, 82%); }
+.event-list { max-height: 13em; overflow-y: auto; padding-left: 1.7em; line-height: 1.5; }
+.report-reopen { font-size: .77em; margin-top: .5em; }
+.loading { min-height: 100dvh; display: grid; place-content: center; gap: 1em; text-align: center; }
+.loading h1 { font-size: 1.7em; }
+@media (max-width: 800px) {
+  .header-area { gap: 3px; }
+  .header-stats { gap: 2px; }
+  .header-stats .pill { padding: .2em .35em; }
+  .header-area .action { padding: .3em .45em; }
+  .inventory-line { gap: 3px; }
+  .seed-item { padding: 2px 4px; }
+  .held-elements { gap: 2px; }
+  .held-elements button { padding: 2px 4px; font-size: 9px; }
+  .dialog-pane { padding: 10px; }
+}

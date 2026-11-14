@@ -11,7 +11,9 @@ async function ready(page: Page) {
   for (const name of regions) await expect(page.getByTestId(`region-${name}`)).toBeVisible();
   await expect(page.getByTestId("day")).toContainText("第 1 天");
   await expect(page.getByTestId("energy")).toContainText("0");
-  await expect(page.locator("button:not([disabled])")).toHaveCount(0);
+  await expect(page.getByTestId("condense")).toBeEnabled();
+  await expect(page.getByTestId("end-day")).toBeEnabled();
+  await expect(page.getByTestId("seed-item")).toHaveCount(1);
 }
 
 async function plotPoint(page: Page, index: number) {
