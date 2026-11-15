@@ -1,13 +1,29 @@
 /** U2 authoritative world state. No React, PixiJS or browser APIs in this module. */
 import { ELEMENTS, U2_CONFIG, elementIndex, vectorSum, zeros, type Element, type Vector } from "./config.ts";
 import { advancePlotOneUH, newLedger, newTree, type GardenPlot, type NightLedger, type TreeStage } from "./growth.ts";
+import { reproductiveMass, type ReactionState } from "./reactions.ts";
 
 export const PLOT_IDS = ["P01", "P02", "P03", "P04", "P05", "P06", "P07"] as const;
 export type PlotId = (typeof PLOT_IDS)[number];
 export type Plot = GardenPlot & { id: PlotId };
 export type Notice = Readonly<{ kind: "info" | "success" | "locked"; message: string }>;
 export type GameEvent = { id: string; day: number; worldUH: number; kind: string; message: string };
-export type SeedItem = { id: string; kind: "Seed"; location: "inventory" };
+/** A world item has one persistent ID and exactly one location. */
+export type ItemLocation =
+  | { kind: "inventory" }
+  | { kind: "storage" }
+  | { kind: "ground"; plotId: PlotId; x: number; y: number };
+export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation };
+export type AquamelonItem = {
+  id: string; kind: "Aquamelon"; location: ItemLocation;
+  source: { plotId: PlotId; plantId: string; leafId: string };
+  free: Vector; reaction: ReactionState; baseAffinity: Vector; lockedAffinity: Vector | null;
+};
+export type GameItem = SeedItem | AquamelonItem;
+export function fruitMass(item: AquamelonItem): number {
+  return reproductiveMass(item.free, item.reaction);
+}
+
 export type ElementBall = { id: string; element: Element; initialV: 50; createdUH: number; slot: number };
 export type NightReport = {
   fromDay: number; toDay: number; fromUH: number; toUH: number;
@@ -22,7 +38,7 @@ export type NightReport = {
   events: string[];
 };
 export type GameState = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   day: number;
   worldUH: number;
   phase: "DAY_WORK" | "DAY_CONFIRM";
@@ -30,7 +46,8 @@ export type GameState = {
   adeptalEnergy: number;
   plots: Record<PlotId, Plot>;
   selectedPlotId: PlotId | null;
-  items: Record<string, SeedItem>;
+  selectedItemId: string | null;
+  items: Record<string, GameItem>;
   looseBalls: Record<string, ElementBall>;
   heldElements: Vector; // actual V acquired, not extra material copies
   dayCondenseUsed: number;
@@ -44,6 +61,9 @@ export type GameState = {
 export type Command =
   | { type: "SELECT_PLOT"; plotId: PlotId }
   | { type: "PLANT_SEED"; itemId: string; plotId: PlotId }
+  | { type: "HARVEST"; plotId: PlotId; plantId: string; leafId: string }
+  | { type: "SELECT_ITEM"; itemId: string }
+  | { type: "MOVE_ITEM"; itemId: string; destination: ItemLocation }
   | { type: "REJECT_DROP"; reason: string }
   | { type: "CONDENSE" }
   | { type: "COLLECT_BALL"; ballId: string }
@@ -57,9 +77,9 @@ export function newGame(seed = 0x17a5b7e1): GameState {
     id, open: i === 0, soil: zeros(), plant: null,
   }])) as Record<PlotId, Plot>;
   return {
-    schemaVersion: 1, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
-    adeptalEnergy: 0, plots, selectedPlotId: null,
-    items: { "item:seed:1": { id: "item:seed:1", kind: "Seed", location: "inventory" } },
+    schemaVersion: 2, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
+    adeptalEnergy: 0, plots, selectedPlotId: null, selectedItemId: null,
+    items: { "item:seed:1": { id: "item:seed:1", kind: "Seed", location: { kind: "inventory" } } },
     looseBalls: {}, heldElements: zeros(), dayCondenseUsed: 0,
     dayCondenseLimit: U2_CONFIG.condensesPerDay, nextObjectSeq: 2,
     randomState: (seed >>> 0) || 1, eventLog: [], lastNightReport: null,
@@ -169,7 +189,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     case "PLANT_SEED": {
       const p = validPlot(state, command.plotId);
       const seed = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
-      if (!seed || seed.kind !== "Seed" || seed.location !== "inventory") return notice(state, "locked", "种子已不存在，无法再次播种。");
+      if (!seed || seed.kind !== "Seed" || seed.location.kind !== "inventory") return notice(state, "locked", "种子已不存在，无法再次播种。");
       if (!p || !p.open) return notice(state, "locked", "此地格未开垦，种子未消耗。");
       if (p.plant) return notice(state, "locked", "此地格已有植物，种子未消耗。");
       const tree = newTree(`plant:${state.nextObjectSeq++}`);
@@ -178,6 +198,58 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       state.selectedPlotId = p.id;
       event(state, "plant", `种植 ${tree.id} 到 ${p.id}，消耗 ${seed.id}`);
       return notice(state, "success", `已在 ${p.id} 播下水瓜种子，开始凝聚元素并浇灌。`);
+    }
+    case "HARVEST": {
+      const p = validPlot(state, command.plotId);
+      if (!p?.open || p.plant?.id !== command.plantId) {
+        return notice(state, "locked", "地格或植株身份已失效，未采摘。");
+      }
+      const leaf = p.plant.leaves.find(l => l.id === command.leafId);
+      if (!leaf?.fruit || leaf.fruit.stage !== "MatureFruit") {
+        return notice(state, "locked", "只有成熟且尚未采摘的水瓜可以采收。");
+      }
+      const fruit = leaf.fruit;
+      // The original edible account leaves the tree. Never keep two owners.
+      const id = `item:aquamelon:${state.nextObjectSeq++}`;
+      const groundCount = Object.values(state.items).filter(
+        item => item.location.kind === "ground").length;
+      const item: AquamelonItem = {
+        id, kind: "Aquamelon",
+        location: { kind: "ground", plotId: p.id,
+          x: 0.36 + (groundCount % 3) * 0.07, y: 0.69 + (Math.floor(groundCount / 3) % 2) * 0.06 },
+        source: { plotId: p.id, plantId: p.plant.id, leafId: leaf.id },
+        free: [...fruit.free], baseAffinity: [...fruit.baseAffinity],
+        reaction: { ...structuredClone(fruit.reaction), charged: false, burning: false },
+        lockedAffinity: fruit.lockedAffinity ? [...fruit.lockedAffinity] : null,
+      };
+      leaf.fruit = null;
+      state.items[id] = item;
+      state.selectedItemId = id;
+      event(state, "harvest", `采摘 ${leaf.id} → ${id}，${fruitMass(item).toFixed(3)}G`);
+      return notice(state, "success", `成熟水瓜已采摘到水晶球地面（${id}）。`);
+    }
+    case "SELECT_ITEM": {
+      const item = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
+      if (!item) return notice(state, "locked", "物品不存在。");
+      state.selectedItemId = state.selectedItemId === item.id ? null : item.id;
+      return notice(state, "info", state.selectedItemId ? `选中 ${item.id}` : "已取消物品选择。");
+    }
+    case "MOVE_ITEM": {
+      const item = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
+      if (!item || item.kind !== "Aquamelon") return notice(state, "locked", "仅能搬运已采摘水瓜。");
+      const dest = command.destination;
+      if (dest.kind !== "inventory" && dest.kind !== "storage" && dest.kind !== "ground")
+        return notice(state, "locked", "未知放置位置。");
+      if (dest.kind === "ground" && (
+        !validPlot(state, dest.plotId)?.open ||
+        !Number.isFinite(dest.x) || !Number.isFinite(dest.y) ||
+        dest.x < 0 || dest.x > 1 || dest.y < 0 || dest.y > 1
+      )) return notice(state, "locked", "地面位置无效或地格尚未开垦。");
+      if (JSON.stringify(item.location) === JSON.stringify(dest)) return previous;
+      item.location = structuredClone(dest);
+      state.selectedItemId = item.id;
+      event(state, "move", `移动 ${item.id} → ${dest.kind}`);
+      return notice(state, "success", `${item.id} 已移至${dest.kind === "inventory" ? "物品栏" : dest.kind === "storage" ? "仓储" : "水晶球地面"}。`);
     }
     case "CONDENSE": {
       if (state.dayCondenseUsed >= state.dayCondenseLimit) return notice(state, "locked", "今日凝聚额度已用尽。");

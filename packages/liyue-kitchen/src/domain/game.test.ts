@@ -5,6 +5,7 @@ import { createGameStore } from "./store.ts";
 import { ELEMENTS, U2_CONFIG, vectorSum, zeros } from "./config.ts";
 import { applyNaturalGrowth, newReactionState, productAmount, advanceSustained, reproductiveMass } from "./reactions.ts";
 import { validateSave } from "./save.ts";
+import { newTree } from "./growth.ts";
 
 const cmd = (state: GameState, command: Parameters<typeof applyCommand>[1]) => applyCommand(state, command);
 const seed = "item:seed:1";
@@ -208,12 +209,12 @@ test("sustained electro-charge and burning settle one step, requiring real activ
 
 test("versioned saves accept a valid state, reject corruption and preserve exact single Seed", () => {
   const state = planted();
-  const saved = validateSave({ version: 1, game: state });
+  const saved = validateSave({ version: 2, game: state });
   assert.deepEqual(saved, state);
   assert.equal(Object.keys(saved!.items).length, 0);
-  assert.equal(validateSave({ version: 2, game: newGame() }), null);
+  assert.equal(validateSave({ version: 3, game: newGame() }), null);
   const bad = newGame(); bad.plots.P01.soil[0] = -1;
-  assert.equal(validateSave({ version: 1, game: bad }), null);
+  assert.equal(validateSave({ version: 2, game: bad }), null);
 });
 
 test("store emits once and serializes persisted revisions without Seed duplication", async () => {
@@ -426,4 +427,123 @@ test("M4: first IndexedDB save blocks interactions until it commits in the same 
   assert.equal(persisted[1].dayCondenseUsed, 1);
   assert.deepEqual(persisted.at(-1), store.getSnapshot());
   assert.equal(Object.keys(persisted.at(-1)!.items).length, 1);
+});
+
+function matureFixture(): GameState {
+  const g = planted();
+  const tree = g.plots.P01.plant!;
+  tree.stage = "Sapling";
+  tree.reserve = [1, 2, 3, 4, 5, 6, 7];
+  tree.leaves = [{ id: tree.id + ":leaf:1", stage: "FibrousLeaf",
+    growth: zeros(), baseAffinity: [1, 1, 1, 1, 1, 1, 1],
+    fruit: { stage: "MatureFruit", free: [10, 12, 13, 14, 15, 16, 20],
+      reaction: { products: { "逆蒸发": 45 }, firstReaction: "逆蒸发", charged: true, burning: false },
+      baseAffinity: [1, 1, 1, 1, 1, 1, 1], lockedAffinity: [1, 1, 1, 1, 1, 1, 1],
+      stageStart: zeros() },
+  }];
+  return g;
+}
+
+test("U3 harvest: mature-only, authentic plot/plant/leaf, single ground fruit and material transfer", () => {
+  const initial = matureFixture();
+  const tree = initial.plots.P01.plant!;
+  const leaf = tree.leaves[0];
+  const fruit = leaf.fruit!;
+  const mass = reproductiveMass(fruit.free, fruit.reaction);
+  const harvest = { type: "HARVEST" as const, plotId: "P01" as const, plantId: tree.id, leafId: leaf.id };
+  const wrongPlant = cmd(initial, { ...harvest, plantId: "unknown" });
+  assert.deepEqual(wrongPlant.items, initial.items);
+  assert.equal(cmd(initial, { ...harvest, plotId: "P02" }).items["item:aquamelon:3"], undefined);
+  assert.equal(cmd(initial, { ...harvest, leafId: "missing" }).items["item:aquamelon:3"], undefined);
+  const immature = structuredClone(initial);
+  immature.plots.P01.plant!.leaves[0].fruit!.stage = "GreenFruit";
+  assert.equal(Object.values(cmd(immature, harvest).items).filter(i => i.kind === "Aquamelon").length, 0);
+  const confirming = cmd(initial, { type: "REQUEST_END_DAY" });
+  assert.strictEqual(cmd(confirming, harvest), confirming);
+  const done = cmd(initial, harvest);
+  const items = Object.values(done.items).filter(i => i.kind === "Aquamelon");
+  assert.equal(items.length, 1);
+  const item = items[0];
+  assert.equal(item.kind, "Aquamelon");
+  if (item.kind !== "Aquamelon") return;
+  assert.equal(item.location.kind, "ground");
+  assert.deepEqual(item.source, { plotId: "P01", plantId: tree.id, leafId: leaf.id });
+  assert.deepEqual(item.free, fruit.free);
+  assert.deepEqual(item.baseAffinity, fruit.baseAffinity);
+  assert.deepEqual(item.reaction.products, fruit.reaction.products);
+  assert.equal(item.reaction.firstReaction, "逆蒸发");
+  assert.equal(item.reaction.charged, false);
+  assert.ok(Math.abs(reproductiveMass(item.free, item.reaction) - mass) < 1e-8);
+  assert.equal(done.plots.P01.plant!.leaves[0].fruit, null);
+  assert.equal(initial.plots.P01.plant!.leaves[0].fruit!.stage, "MatureFruit");
+  const repeated = cmd(done, harvest);
+  assert.deepEqual(repeated.items, done.items);
+  assert.equal(repeated.nextObjectSeq, done.nextObjectSeq);
+  const night = tomorrow(done);
+  const preserved = night.items[item.id];
+  assert.deepEqual(preserved, item);
+  assert.equal(night.plots.P01.plant!.leaves[0].fruit, null);
+});
+
+test("U3 one item moves ground → inventory → storage → ground with stable material and IDs", () => {
+  let state = matureFixture();
+  const leaf = state.plots.P01.plant!.leaves[0];
+  state = cmd(state, { type: "HARVEST", plotId: "P01", plantId: state.plots.P01.plant!.id, leafId: leaf.id });
+  const item = Object.values(state.items).find(x => x.kind === "Aquamelon")!;
+  const original = structuredClone(item);
+  const reject = cmd(state, { type: "MOVE_ITEM", itemId: item.id,
+    destination: { kind: "ground", plotId: "P02", x: 0.5, y: 0.5 } });
+  assert.deepEqual(reject.items, state.items);
+  const bad = cmd(state, { type: "MOVE_ITEM", itemId: item.id,
+    destination: { kind: "ground", plotId: "P01", x: Number.NaN, y: 0.5 } });
+  assert.deepEqual(bad.items, state.items);
+  for (const destination of [
+    { kind: "inventory" }, { kind: "storage" }, { kind: "ground", plotId: "P01", x: 0.44, y: 0.75 },
+  ] as const) {
+    const before = state;
+    state = cmd(state, { type: "MOVE_ITEM", itemId: item.id, destination });
+    assert.equal(Object.keys(state.items).length, 1);
+    assert.equal(state.items[item.id].id, item.id);
+    assert.deepEqual(state.items[item.id].location, destination);
+    assert.equal(state.day, before.day);
+    assert.equal(state.worldUH, before.worldUH);
+    const movedItem = state.items[item.id];
+    if (movedItem.kind === "Aquamelon" && original.kind === "Aquamelon") {
+      assert.deepEqual(movedItem.free, original.free);
+      assert.deepEqual(movedItem.reaction, original.reaction);
+    }
+  }
+  const cancel = cmd(state, { type: "REJECT_DROP", reason: "已取消拖放" });
+  assert.deepEqual(cancel.items, state.items);
+});
+
+test("U3 migration: version-1 U2 Seed keeps ID and seeded world; new schema survives reload", () => {
+  const old = newGame() as unknown as Record<string, unknown>;
+  old.schemaVersion = 1;
+  delete old.selectedItemId;
+  (old.items as Record<string, { location: string }>)["item:seed:1"].location = "inventory";
+  const migrated = validateSave({ version: 1, game: old });
+  assert.ok(migrated);
+  assert.equal(migrated.schemaVersion, 2);
+  assert.deepEqual(migrated.items["item:seed:1"].location, { kind: "inventory" });
+  assert.equal(migrated.selectedItemId, null);
+  assert.equal(migrated.nextObjectSeq, 2);
+  assert.deepEqual(validateSave({ version: 2, game: migrated }), migrated);
+  const plantedLegacy = planted() as unknown as Record<string, unknown>;
+  plantedLegacy.schemaVersion = 1;
+  delete plantedLegacy.selectedItemId;
+  const loaded = validateSave({ version: 1, game: plantedLegacy })!;
+  assert.equal(loaded.plots.P01.plant?.id, planted().plots.P01.plant?.id);
+  assert.equal(Object.keys(loaded.items).length, 0);
+});
+
+test("U3 invalid save cannot duplicate consumed fruit by cloning sources or free account", () => {
+  const g = matureFixture();
+  const leaf = g.plots.P01.plant!.leaves[0];
+  const result = cmd(g, { type: "HARVEST", plotId: "P01", plantId: g.plots.P01.plant!.id, leafId: leaf.id });
+  assert.deepEqual(validateSave({ version: 2, game: result }), result);
+  const duplicate = structuredClone(result);
+  const fruit = Object.values(duplicate.items)[0];
+  duplicate.items["item:duplicate"] = { ...structuredClone(fruit), id: "item:duplicate" };
+  assert.equal(validateSave({ version: 2, game: duplicate }), null);
 });

@@ -1,0 +1,16 @@
+/* U3: world fruit input surfaces and compact inspection; footer grid remains unchanged. */
+.item-inspector {
+  position: absolute;
+  left: 23%; bottom: 7.4%; z-index: 12;
+  display: flex; flex-wrap: wrap; align-items: center; gap: .45em .9em;
+  max-width: 49%; padding: .3em .7em;
+  background: #17251fea; border: 1px solid #b9a76b;
+  font-size: .72em; color: #f0e4bc;
+  pointer-events: none;
+}
+.item-inspector strong { color: #e7c980; }
+.inventory .seed-item, .storage .seed-item { font-size: .82em; }
+.storage .held-elements { max-height: 70%; overflow: auto; }
+@media (max-width: 800px) {
+  .item-inspector { font-size: 8px; max-width: 57%; }
+}
