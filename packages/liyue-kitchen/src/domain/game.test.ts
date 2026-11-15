@@ -259,3 +259,160 @@ test("mature fruit's 7D enrichment uses one pre-growth mass snapshot per uh", as
     assert.ok(treeAffinity[i] > 0);
   }
 });
+
+
+test("M1/M2: full wind strength and total mass ledger on a single swirl", () => {
+  const free = zeros();
+  const reaction = newReactionState();
+  const events: string[] = [];
+  free[0] = 60; // Fire
+  free[2] = 59; // Anemo
+  const added = zeros();
+  added[2] = 1; // A real Anemo Growth input takes wind to 2U.
+  const before = vectorSum(free);
+  const net = applyNaturalGrowth(free, reaction, added, events);
+
+  // W=2, A_source=0.8*2=1.6 >= 0.5*W=1 => R=2 (not 1).
+  // d=1, windSpent=2, propagated gain=2.76U=82.8G.
+  assert.ok(Math.abs(free[0] - 112.8) < 1e-9);
+  assert.ok(Math.abs(free[2]) < 1e-9);
+  assert.ok(Math.abs(net - (-7.2)) < 1e-9);
+  assert.ok(Math.abs(net - (vectorSum(free) - before - added[2])) < 1e-9);
+  assert.equal(productAmount(reaction), 0); // Swirl creates no product entry.
+  assert.equal(events.filter(x => x.startsWith("风扩散：")).length, 1);
+});
+
+test("M1/M2: electro-charged double swirl recomputes R after wind spent", () => {
+  const free = zeros();
+  const reaction = newReactionState();
+  reaction.charged = true; // Only an already active charged state enables double swirl.
+  free[1] = 15; // Hydro
+  free[3] = 15; // Electro
+  free[2] = 59; // Anemo
+  const before = reproductiveMass(free, reaction);
+  const added = zeros();
+  added[2] = 1;
+  const events: string[] = [];
+  const delta = applyNaturalGrowth(free, reaction, added, events);
+
+  // First Electro then Hydro; each uses one remaining 1U wind share.
+  // A_source=0.4U, R=0.4U, d=0.5U => gain=1.16U each.
+  assert.ok(Math.abs(free[3] - 34.8) < 1e-9);
+  assert.ok(Math.abs(free[1] - 34.8) < 1e-9);
+  assert.ok(Math.abs(free[2]) < 1e-9);
+  assert.equal(events.filter(x => x.startsWith("风扩散：")).length, 2);
+  assert.ok(Math.abs(delta - (-20.4)) < 1e-9);
+  assert.ok(Math.abs(delta - (reproductiveMass(free, reaction) - before - added[2])) < 1e-9);
+});
+
+test("M3: mature fruit at 150G refunds its full nominal V share to Tree/Bud", async () => {
+  const { advancePlotOneUH, newTree, newLedger } = await import("./growth.ts");
+  const { LEAF_TEMPLATE, FRUIT_TEMPLATE } = await import("./config.ts");
+  const plot = structuredClone(newGame().plots.P01);
+  const tree = newTree("plant:mature-refund");
+  tree.stage = "Sapling";
+  tree.reserve = [0, 0, 45, 0, 0, 0, 45];
+  tree.budGrowth = null;
+  tree.leaves.push({
+    id: "leaf:fibrous", stage: "FibrousLeaf", growth: zeros(), baseAffinity: [...LEAF_TEMPLATE],
+    fruit: {
+      stage: "MatureFruit", free: [0, 0, 75, 0, 0, 0, 75],
+      baseAffinity: [...FRUIT_TEMPLATE], lockedAffinity: [...FRUIT_TEMPLATE],
+      stageStart: zeros(), reaction: newReactionState(),
+    },
+  });
+  plot.plant = tree;
+  const initialReserve = vectorSum(tree.reserve);
+  const initialFruit = structuredClone(tree.leaves[0].fruit!.free);
+  const ledger = newLedger();
+  advancePlotOneUH(plot, 1, () => 0.99, [], ledger);
+
+  assert.ok(ledger.reserveConsumedV > 0, "the budget is really spent by Tree");
+  assert.ok(Math.abs(ledger.organConsumedV) < 1e-10);
+  assert.ok(Math.abs(ledger.newOrganGrowthG) < 1e-10);
+  assert.ok(Math.abs(ledger.leafEnvironmentalLossV) < 1e-10);
+  assert.deepEqual(tree.leaves[0].fruit!.free, initialFruit);
+  assert.ok(Math.abs(ledger.reserveConsumedV - ledger.directTreeConvertedV) < 1e-9);
+  assert.ok(Math.abs(ledger.newTreeGrowthG - ledger.directTreeConvertedV) < 1e-9);
+  assert.ok(Math.abs(initialReserve - vectorSum(tree.reserve) - ledger.reserveConsumedV) < 1e-9);
+});
+
+test("M3: partially enriched fruit only withdraws factor-scaled V, remainder feeds Tree", async () => {
+  const { advancePlotOneUH, newTree, newLedger } = await import("./growth.ts");
+  const { LEAF_TEMPLATE, FRUIT_TEMPLATE } = await import("./config.ts");
+  const plot = structuredClone(newGame().plots.P01);
+  const tree = newTree("plant:partial-refund");
+  tree.stage = "Sapling";
+  tree.reserve = [0, 0, 45, 0, 0, 0, 45];
+  tree.budGrowth = null;
+  tree.leaves.push({
+    id: "leaf:fibrous", stage: "FibrousLeaf", growth: zeros(), baseAffinity: [...LEAF_TEMPLATE],
+    fruit: {
+      stage: "MatureFruit", free: [0, 0, 60, 0, 0, 0, 60],
+      baseAffinity: [...FRUIT_TEMPLATE], lockedAffinity: [...FRUIT_TEMPLATE],
+      stageStart: zeros(), reaction: newReactionState(),
+    },
+  });
+  plot.plant = tree;
+  const reserveBefore = [...tree.reserve];
+  const ledger = newLedger();
+  advancePlotOneUH(plot, 1, () => 0.99, [], ledger);
+  const fruitFree = tree.leaves[0].fruit!.free;
+  let usedFruitV = 0;
+  for (const i of [2, 6]) {
+    const budget = reserveBefore[i] - tree.reserve[i];
+    const expectedFruitV = budget * 0.30 * Math.min(1, LEAF_TEMPLATE[i]) * 0.4 * 0.25;
+    const fruitIncrease = fruitFree[i] - 60;
+    assert.ok(Math.abs(fruitIncrease - expectedFruitV * FRUIT_TEMPLATE[i]) < 1e-9);
+    usedFruitV += expectedFruitV;
+  }
+  assert.ok(usedFruitV > 0);
+  assert.ok(Math.abs(ledger.organConsumedV - usedFruitV) < 1e-9);
+  assert.ok(Math.abs(ledger.reserveConsumedV -
+    ledger.directTreeConvertedV - ledger.organConsumedV) < 1e-9);
+  assert.ok(ledger.directTreeConvertedV > ledger.organConsumedV);
+});
+
+test("M4: first IndexedDB save blocks interactions until it commits in the same queue", async () => {
+  let releaseInitial!: () => void;
+  let firstSaveStarted!: () => void;
+  const pending = new Promise<void>(resolve => { releaseInitial = resolve; });
+  const started = new Promise<void>(resolve => { firstSaveStarted = resolve; });
+  const persisted: GameState[] = [];
+  let calls = 0;
+  const store = createGameStore(newGame(), {
+    initialReady: false,
+    persistence: {
+      load: async () => null,
+      save: async snapshot => {
+        calls++;
+        if (calls === 1) {
+          firstSaveStarted();
+          await pending;
+        }
+        persisted.push(structuredClone(snapshot));
+      },
+    },
+  });
+  const boot = store.start();
+  await started;
+  try {
+    assert.equal(store.isReady(), false);
+    assert.equal(store.getSaveStatus(), "saving");
+    // Attempts during initial async persistence cannot consume or overwrite seed.
+    store.dispatch({ type: "CONDENSE" });
+    assert.equal(store.getSnapshot().dayCondenseUsed, 0);
+    assert.equal(calls, 1);
+  } finally {
+    releaseInitial();
+  }
+  await boot;
+  assert.equal(store.isReady(), true);
+  store.dispatch({ type: "CONDENSE" });
+  await store.whenSaved();
+  assert.equal(calls, 2);
+  assert.equal(persisted[0].dayCondenseUsed, 0);
+  assert.equal(persisted[1].dayCondenseUsed, 1);
+  assert.deepEqual(persisted.at(-1), store.getSnapshot());
+  assert.equal(Object.keys(persisted.at(-1)!.items).length, 1);
+});
