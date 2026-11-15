@@ -54,7 +54,7 @@ function swirl(free: Vector, reaction: ReactionState, events: string[]): number 
   let remaining = Math.floor((free[wind] + EPS) / 30);
   if (remaining <= 0) return 0;
   let net = 0;
-  const sources: Element[] = reaction.charged ? ["Electro", "Fire", "Hydro", "Cryo"] : ["Electro", "Fire", "Hydro", "Cryo"];
+  const sources: Element[] = ["Electro", "Fire", "Hydro", "Cryo"];
   const primary = sources.find(x => free[E(x)] >= 15 - EPS);
   if (!primary) return 0;
   const priorElectro = free[E("Electro")];
@@ -67,7 +67,10 @@ function swirl(free: Vector, reaction: ReactionState, events: string[]): number 
     const d = 0.5 * Math.floor((Math.min(sourceU, 0.5 * remaining) + EPS) / 0.5);
     if (d < 0.5) return { spent: 0, exhausted: false };
     const windSpent = 2 * d;
-    const R = Math.min(0.8 * sourceU, 0.5 * remaining);
+    const sourceStrength = 0.8 * sourceU;
+    // The propagation threshold uses half the remaining wind, but the strength
+    // is the FULL remaining wind when that threshold is reached (§4).
+    const R = sourceStrength >= 0.5 * remaining ? remaining : sourceStrength;
     const gainU = 0.8 * (1 + 1.25 * (R - 0.04));
     const sourceLeft = free[i] - d * 30;
     free[i] = Math.max(0, sourceLeft);
@@ -75,9 +78,11 @@ function swirl(free: Vector, reaction: ReactionState, events: string[]): number 
     free[wind] = Math.max(0, free[wind] - windSpent * 30);
     free[i] += gainU * 30;
     remaining -= windSpent;
-    const change = (gainU - d) * 30;
-    net += change;
-    events.push(`风扩散：${source}（净变 ${change.toFixed(2)}G）`);
+    // Includes both the source net gain and the Anemo spent. The caller
+    // records the change to the fruit's total G, not only the propagated aura.
+    const totalMassChange = (gainU - d - windSpent) * 30;
+    net += totalMassChange;
+    events.push(`风扩散：${source}（总物质量净变 ${totalMassChange.toFixed(2)}G）`);
     return { spent: windSpent, exhausted };
   };
   const first = run(primary);
