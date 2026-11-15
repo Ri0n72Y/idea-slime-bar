@@ -504,9 +504,10 @@ test("U3 one item moves ground → inventory → storage → ground with stable 
     assert.deepEqual(state.items[item.id].location, destination);
     assert.equal(state.day, before.day);
     assert.equal(state.worldUH, before.worldUH);
-    if (state.items[item.id].kind === "Aquamelon" && original.kind === "Aquamelon") {
-      assert.deepEqual(state.items[item.id].free, original.free);
-      assert.deepEqual(state.items[item.id].reaction, original.reaction);
+    const movedItem = state.items[item.id];
+    if (movedItem.kind === "Aquamelon" && original.kind === "Aquamelon") {
+      assert.deepEqual(movedItem.free, original.free);
+      assert.deepEqual(movedItem.reaction, original.reaction);
     }
   }
   const cancel = cmd(state, { type: "REJECT_DROP", reason: "已取消拖放" });

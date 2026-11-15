@@ -3,11 +3,25 @@ import "./u3.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
-import { remainingCondenses, stageLabel, type PlotId } from "./domain/game";
-import { CrystalScene } from "./scene/CrystalScene";
+import { fruitMass, remainingCondenses, stageLabel, type AquamelonItem, type ItemLocation, type PlotId } from "./domain/game";
+import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
 
 const unavailable = "后续阶段开放";
-type Drag = { itemId: string; pointerId: number; x: number; y: number; target: PlotId | null };
+type DropTarget = { zone: "inventory" | "storage" | null; scene: SceneDropTarget };
+type Drag = {
+  itemId: string; kind: "Seed" | "Aquamelon";
+  pointerId: number; x: number; y: number;
+  originX: number; originY: number; target: DropTarget | null;
+};
+const emptyScene: SceneDropTarget = { plotId: null, ground: null };
+function dropTargetAt(x: number, y: number, pick: ((x: number, y: number) => SceneDropTarget) | null): DropTarget {
+  const element = document.elementFromPoint(x, y);
+  const zone = element?.closest("[data-item-drop-zone]")?.getAttribute("data-item-drop-zone");
+  return {
+    zone: zone === "inventory" || zone === "storage" ? zone : null,
+    scene: pick?.(x, y) ?? emptyScene,
+  };
+}
 
 export function App() {
   const state = useSyncExternalStore(gameStore.subscribe, gameStore.getSnapshot);
@@ -16,28 +30,39 @@ export function App() {
   const saveError = useSyncExternalStore(gameStore.subscribe, gameStore.getError);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
-  const pickRef = useRef<((x: number, y: number) => PlotId | null) | null>(null);
+  const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
 
   useEffect(() => { void gameStore.start().catch(() => {}); }, []);
-  const registerDropTarget = useCallback((pick: (x: number, y: number) => PlotId | null) => {
+  const registerDropTarget = useCallback((pick: (x: number, y: number) => SceneDropTarget) => {
     pickRef.current = pick;
     return () => { if (pickRef.current === pick) pickRef.current = null; };
   }, []);
   const choosePlot = (plotId: PlotId) => gameStore.dispatch({ type: "SELECT_PLOT", plotId });
   const collectBall = (ballId: string) => gameStore.dispatch({ type: "COLLECT_BALL", ballId });
+  const harvestFruit = (plotId: PlotId, plantId: string, leafId: string) =>
+    gameStore.dispatch({ type: "HARVEST", plotId, plantId, leafId });
+  const selectItem = (itemId: string) => gameStore.dispatch({ type: "SELECT_ITEM", itemId });
+  const beginDrag = (itemId: string, pointerId: number, x: number, y: number) => {
+    const item = gameStore.getSnapshot().items[itemId];
+    if (!item || !gameStore.isReady() || gameStore.getSnapshot().phase !== "DAY_WORK") return;
+    const next: Drag = { itemId, kind: item.kind, pointerId, x, y,
+      originX: x, originY: y, target: null };
+    dragRef.current = next;
+    setDrag(next);
+  };
+  const startGroundDrag = (itemId: string, pointerId: number, x: number, y: number) =>
+    beginDrag(itemId, pointerId, x, y);
   const startDrag = (event: ReactPointerEvent, itemId: string) => {
     if (!ready || (event.pointerType === "mouse" && event.button !== 0)) return;
     event.preventDefault();
-    const next: Drag = { itemId, pointerId: event.pointerId, x: event.clientX, y: event.clientY, target: null };
-    dragRef.current = next;
-    setDrag(next);
+    beginDrag(itemId, event.pointerId, event.clientX, event.clientY);
   };
   useEffect(() => {
     const move = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = pickRef.current?.(event.clientX, event.clientY) ?? null;
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current);
       const next = { ...current, x: event.clientX, y: event.clientY, target };
       dragRef.current = next;
       setDrag(next);
@@ -45,24 +70,33 @@ export function App() {
     const up = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = pickRef.current?.(event.clientX, event.clientY) ?? null;
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current);
       dragRef.current = null;
       setDrag(null);
-      if (target) gameStore.dispatch({ type: "PLANT_SEED", itemId: current.itemId, plotId: target });
-      else gameStore.dispatch({ type: "REJECT_DROP", reason: "种子需拖到已开垦、空置的地格；未消耗种子。" });
+      if (Math.hypot(event.clientX - current.originX, event.clientY - current.originY) < 8) return;
+      if (current.kind === "Seed") {
+        if (target.scene.plotId && !target.zone)
+          gameStore.dispatch({ type: "PLANT_SEED", itemId: current.itemId, plotId: target.scene.plotId });
+        else gameStore.dispatch({ type: "REJECT_DROP", reason: "种子需拖到已开垦、空置的地格；未消耗种子。" });
+      } else {
+        const destination: ItemLocation | null = target.zone ? { kind: target.zone } :
+          target.scene.ground ? { kind: "ground", ...target.scene.ground } : null;
+        if (destination) gameStore.dispatch({ type: "MOVE_ITEM", itemId: current.itemId, destination });
+        else gameStore.dispatch({ type: "REJECT_DROP", reason: "只能放到水晶球地面、物品栏或仓储；物品未移动。" });
+      }
     };
     const cancel = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
       dragRef.current = null;
       setDrag(null);
-      gameStore.dispatch({ type: "REJECT_DROP", reason: "已取消拖放，种子仍在物品栏。" });
+      gameStore.dispatch({ type: "REJECT_DROP", reason: "已取消拖放，物品位置不变。" });
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || !dragRef.current) return;
       dragRef.current = null;
       setDrag(null);
-      gameStore.dispatch({ type: "REJECT_DROP", reason: "已取消拖放，种子仍在物品栏。" });
+      gameStore.dispatch({ type: "REJECT_DROP", reason: "已取消拖放，物品位置不变。" });
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -83,6 +117,9 @@ export function App() {
     </main>
   );
 
+  const selectedItem = state.selectedItemId ? state.items[state.selectedItemId] : undefined;
+  const inventoryItems = Object.values(state.items).filter(item => item.location.kind === "inventory");
+  const storageItems = Object.values(state.items).filter(item => item.location.kind === "storage");
   const report = state.lastNightReport;
   const showReport = !!report && report.toDay !== reportDismissed;
   return (
@@ -120,8 +157,10 @@ export function App() {
             <h2>洞天水晶球</h2>
             <span>{Object.keys(state.looseBalls).length} 枚元素球待收集 · 点击收集</span>
           </div>
-          <CrystalScene state={state} hoverPlotId={drag?.target ?? null}
-            onChoose={choosePlot} onCollect={collectBall} onRegisterDropTarget={registerDropTarget} />
+          <CrystalScene state={state} hoverPlotId={drag?.target?.scene.plotId ?? null}
+            onChoose={choosePlot} onCollect={collectBall} onHarvest={harvestFruit}
+            onSelectItem={selectItem} onStartGroundDrag={startGroundDrag}
+            onRegisterDropTarget={registerDropTarget} />
           <div className="crystal-footer">
             <span data-testid="selected-plot">当前地格：{state.selectedPlotId ?? "未选择"}</span>
             <span data-testid="plant-stage">{state.selectedPlotId ? stageLabel(state, state.selectedPlotId) : "拖放种子至中央地格"}</span>
@@ -151,22 +190,27 @@ export function App() {
           <button type="button" disabled title={unavailable}>剥壳 · 未开放</button>
         </section>
         <div className="bottom-center">
-          <section className="region inventory" aria-label="物品栏" data-testid="region-inventory">
-            <h2>物品栏 <small>{Object.keys(state.items).length} 件</small></h2>
+          <section className="region inventory" aria-label="物品栏" data-testid="region-inventory" data-item-drop-zone="inventory">
+            <h2>物品栏 <small>{inventoryItems.length} 件</small></h2>
             <div className="inventory-line">
-              {Object.values(state.items).map(item => (
-                <div key={item.id} role="button" tabIndex={0} aria-label="拖拽水瓜种子" className="seed-item"
-                  data-testid="seed-item" onPointerDown={e => startDrag(e, item.id)}
-                  onKeyDown={e => { if (e.key === "Enter") gameStore.dispatch({ type: "REJECT_DROP", reason: "请拖动种子至地格播种。" }); }}>
-                  <span>🌰</span><small>水瓜种子</small>
+{inventoryItems.map(item => (
+                <div key={item.id} role="button" tabIndex={0}
+                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽水瓜 ${item.id}`}
+                  className="seed-item" data-testid={item.kind === "Seed" ? "seed-item" : "fruit-inventory"}
+                  data-item-id={item.id}
+                  onPointerDown={e => startDrag(e, item.id)}
+                  onClick={() => item.kind === "Aquamelon" && selectItem(item.id)}
+                  onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
+                  <span>{item.kind === "Seed" ? "🌰" : "🍈"}</span>
+                  <small>{item.kind === "Seed" ? "水瓜种子" : item.id}</small>
                 </div>
               ))}
-              {!Object.keys(state.items).length && <p className="hint">种子已播下</p>}
-              <span className="hint">拖动种子→水晶球地格</span>
+              {!inventoryItems.length && <p className="hint">暂无物品</p>}
+              <span className="hint">拖放至地格播种或搬运水瓜</span>
             </div>
           </section>
-          <section className="region storage" aria-label="仓储区" data-testid="region-storage">
-            <h2>仓储区 <small>元素养分</small></h2>
+          <section className="region storage" aria-label="仓储区" data-testid="region-storage" data-item-drop-zone="storage">
+            <h2>仓储区 <small>元素养分 · {storageItems.length} 件物品</small></h2>
             <div className="held-elements" data-testid="held-elements">
               {ELEMENTS.map(element => {
                 const v = state.heldElements[ELEMENTS.indexOf(element)];
@@ -178,6 +222,14 @@ export function App() {
                   {info.icon} {info.name} · 浇灌</button>;
               })}
               {!state.heldElements.some(v => v > 0) && <p className="hint">收集元素球后在此选择浇灌</p>}
+              {storageItems.map(item => (
+                <div key={item.id} role="button" tabIndex={0} className="seed-item"
+                  data-testid="fruit-storage" data-item-id={item.id}
+                  onPointerDown={e => startDrag(e, item.id)} onClick={() => selectItem(item.id)}
+                  onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
+                  🍈 <small>{item.id}</small>
+                </div>
+              ))}
             </div>
           </section>
         </div>
@@ -191,6 +243,15 @@ export function App() {
         </section>
       </div>
 
+      {selectedItem?.kind === "Aquamelon" && (
+        <div className="item-inspector" data-testid="selected-item">
+          <strong data-testid="item-id">{selectedItem.id}</strong>
+          <span data-testid="item-mass">{fruitMass(selectedItem).toFixed(3)}G</span>
+          <span>原植株：{selectedItem.source.plantId} / {selectedItem.source.leafId}</span>
+          <span>位置：{selectedItem.location.kind}</span>
+          <span>首反应：{selectedItem.reaction.firstReaction ?? "无"}</span>
+        </div>
+      )}
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">
         <strong>状态反馈</strong>
         <span data-testid="feedback">{state.notice.message}</span>
@@ -221,8 +282,9 @@ export function App() {
           </div>
         </div>
       )}
-      {drag && <div className={`drag-ghost ${drag.target ? "valid-target" : ""}`} data-testid="seed-drag-ghost"
-        style={{ left: drag.x, top: drag.y }} aria-hidden="true">🌰</div>}
+      {drag && <div className={`drag-ghost ${drag.target?.zone || drag.target?.scene.ground ? "valid-target" : ""}`}
+        data-testid={drag.kind === "Seed" ? "seed-drag-ghost" : "fruit-drag-ghost"}
+        style={{ left: drag.x, top: drag.y }} aria-hidden="true">{drag.kind === "Seed" ? "🌰" : "🍈"}</div>}
     </div>
   );
 }
