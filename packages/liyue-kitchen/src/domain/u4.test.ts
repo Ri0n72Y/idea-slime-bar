@@ -82,7 +82,7 @@ test("U4 three atomic processing steps conserve one edible E_free + Products and
   assert.equal(fruitMass(cup), mass);
   assert.deepEqual(cup.location, { kind: "workbench", slot: "juice" });
   assert.equal(Object.keys(state.items).length, 2);
-  assert.ok(!Object.values(state.items).some(x => x.kind === "EmptyCup"));
+  assert.ok(!Object.values(state.items).some(x => String(x.kind) === "EmptyCup"));
   assert.equal(state.worldUH, time);
   assert.equal(state.dayCondenseUsed, quota);
   assert.deepEqual(validateSave({ version: 3, game: state }), state);
@@ -137,7 +137,7 @@ test("U4 v1/v2 migrations preserve unique IDs and v3 validates workbench state",
   assert.equal(validateSave({ version: 3, game: duplicate }), null);
   const shell = byKind(workbench, "Shell");
   const forgedShell = structuredClone(workbench);
-  forgedShell.items[shell.id] = { ...shell, free: [1, 0, 0, 0, 0, 0, 0] };
+  (forgedShell.items as Record<string, unknown>)[shell.id] = { ...shell, free: [1, 0, 0, 0, 0, 0, 0] };
   assert.equal(validateSave({ version: 3, game: forgedShell }), null);
   workbench = moved(workbench, "PeeledFlesh", "juice");
   workbench = processed(workbench, "PeeledFlesh", "JUICE");
