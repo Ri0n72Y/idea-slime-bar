@@ -157,11 +157,14 @@ export function advancePlotOneUH(plot: GardenPlot, hour: number, random: () => n
     for (let i = 0; i < 7; i++) {
       const grant = budget[i] * 0.30 * Math.min(1, Math.max(0, leafAffinity[i]));
       if (grant <= 0) continue;
-      const fruitShare = leaf.fruit ? (leaf.fruit.stage === "MatureFruit" ? 0.4 : 0.8) : 0;
-      const fruitV = grant * fruitShare;
-      const leafV = leaf.stage === "FibrousLeaf" ? 0 : grant - fruitV;
-      // A fibrous mother does not grow; unused V goes back into the tree budget.
-      const actualV = leafV + fruitV;
+      const fruitShare = fruit ? (fruit.stage === "MatureFruit" ? 0.4 : 0.8) : 0;
+      const fruitGrantV = grant * fruitShare;
+      // The mature-fruit factor controls how much of its nominal 40% V share
+      // is actually withdrawn. Unused V stays in this parent's budget and
+      // flows to Tree/Bud, with no invented environmental loss (Lead M3).
+      const fruitUsedV = fruitGrantV * enrichmentAtStepStart;
+      const leafV = leaf.stage === "FibrousLeaf" ? 0 : grant - fruitGrantV;
+      const actualV = leafV + fruitUsedV;
       remaining[i] -= actualV;
       ledger.organConsumedV += actualV;
       ledger.reserveConsumedV += actualV;
@@ -172,8 +175,9 @@ export function advancePlotOneUH(plot: GardenPlot, hour: number, random: () => n
         ledger.newOrganGrowthG += gained;
         if (leaf.stage === "LargeLeaf") ledger.leafEnvironmentalLossV += leafV * 0.4;
       }
-      if (fruitV > 0 && fruit && fruitAffinityAtStepStart) {
-        const gained = fruitV * fruitAffinityAtStepStart[i] * enrichmentAtStepStart;
+      if (fruitUsedV > 0 && fruit && fruitAffinityAtStepStart) {
+        // Factor applied to actual V uptake above; do not apply it twice.
+        const gained = fruitUsedV * fruitAffinityAtStepStart[i];
         fruit.free[i] += gained;
         newFruitGrowth[i] += gained;
         ledger.newOrganGrowthG += gained;
