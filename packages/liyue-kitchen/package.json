@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 4174",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test:domain": "node --experimental-strip-types --test src/domain/game.test.ts",
+    "test:domain": "node --experimental-strip-types --test src/domain/game.test.ts src/domain/u4.test.ts",
     "test:e2e": "playwright test"
   },
   "dependencies": {

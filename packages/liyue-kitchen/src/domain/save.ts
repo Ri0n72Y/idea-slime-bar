@@ -3,7 +3,7 @@ import { PLOT_IDS, type GameItem, type GameState, type ItemLocation } from "./ga
 const DB_NAME = "liyue-kitchen";
 const STORE_NAME = "game-saves";
 const SAVE_KEY = "primary";
-export const SAVE_VERSION = 2 as const;
+export const SAVE_VERSION = 3 as const;
 
 type SaveRecord = { version: number; game: unknown };
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -14,6 +14,8 @@ const validLocation = (value: unknown): value is ItemLocation => {
   if (!isObject(value)) return false;
   if (value.kind === "inventory" || value.kind === "storage")
     return Object.keys(value).length === 1;
+  if (value.kind === "workbench")
+    return Object.keys(value).length === 2 && (value.slot === "peel" || value.slot === "juice");
   return value.kind === "ground" && PLOT_IDS.includes(value.plotId as never) &&
     typeof value.x === "number" && Number.isFinite(value.x) && value.x >= 0 && value.x <= 1 &&
     typeof value.y === "number" && Number.isFinite(value.y) && value.y >= 0 && value.y <= 1;
@@ -24,22 +26,38 @@ const validReaction = (value: unknown): boolean => {
     typeof value.charged === "boolean" && typeof value.burning === "boolean" &&
     Object.values(value.products).every(n => typeof n === "number" && Number.isFinite(n) && n >= 0);
 };
+const validSource = (value: unknown): boolean =>
+  isObject(value) && PLOT_IDS.includes(value.plotId as never) &&
+  typeof value.plantId === "string" && value.plantId.length > 0 &&
+  typeof value.leafId === "string" && value.leafId.length > 0;
+
 const validItem = (id: string, value: unknown): value is GameItem => {
   if (!isObject(value) || value.id !== id || !validLocation(value.location)) return false;
-  if (value.kind === "Seed") return value.location.kind === "inventory";
-  if (value.kind !== "Aquamelon" || !isVector(value.free) || !isVector(value.baseAffinity) || !validReaction(value.reaction) ||
-      !(value.lockedAffinity === null || isVector(value.lockedAffinity)) ||
-      !isObject(value.source)) return false;
-  return PLOT_IDS.includes(value.source.plotId as never) &&
-    typeof value.source.plantId === "string" && typeof value.source.leafId === "string" &&
-    value.reaction !== null;
+  const loc = value.location;
+  if (value.kind === "Seed") return loc.kind === "inventory";
+  if (!validSource(value.source)) return false;
+  if (value.kind === "Shell")
+    return loc.kind !== "workbench" && typeof value.parentItemId === "string" &&
+      value.parentItemId.length > 0 && !Object.hasOwn(value, "free") &&
+      !Object.hasOwn(value, "reaction") && !Object.hasOwn(value, "baseAffinity");
+  if (!["Aquamelon", "PeeledFlesh", "RawJuice", "AquamelonJuiceCup"].includes(String(value.kind)) ||
+      !isVector(value.free) || !isVector(value.baseAffinity) || !validReaction(value.reaction) ||
+      !(value.lockedAffinity === null || isVector(value.lockedAffinity))) return false;
+  if (value.kind !== "Aquamelon" &&
+      (typeof value.parentItemId !== "string" || value.parentItemId.length === 0)) return false;
+  if (loc.kind === "workbench" && (
+    (loc.slot === "peel" && value.kind !== "Aquamelon" && value.kind !== "PeeledFlesh") ||
+    (loc.slot === "juice" && value.kind !== "PeeledFlesh" &&
+      value.kind !== "RawJuice" && value.kind !== "AquamelonJuiceCup")
+  )) return false;
+  return true;
 };
 
-/** Validate both schema versions and migrate the U2 seed without creating a new ID. */
+/** Validate and migrate U2 (v1) / U3 (v2) to the current U4 material schema. */
 export function validateSave(value: unknown): GameState | null {
-  if (!isObject(value) || (value.version !== 1 && value.version !== SAVE_VERSION) ||
+  if (!isObject(value) || (value.version !== 1 && value.version !== 2 && value.version !== SAVE_VERSION) ||
       !isObject(value.game)) return null;
-  const legacy = value.version === 1;
+  const legacySeed = value.version === 1;
   const g = structuredClone(value.game);
   if (g.schemaVersion !== value.version || !Number.isSafeInteger(g.day) || (g.day as number) < 1 ||
       !Number.isSafeInteger(g.worldUH) || (g.worldUH as number) < 0 ||
@@ -73,15 +91,15 @@ export function validateSave(value: unknown): GameState | null {
       }
     }
   }
-  if (legacy) {
+  if (legacySeed) {
     for (const [id, item] of Object.entries(g.items)) {
       if (!isObject(item) || item.id !== id || item.kind !== "Seed" ||
           item.location !== "inventory") return null;
       item.location = { kind: "inventory" };
     }
-    g.schemaVersion = SAVE_VERSION;
     g.selectedItemId = null;
   }
+  g.schemaVersion = SAVE_VERSION;
   if (Object.entries(g.items).some(([id, item]) => !validItem(id, item))) return null;
   const plotsById = g.plots as Record<string, unknown>;
   if (Object.values(g.items).some(item => isObject(item) && isObject(item.location) &&
@@ -95,20 +113,35 @@ export function validateSave(value: unknown): GameState | null {
       ball.initialV !== 50 || !Number.isInteger(ball.createdUH) ||
       (ball.createdUH as number) > (g.worldUH as number))) return null;
 
-  // No two harvested items may claim the same live leaf and its single edible account.
-  const harvestedSources = new Set<string>();
+  // Each source may own at most one edible material and one zero-G shell.
+  const edibleSources = new Set<string>(), shellSources = new Set<string>();
+  const occupiedSlots = new Set<string>();
   for (const item of Object.values(g.items)) {
-    if (!isObject(item) || item.kind !== "Aquamelon") continue;
+    if (!isObject(item) || item.kind === "Seed") continue;
     const source = item.source as { plotId: string; plantId: string; leafId: string };
     const key = `${source.plotId}/${source.plantId}/${source.leafId}`;
-    if (harvestedSources.has(key)) return null;
-    harvestedSources.add(key);
-    const plot = g.plots[source.plotId];
+    const sources = item.kind === "Shell" ? shellSources : edibleSources;
+    if (sources.has(key)) return null;
+    sources.add(key);
+    const loc = item.location;
+    if (isObject(loc) && loc.kind === "workbench") {
+      if (occupiedSlots.has(String(loc.slot))) return null;
+      occupiedSlots.add(String(loc.slot));
+    }
+    const plot = plotsById[source.plotId];
     if (!isObject(plot) || plot.open !== true) return null;
     const tree = plot.plant;
     if (!isObject(tree) || tree.id !== source.plantId || !Array.isArray(tree.leaves)) return null;
     const leaf = tree.leaves.find(l => isObject(l) && l.id === source.leafId);
     if (!isObject(leaf) || leaf.fruit !== null) return null;
+  }
+  for (const item of Object.values(g.items)) {
+    if (!isObject(item) || item.kind !== "Shell") continue;
+    const src = item.source as { plotId: string; plantId: string; leafId: string };
+    const key = `${src.plotId}/${src.plantId}/${src.leafId}`;
+    if (Object.values(g.items).some(other => isObject(other) && other.kind === "Aquamelon" &&
+      isObject(other.source) && `${other.source.plotId}/${other.source.plantId}/${other.source.leafId}` === key))
+      return null;
   }
   return g as GameState;
 }
@@ -144,7 +177,7 @@ export async function loadGame(): Promise<GameState | null> {
   if (record === undefined) return null;
   const game = validateSave(record);
   if (!game) throw new Error("存档损坏或版本不受支持；不会覆盖已有存档");
-  if (record.version === 1) await saveGame(game);
+  if (record.version !== SAVE_VERSION) await saveGame(game);
   return game;
 }
 export async function saveGame(game: GameState): Promise<void> {
