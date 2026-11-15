@@ -17,7 +17,7 @@ export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation };
 export type AquamelonItem = {
   id: string; kind: "Aquamelon"; location: ItemLocation;
   source: { plotId: PlotId; plantId: string; leafId: string };
-  free: Vector; reaction: ReactionState; lockedAffinity: Vector | null;
+  free: Vector; reaction: ReactionState; baseAffinity: Vector; lockedAffinity: Vector | null;
 };
 export type GameItem = SeedItem | AquamelonItem;
 export function fruitMass(item: AquamelonItem): number {
@@ -218,7 +218,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
         location: { kind: "ground", plotId: p.id,
           x: 0.36 + (groundCount % 3) * 0.07, y: 0.69 + (Math.floor(groundCount / 3) % 2) * 0.06 },
         source: { plotId: p.id, plantId: p.plant.id, leafId: leaf.id },
-        free: [...fruit.free],
+        free: [...fruit.free], baseAffinity: [...fruit.baseAffinity],
         reaction: { ...structuredClone(fruit.reaction), charged: false, burning: false },
         lockedAffinity: fruit.lockedAffinity ? [...fruit.lockedAffinity] : null,
       };

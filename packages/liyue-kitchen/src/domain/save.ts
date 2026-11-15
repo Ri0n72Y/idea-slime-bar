@@ -27,7 +27,7 @@ const validReaction = (value: unknown): boolean => {
 const validItem = (id: string, value: unknown): value is GameItem => {
   if (!isObject(value) || value.id !== id || !validLocation(value.location)) return false;
   if (value.kind === "Seed") return value.location.kind === "inventory";
-  if (value.kind !== "Aquamelon" || !isVector(value.free) || !validReaction(value.reaction) ||
+  if (value.kind !== "Aquamelon" || !isVector(value.free) || !isVector(value.baseAffinity) || !validReaction(value.reaction) ||
       !(value.lockedAffinity === null || isVector(value.lockedAffinity)) ||
       !isObject(value.source)) return false;
   return PLOT_IDS.includes(value.source.plotId as never) &&
@@ -83,6 +83,10 @@ export function validateSave(value: unknown): GameState | null {
     g.selectedItemId = null;
   }
   if (Object.entries(g.items).some(([id, item]) => !validItem(id, item))) return null;
+  if (Object.values(g.items).some(item => isObject(item) && isObject(item.location) &&
+      item.location.kind === "ground" && (!isObject(g.plots[item.location.plotId as string]) ||
+        (g.plots[item.location.plotId as string] as Record<string, unknown>).open !== true)))
+    return null;
   if (g.selectedItemId !== null &&
       (typeof g.selectedItemId !== "string" || !Object.hasOwn(g.items, g.selectedItemId))) return null;
   if (Object.values(g.looseBalls).some(ball => !isObject(ball) || !ball.id ||

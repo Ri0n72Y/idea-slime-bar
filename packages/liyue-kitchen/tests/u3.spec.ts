@@ -90,7 +90,16 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
   const ground = await scenePoint(page, 0.36, 0.69);
 
-  // A failed drag must keep location and identity.
+  // A pointer drag cancelled with Escape must leave the material untouched.
+  await page.mouse.move(ground.x, ground.y);
+  await page.mouse.down();
+  await page.mouse.move(ground.x + 45, ground.y + 25, { steps: 5 });
+  await expect(page.getByTestId("fruit-drag-ghost")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect(page.getByTestId("fruit-drag-ghost")).toHaveCount(0);
+  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  // A failed drop must also keep the same identity.
   await dragMouse(page, ground, { x: 5, y: 5 });
   await expect(page.getByTestId("selected-item")).toContainText("ground");
   await expect(page.getByTestId("feedback")).toContainText("未移动");
@@ -138,14 +147,22 @@ test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ bro
     const from = await scenePoint(page, 0.36, 0.69);
     const to = await centerOf(page, "region-storage");
     const cdp = await context.newCDPSession(page);
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ ...from, id: 0 }] });
-    for (let i = 1; i <= 14; i++) await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchMove", touchPoints: [{ id: 0, x: from.x + (to.x-from.x)*i/14,
-        y: from.y + (to.y-from.y)*i/14 }],
-    });
-    await expect(page.getByTestId("fruit-drag-ghost")).toBeVisible();
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    const touchDrag = async (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ ...from, id: 0 }] });
+      for (let i = 1; i <= 14; i++) await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove", touchPoints: [{ id: 0, x: from.x + (to.x-from.x)*i/14,
+          y: from.y + (to.y-from.y)*i/14 }],
+      });
+      await expect(page.getByTestId("fruit-drag-ghost")).toBeVisible();
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+    await touchDrag(from, to);
     await expect(page.getByTestId("fruit-storage")).toHaveAttribute("data-item-id", id);
+    await touchDrag(await centerOf(page, "fruit-storage"), await centerOf(page, "region-inventory"));
+    await expect(page.getByTestId("fruit-inventory")).toHaveAttribute("data-item-id", id);
+    await touchDrag(await centerOf(page, "fruit-inventory"), await scenePoint(page, 0.5, 0.5));
+    await expect(page.getByTestId("fruit-inventory")).toHaveCount(0);
+    await expect(page.getByTestId("selected-item")).toContainText("ground");
     await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
     await page.screenshot({ path: info.outputPath("u3-touch-harvest-1280x720.png") });
   } finally { await context.close(); }

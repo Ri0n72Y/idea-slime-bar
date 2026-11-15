@@ -458,6 +458,8 @@ test("U3 harvest: mature-only, authentic plot/plant/leaf, single ground fruit an
   const immature = structuredClone(initial);
   immature.plots.P01.plant!.leaves[0].fruit!.stage = "GreenFruit";
   assert.equal(Object.values(cmd(immature, harvest).items).filter(i => i.kind === "Aquamelon").length, 0);
+  const confirming = cmd(initial, { type: "REQUEST_END_DAY" });
+  assert.strictEqual(cmd(confirming, harvest), confirming);
   const done = cmd(initial, harvest);
   const items = Object.values(done.items).filter(i => i.kind === "Aquamelon");
   assert.equal(items.length, 1);
@@ -467,6 +469,7 @@ test("U3 harvest: mature-only, authentic plot/plant/leaf, single ground fruit an
   assert.equal(item.location.kind, "ground");
   assert.deepEqual(item.source, { plotId: "P01", plantId: tree.id, leafId: leaf.id });
   assert.deepEqual(item.free, fruit.free);
+  assert.deepEqual(item.baseAffinity, fruit.baseAffinity);
   assert.deepEqual(item.reaction.products, fruit.reaction.products);
   assert.equal(item.reaction.firstReaction, "逆蒸发");
   assert.equal(item.reaction.charged, false);
