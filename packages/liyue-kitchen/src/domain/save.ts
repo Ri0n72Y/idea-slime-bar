@@ -83,9 +83,11 @@ export function validateSave(value: unknown): GameState | null {
     g.selectedItemId = null;
   }
   if (Object.entries(g.items).some(([id, item]) => !validItem(id, item))) return null;
+  const plotsById = g.plots as Record<string, unknown>;
   if (Object.values(g.items).some(item => isObject(item) && isObject(item.location) &&
-      item.location.kind === "ground" && (!isObject(g.plots[item.location.plotId as string]) ||
-        (g.plots[item.location.plotId as string] as Record<string, unknown>).open !== true)))
+      item.location.kind === "ground" &&
+      (!isObject(plotsById[item.location.plotId as string]) ||
+        (plotsById[item.location.plotId as string] as Record<string, unknown>).open !== true)))
     return null;
   if (g.selectedItemId !== null &&
       (typeof g.selectedItemId !== "string" || !Object.hasOwn(g.items, g.selectedItemId))) return null;
