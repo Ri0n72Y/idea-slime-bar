@@ -2,6 +2,7 @@
 import { ELEMENTS, U2_CONFIG, elementIndex, vectorSum, zeros, type Element, type Vector } from "./config.ts";
 import { advancePlotOneUH, newLedger, newTree, type GardenPlot, type NightLedger, type TreeStage } from "./growth.ts";
 import { reproductiveMass, type ReactionState } from "./reactions.ts";
+import { processWorkbench, type ProcessAction } from "./processing.ts";
 
 export const PLOT_IDS = ["P01", "P02", "P03", "P04", "P05", "P06", "P07"] as const;
 export type PlotId = (typeof PLOT_IDS)[number];
@@ -9,18 +10,30 @@ export type Plot = GardenPlot & { id: PlotId };
 export type Notice = Readonly<{ kind: "info" | "success" | "locked"; message: string }>;
 export type GameEvent = { id: string; day: number; worldUH: number; kind: string; message: string };
 /** A world item has one persistent ID and exactly one location. */
+export type WorkbenchSlot = "peel" | "juice";
 export type ItemLocation =
   | { kind: "inventory" }
   | { kind: "storage" }
-  | { kind: "ground"; plotId: PlotId; x: number; y: number };
+  | { kind: "ground"; plotId: PlotId; x: number; y: number }
+  | { kind: "workbench"; slot: WorkbenchSlot };
+export type SourceIdentity = { plotId: PlotId; plantId: string; leafId: string };
 export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation };
-export type AquamelonItem = {
-  id: string; kind: "Aquamelon"; location: ItemLocation;
-  source: { plotId: PlotId; plantId: string; leafId: string };
+export type EdibleKind = "Aquamelon" | "PeeledFlesh" | "RawJuice" | "AquamelonJuiceCup";
+export type EdibleItem = {
+  id: string; kind: EdibleKind; location: ItemLocation; source: SourceIdentity;
   free: Vector; reaction: ReactionState; baseAffinity: Vector; lockedAffinity: Vector | null;
+  parentItemId?: string;
 };
-export type GameItem = SeedItem | AquamelonItem;
-export function fruitMass(item: AquamelonItem): number {
+export type AquamelonItem = EdibleItem & { kind: "Aquamelon" };
+export type ShellItem = {
+  id: string; kind: "Shell"; location: ItemLocation; source: SourceIdentity;
+  parentItemId: string; // no edible E_free or Products on a shell
+};
+export type GameItem = SeedItem | EdibleItem | ShellItem;
+export function isEdible(item: GameItem): item is EdibleItem {
+  return item.kind !== "Seed" && item.kind !== "Shell";
+}
+export function fruitMass(item: EdibleItem): number {
   return reproductiveMass(item.free, item.reaction);
 }
 
@@ -38,7 +51,7 @@ export type NightReport = {
   events: string[];
 };
 export type GameState = {
-  schemaVersion: 2;
+  schemaVersion: 3;
   day: number;
   worldUH: number;
   phase: "DAY_WORK" | "DAY_CONFIRM";
@@ -64,6 +77,7 @@ export type Command =
   | { type: "HARVEST"; plotId: PlotId; plantId: string; leafId: string }
   | { type: "SELECT_ITEM"; itemId: string }
   | { type: "MOVE_ITEM"; itemId: string; destination: ItemLocation }
+  | { type: "PROCESS_ITEM"; itemId: string; action: ProcessAction }
   | { type: "REJECT_DROP"; reason: string }
   | { type: "CONDENSE" }
   | { type: "COLLECT_BALL"; ballId: string }
@@ -77,7 +91,7 @@ export function newGame(seed = 0x17a5b7e1): GameState {
     id, open: i === 0, soil: zeros(), plant: null,
   }])) as Record<PlotId, Plot>;
   return {
-    schemaVersion: 2, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
+    schemaVersion: 3, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
     adeptalEnergy: 0, plots, selectedPlotId: null, selectedItemId: null,
     items: { "item:seed:1": { id: "item:seed:1", kind: "Seed", location: { kind: "inventory" } } },
     looseBalls: {}, heldElements: zeros(), dayCondenseUsed: 0,
@@ -236,10 +250,21 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     }
     case "MOVE_ITEM": {
       const item = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
-      if (!item || item.kind !== "Aquamelon") return notice(state, "locked", "仅能搬运已采摘水瓜。");
+      if (!item || item.kind === "Seed") return notice(state, "locked", "物品不存在或无法搬运。");
       const dest = command.destination;
-      if (dest.kind !== "inventory" && dest.kind !== "storage" && dest.kind !== "ground")
+      if (dest.kind !== "inventory" && dest.kind !== "storage" && dest.kind !== "ground" &&
+          dest.kind !== "workbench")
         return notice(state, "locked", "未知放置位置。");
+      if (dest.kind === "workbench") {
+        if (dest.slot !== "peel" && dest.slot !== "juice")
+          return notice(state, "locked", "未知工作台。");
+        if (dest.slot === "peel" ? item.kind !== "Aquamelon" :
+          item.kind !== "PeeledFlesh" && item.kind !== "RawJuice")
+          return notice(state, "locked", "工作台不接受这种材料。");
+        if (Object.values(state.items).some(other => other.id !== item.id &&
+            other.location.kind === "workbench" && other.location.slot === dest.slot))
+          return notice(state, "locked", "工作台已被占用，材料未移动。");
+      }
       if (dest.kind === "ground" && (
         !validPlot(state, dest.plotId)?.open ||
         !Number.isFinite(dest.x) || !Number.isFinite(dest.y) ||
@@ -249,7 +274,14 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       item.location = structuredClone(dest);
       state.selectedItemId = item.id;
       event(state, "move", `移动 ${item.id} → ${dest.kind}`);
-      return notice(state, "success", `${item.id} 已移至${dest.kind === "inventory" ? "物品栏" : dest.kind === "storage" ? "仓储" : "水晶球地面"}。`);
+      return notice(state, "success", `${item.id} 已移至${dest.kind === "inventory" ? "物品栏" : dest.kind === "storage" ? "仓储" :
+        dest.kind === "workbench" ? (dest.slot === "peel" ? "剥壳台" : "榨汁台") : "水晶球地面"}。`);
+    }
+    case "PROCESS_ITEM": {
+      const result = processWorkbench(state, command.itemId, command.action);
+      if (!result.ok) return notice(state, "locked", result.reason);
+      event(state, "process", `${result.inputId} → ${result.outputIds.join(" + ")}`);
+      return notice(state, "success", result.message);
     }
     case "CONDENSE": {
       if (state.dayCondenseUsed >= state.dayCondenseLimit) return notice(state, "locked", "今日凝聚额度已用尽。");

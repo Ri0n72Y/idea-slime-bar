@@ -1,0 +1,6 @@
+/* U4: a single real object per machine slot; other drop zones retain U3 behavior. */
+.workbench-drop { touch-action: none; }
+.workbench-item { max-width: 100%; gap: .25em; justify-content: center; font-size: .79em; }
+.workbench-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.peeling button, .juicing button { margin-top: .4em; }
+.juicing .actions { margin-top: .3em; }

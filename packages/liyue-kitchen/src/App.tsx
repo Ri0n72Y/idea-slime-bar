@@ -1,15 +1,16 @@
 import "./u2.css";
 import "./u3.css";
+import "./u4.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
-import { fruitMass, remainingCondenses, stageLabel, type AquamelonItem, type ItemLocation, type PlotId } from "./domain/game";
+import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
 
 const unavailable = "后续阶段开放";
-type DropTarget = { zone: "inventory" | "storage" | null; scene: SceneDropTarget };
+type DropTarget = { zone: "inventory" | "storage" | WorkbenchSlot | null; scene: SceneDropTarget };
 type Drag = {
-  itemId: string; kind: "Seed" | "Aquamelon";
+  itemId: string; kind: GameItem["kind"];
   pointerId: number; x: number; y: number;
   originX: number; originY: number; target: DropTarget | null;
 };
@@ -18,7 +19,7 @@ function dropTargetAt(x: number, y: number, pick: ((x: number, y: number) => Sce
   const element = document.elementFromPoint(x, y);
   const zone = element?.closest("[data-item-drop-zone]")?.getAttribute("data-item-drop-zone");
   return {
-    zone: zone === "inventory" || zone === "storage" ? zone : null,
+    zone: zone === "inventory" || zone === "storage" || zone === "peel" || zone === "juice" ? zone : null,
     scene: pick?.(x, y) ?? emptyScene,
   };
 }
@@ -79,10 +80,13 @@ export function App() {
           gameStore.dispatch({ type: "PLANT_SEED", itemId: current.itemId, plotId: target.scene.plotId });
         else gameStore.dispatch({ type: "REJECT_DROP", reason: "种子需拖到已开垦、空置的地格；未消耗种子。" });
       } else {
-        const destination: ItemLocation | null = target.zone ? { kind: target.zone } :
-          target.scene.ground ? { kind: "ground", ...target.scene.ground } : null;
+        const destination: ItemLocation | null =
+          target.zone === "peel" || target.zone === "juice"
+            ? { kind: "workbench", slot: target.zone }
+            : target.zone ? { kind: target.zone } :
+              target.scene.ground ? { kind: "ground", ...target.scene.ground } : null;
         if (destination) gameStore.dispatch({ type: "MOVE_ITEM", itemId: current.itemId, destination });
-        else gameStore.dispatch({ type: "REJECT_DROP", reason: "只能放到水晶球地面、物品栏或仓储；物品未移动。" });
+        else gameStore.dispatch({ type: "REJECT_DROP", reason: "请将材料放在地面、物品栏、仓储或工作台。物品未移动。" });
       }
     };
     const cancel = (event: PointerEvent) => {
@@ -120,6 +124,13 @@ export function App() {
   const selectedItem = state.selectedItemId ? state.items[state.selectedItemId] : undefined;
   const inventoryItems = Object.values(state.items).filter(item => item.location.kind === "inventory");
   const storageItems = Object.values(state.items).filter(item => item.location.kind === "storage");
+  const benchItems = Object.values(state.items).filter(item => item.location.kind === "workbench");
+  const peelItem = benchItems.find(item => item.location.kind === "workbench" && item.location.slot === "peel");
+  const juiceItem = benchItems.find(item => item.location.kind === "workbench" && item.location.slot === "juice");
+  const itemLabel = (item: GameItem) => ({
+    Seed: "水瓜种子", Aquamelon: "完整水瓜", PeeledFlesh: "水瓜果肉",
+    Shell: "水瓜果壳", RawJuice: "水瓜原汁", AquamelonJuiceCup: "杯装水瓜汁",
+  })[item.kind];
   const report = state.lastNightReport;
   const showReport = !!report && report.toDay !== reportDismissed;
   return (
@@ -186,8 +197,20 @@ export function App() {
       <div className="bottom-area">
         <section className="region peeling" aria-label="剥壳工作台" data-testid="region-peeling">
           <h2>剥壳工作台</h2>
-          <div className="workbench-placeholder"><span>◎</span><p>待加工水瓜</p></div>
-          <button type="button" disabled title={unavailable}>剥壳 · 未开放</button>
+          <div className="workbench-placeholder workbench-drop" data-item-drop-zone="peel" data-testid="peel-drop">
+            {peelItem ? (
+              <div className="seed-item workbench-item" role="button" tabIndex={0}
+                data-testid="peel-item" data-item-id={peelItem.id}
+                onPointerDown={e => startDrag(e, peelItem.id)}
+                onClick={() => selectItem(peelItem.id)}
+                onKeyDown={e => { if (e.key === "Enter") selectItem(peelItem.id); }}>
+                🍈 <small>{itemLabel(peelItem)}</small>
+              </div>
+            ) : <><span>◎</span><p>拖入完整水瓜</p></>}
+          </div>
+          <button type="button" data-testid="peel-action"
+            disabled={state.phase !== "DAY_WORK" || peelItem?.kind !== "Aquamelon"}
+            onClick={() => peelItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: peelItem.id, action: "PEEL" })}>剥壳</button>
         </section>
         <div className="bottom-center">
           <section className="region inventory" aria-label="物品栏" data-testid="region-inventory" data-item-drop-zone="inventory">
@@ -195,18 +218,18 @@ export function App() {
             <div className="inventory-line">
 {inventoryItems.map(item => (
                 <div key={item.id} role="button" tabIndex={0}
-                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽水瓜 ${item.id}`}
+                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽${itemLabel(item)} ${item.id}`}
                   className="seed-item" data-testid={item.kind === "Seed" ? "seed-item" : "fruit-inventory"}
                   data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)}
-                  onClick={() => item.kind === "Aquamelon" && selectItem(item.id)}
+                  onClick={() => item.kind !== "Seed" && selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
-                  <span>{item.kind === "Seed" ? "🌰" : "🍈"}</span>
-                  <small>{item.kind === "Seed" ? "水瓜种子" : item.id}</small>
+                  <span>{item.kind === "Seed" ? "🌰" : item.kind === "Shell" ? "🐚" : "🍈"}</span>
+                  <small>{itemLabel(item)} · {item.kind === "Seed" ? "" : item.id}</small>
                 </div>
               ))}
               {!inventoryItems.length && <p className="hint">暂无物品</p>}
-              <span className="hint">拖放至地格播种或搬运水瓜</span>
+              <span className="hint">拖动种子播种，拖动材料至工作台</span>
             </div>
           </section>
           <section className="region storage" aria-label="仓储区" data-testid="region-storage" data-item-drop-zone="storage">
@@ -227,7 +250,7 @@ export function App() {
                   data-testid="fruit-storage" data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)} onClick={() => selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
-                  🍈 <small>{item.id}</small>
+                  {item.kind === "Shell" ? "🐚" : "🍈"} <small>{itemLabel(item)} · {item.id}</small>
                 </div>
               ))}
             </div>
@@ -235,21 +258,38 @@ export function App() {
         </div>
         <section className="region juicing" aria-label="榨汁与装杯" data-testid="region-juicing">
           <h2>榨汁与装杯</h2>
-          <div className="workbench-placeholder"><span>◉</span><p>待放入果肉与空杯</p></div>
+          <div className="workbench-placeholder workbench-drop" data-item-drop-zone="juice" data-testid="juice-drop">
+            {juiceItem ? (
+              <div className="seed-item workbench-item" role="button" tabIndex={0}
+                data-testid="juice-item" data-item-id={juiceItem.id}
+                onPointerDown={e => startDrag(e, juiceItem.id)}
+                onClick={() => selectItem(juiceItem.id)}
+                onKeyDown={e => { if (e.key === "Enter") selectItem(juiceItem.id); }}>
+                🧃 <small>{itemLabel(juiceItem)}</small>
+              </div>
+            ) : <><span>◉</span><p>拖入果肉 · 装杯机自带容器</p></>}
+          </div>
           <div className="actions">
-            <button type="button" disabled title={unavailable}>榨汁</button>
-            <button type="button" disabled title={unavailable}>装杯</button>
+            <button type="button" data-testid="juice-action"
+              disabled={state.phase !== "DAY_WORK" || juiceItem?.kind !== "PeeledFlesh"}
+              onClick={() => juiceItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: juiceItem.id, action: "JUICE" })}>榨汁</button>
+            <button type="button" data-testid="cup-action"
+              disabled={state.phase !== "DAY_WORK" || juiceItem?.kind !== "RawJuice"}
+              onClick={() => juiceItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: juiceItem.id, action: "CUP" })}>装杯</button>
           </div>
         </section>
       </div>
 
-      {selectedItem?.kind === "Aquamelon" && (
+      {selectedItem && selectedItem.kind !== "Seed" && (
         <div className="item-inspector" data-testid="selected-item">
           <strong data-testid="item-id">{selectedItem.id}</strong>
-          <span data-testid="item-mass">{fruitMass(selectedItem).toFixed(3)}G</span>
+          <span>{itemLabel(selectedItem)}</span>
+          <span data-testid="item-mass">{selectedItem.kind === "Shell" ? "0.000" :
+            fruitMass(selectedItem).toFixed(3)}G</span>
           <span>原植株：{selectedItem.source.plantId} / {selectedItem.source.leafId}</span>
           <span>位置：{selectedItem.location.kind}</span>
-          <span>首反应：{selectedItem.reaction.firstReaction ?? "无"}</span>
+          <span>首反应：{selectedItem.kind === "Shell" ? "无" :
+            selectedItem.reaction.firstReaction ?? "无"}</span>
         </div>
       )}
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">
@@ -284,7 +324,7 @@ export function App() {
       )}
       {drag && <div className={`drag-ghost ${drag.target?.zone || drag.target?.scene.ground ? "valid-target" : ""}`}
         data-testid={drag.kind === "Seed" ? "seed-drag-ghost" : "fruit-drag-ghost"}
-        style={{ left: drag.x, top: drag.y }} aria-hidden="true">{drag.kind === "Seed" ? "🌰" : "🍈"}</div>}
+        style={{ left: drag.x, top: drag.y }} aria-hidden="true">{drag.kind === "Seed" ? "🌰" : drag.kind === "Shell" ? "🐚" : "🍈"}</div>}
     </div>
   );
 }
