@@ -33,12 +33,17 @@ export function createGameStore(initialState: GameState = newGame(), options: {
         try {
           const loaded = await options.persistence!.load();
           if (loaded) state = loaded;
-          ready = true; emit();
           if (!loaded) {
             saveStatus = "saving"; emit();
-            await options.persistence!.save(state);
-            saveStatus = "saved"; emit();
-          } else { saveStatus = "saved"; emit(); }
+            // Never expose a writable new game until its initial snapshot is
+            // committed. Initialization and all later revisions use the SAME
+            // write queue; a slow initial save cannot overwrite player actions.
+            const initialSnapshot = structuredClone(state);
+            writes = writes.then(() => options.persistence!.save(initialSnapshot));
+            await writes;
+          }
+          saveStatus = "saved";
+          ready = true; emit();
         } catch (cause) {
           error = `存档读取失败：${String(cause)}`;
           saveStatus = "error";
