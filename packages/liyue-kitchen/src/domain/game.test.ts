@@ -133,7 +133,11 @@ test("night uses soil retention then one root budget; positive seven-vector mass
 test("multi-day deterministic replay reaches stage transitions with traceable reports", () => {
   const cycle = (initial: GameState) => {
     let state = initial;
-    const days: Array<{ day: number; tree: string; leaves: number; soil: number; reserve: number }> = [];
+    const days: Array<{
+      day: number; tree: string; leaves: number; mature: number;
+      soil: number; reserve: number; evaporated: number; absorbed: number;
+      reserveSpent: number; treeGained: number; organGained: number;
+    }> = [];
     for (let d = 0; d < 18; d++) {
       for (let n = 0; n < state.dayCondenseLimit; n++) {
         state = cmd(state, { type: "CONDENSE" });
@@ -142,9 +146,15 @@ test("multi-day deterministic replay reaches stage transitions with traceable re
         state = cmd(state, { type: "WATER_PLOT", element: ball.element, plotId: "P01" });
       }
       state = tomorrow(state);
-      days.push({ day: state.day, tree: state.plots.P01.plant!.stage,
-        leaves: state.plots.P01.plant!.leaves.length,
-        soil: vectorSum(state.plots.P01.soil), reserve: vectorSum(state.plots.P01.plant!.reserve) });
+      const plant = state.plots.P01.plant!;
+      const ledger = state.lastNightReport!.ledger;
+      days.push({ day: state.day, tree: plant.stage,
+        leaves: plant.leaves.length,
+        mature: plant.leaves.filter(leaf => leaf.fruit?.stage === "MatureFruit").length,
+        soil: vectorSum(state.plots.P01.soil), reserve: vectorSum(plant.reserve),
+        evaporated: ledger.soilEvaporatedV, absorbed: ledger.rootAbsorbedV,
+        reserveSpent: ledger.reserveConsumedV, treeGained: ledger.newTreeGrowthG,
+        organGained: ledger.newOrganGrowthG });
     }
     return { state, days };
   };
@@ -156,6 +166,7 @@ test("multi-day deterministic replay reaches stage transitions with traceable re
   assert.ok(a.days.every(d => d.soil >= 0 && d.soil <= 1000 && d.reserve <= 180 + 1e-6));
   // Keep the output as a reproducible balance candidate, not an approved N/K decision.
   console.log("U2 replay N=8 K=24:", JSON.stringify(a.days));
+  console.log("U2_TRACE_12:", JSON.stringify(a.days.slice(0, 12)));
 });
 
 test("reaction only starts from this real Growth: vaporize, freeze, hyperbloom and no empty-tick reactivation", () => {
