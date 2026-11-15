@@ -211,9 +211,12 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       const fruit = leaf.fruit;
       // The original edible account leaves the tree. Never keep two owners.
       const id = `item:aquamelon:${state.nextObjectSeq++}`;
+      const groundCount = Object.values(state.items).filter(
+        item => item.location.kind === "ground").length;
       const item: AquamelonItem = {
         id, kind: "Aquamelon",
-        location: { kind: "ground", plotId: p.id, x: 0.25, y: 0.69 },
+        location: { kind: "ground", plotId: p.id,
+          x: 0.36 + (groundCount % 3) * 0.07, y: 0.69 + (Math.floor(groundCount / 3) % 2) * 0.06 },
         source: { plotId: p.id, plantId: p.plant.id, leafId: leaf.id },
         free: [...fruit.free],
         reaction: { ...structuredClone(fruit.reaction), charged: false, burning: false },
