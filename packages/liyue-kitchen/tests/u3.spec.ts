@@ -116,6 +116,9 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   await page.screenshot({ path: info.outputPath("u3-desktop-harvest-1600x900.png") });
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
+  if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
+  // The preceding item tap intentionally deselected it; select the persisted ground object again.
+  await page.mouse.click(center.x, center.y);
   await expect(page.getByTestId("item-id")).toHaveText(id);
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
 });
