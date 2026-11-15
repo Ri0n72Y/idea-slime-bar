@@ -3,7 +3,7 @@ import test from "node:test";
 import { applyCommand, newGame, PLOT_IDS, type GameState } from "./game.ts";
 import { createGameStore } from "./store.ts";
 import { ELEMENTS, U2_CONFIG, vectorSum, zeros } from "./config.ts";
-import { applyNaturalGrowth, newReactionState, productAmount, advanceSustained } from "./reactions.ts";
+import { applyNaturalGrowth, newReactionState, productAmount, advanceSustained, reproductiveMass } from "./reactions.ts";
 import { validateSave } from "./save.ts";
 
 const cmd = (state: GameState, command: Parameters<typeof applyCommand>[1]) => applyCommand(state, command);
