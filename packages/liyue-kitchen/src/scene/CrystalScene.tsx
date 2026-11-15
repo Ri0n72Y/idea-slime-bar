@@ -2,21 +2,29 @@ import { useEffect, useRef, useState } from "react";
 import { Application, Graphics, Polygon, Text } from "pixi.js";
 import { ELEMENT_VIEW } from "../domain/config";
 import type { GameState, PlotId } from "../domain/game";
+import { fruitMass } from "../domain/game";
 import { stageLabel } from "../domain/game";
 import { plotGeometry } from "./plotGeometry";
 
+export type SceneDropTarget = { plotId: PlotId | null; ground: { plotId: PlotId; x: number; y: number } | null };
 type Props = {
+  onHarvest: (plotId: PlotId, plantId: string, leafId: string) => void;
+  onSelectItem: (itemId: string) => void;
+  onStartGroundDrag: (itemId: string, pointerId: number, x: number, y: number) => void;
   state: GameState;
   hoverPlotId: PlotId | null;
   onChoose: (plotId: PlotId) => void;
   onCollect: (ballId: string) => void;
   /** Registers the actual Pixi cell hit-shapes for cross-layer React drag/drop. */
-  onRegisterDropTarget: (pick: (clientX: number, clientY: number) => PlotId | null) => () => void;
+  onRegisterDropTarget: (pick: (clientX: number, clientY: number) => SceneDropTarget) => () => void;
 };
 type PlotHit = { id: PlotId; shape: Polygon };
 
 function draw(app: Application, state: GameState, hover: PlotId | null,
-  choose: (id: PlotId) => void, collect: (id: string) => void): PlotHit[] {
+  choose: (id: PlotId) => void, collect: (id: string) => void,
+  harvest: (plotId: PlotId, plantId: string, leafId: string) => void,
+  selectItem: (id: string) => void,
+  startItemDrag: (id: string, pointerId: number, x: number, y: number) => void): PlotHit[] {
   app.stage.removeChildren().forEach(child => child.destroy({ children: true }));
   const width = app.screen.width, height = app.screen.height;
   if (width <= 0 || height <= 0) return [];
@@ -87,6 +95,30 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
       treeMark.position.set(pos.x, pos.y + radius * 0.52);
       treeMark.eventMode = "none";
       app.stage.addChild(treeMark);
+      // A harvested fruit is absent from the living leaf; only actual MatureFruit may be tapped.
+      plot.plant.leaves.forEach((leaf, index) => {
+        if (!leaf.fruit) return;
+        const offset = (index - 1) * radius * 0.43;
+        const fx = pos.x + offset, fy = pos.y - radius * 0.57;
+        const mature = leaf.fruit.stage === "MatureFruit";
+        const fruitMark = new Graphics().circle(fx, fy, Math.max(10, radius * 0.20))
+          .fill({ color: mature ? 0xf0d075 : 0x759987, alpha: 0.96 })
+          .stroke({ color: mature ? 0xfff1c1 : 0x8daaa4, width: 2 });
+        fruitMark.eventMode = "static";
+        fruitMark.cursor = "pointer";
+        fruitMark.on("pointertap", event => {
+          event.stopPropagation();
+          harvest(pos.id, plot.plant!.id, leaf.id);
+        });
+        app.stage.addChild(fruitMark);
+        const fruitText = new Text({ text: mature ? "摘" : "果",
+          style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(10, radius * 0.17),
+            fill: mature ? 0x35291d : 0xe6ede4, fontWeight: "bold" } });
+        fruitText.anchor.set(0.5);
+        fruitText.position.set(fx, fy);
+        fruitText.eventMode = "none";
+        app.stage.addChild(fruitText);
+      });
     }
   }
 
@@ -110,21 +142,62 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
     icon.eventMode = "none";
     app.stage.addChild(icon);
   }
+  // World objects render AFTER cells: their actual Pixi hit areas win overlaps.
+  for (const item of Object.values(state.items)) {
+    if (item.kind !== "Aquamelon" || item.location.kind !== "ground") continue;
+    const ix = item.location.x * width, iy = item.location.y * height;
+    const selected = state.selectedItemId === item.id;
+    const symbol = new Graphics().circle(ix, iy, Math.max(15, radius * 0.26))
+      .fill({ color: 0xc4a461, alpha: 1 })
+      .stroke({ color: selected ? 0xffef99 : 0x624923, width: selected ? 4 : 2 });
+    symbol.eventMode = "static";
+    symbol.cursor = "grab";
+    symbol.on("pointerdown", event => {
+      event.stopPropagation();
+      const b = app.canvas.getBoundingClientRect();
+      startItemDrag(item.id, event.pointerId,
+        b.left + event.global.x * b.width / app.screen.width,
+        b.top + event.global.y * b.height / app.screen.height);
+    });
+    symbol.on("pointertap", event => {
+      event.stopPropagation();
+      selectItem(item.id);
+    });
+    app.stage.addChild(symbol);
+    const tag = new Text({ text: "瓜",
+      style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(14, radius * 0.28),
+        fill: 0x35291d, fontWeight: "bold" } });
+    tag.anchor.set(0.5);
+    tag.position.set(ix, iy);
+    tag.eventMode = "none";
+    app.stage.addChild(tag);
+    const label = new Text({ text: `${fruitMass(item).toFixed(1)}G`,
+      style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(10, radius * 0.18),
+        fill: 0xf3e6ba } });
+    label.anchor.set(0.5);
+    label.position.set(ix, iy + Math.max(19, radius * 0.34));
+    label.eventMode = "none";
+    app.stage.addChild(label);
+  }
   return plotHits;
 }
 
 /** A single Pixi app owns all plot/ball hit areas; React never guesses IDs from a CSS rectangle. */
-export function CrystalScene({ state, hoverPlotId, onChoose, onCollect, onRegisterDropTarget }: Props) {
+export function CrystalScene({ state, hoverPlotId, onChoose, onCollect, onHarvest, onSelectItem, onStartGroundDrag, onRegisterDropTarget }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<Application | null>(null);
   const stateRef = useRef(state), hoverRef = useRef(hoverPlotId);
   const chooseRef = useRef(onChoose), collectRef = useRef(onCollect);
+  const harvestRef = useRef(onHarvest), selectRef = useRef(onSelectItem), dragRef = useRef(onStartGroundDrag);
   const hitsRef = useRef<PlotHit[]>([]);
   const [error, setError] = useState("");
   stateRef.current = state;
   hoverRef.current = hoverPlotId;
   chooseRef.current = onChoose;
   collectRef.current = onCollect;
+  harvestRef.current = onHarvest;
+  selectRef.current = onSelectItem;
+  dragRef.current = onStartGroundDrag;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -133,14 +206,20 @@ export function CrystalScene({ state, hoverPlotId, onChoose, onCollect, onRegist
     let observer: ResizeObserver | undefined;
     let unregister: (() => void) | undefined;
     const app = new Application();
-    const pick = (clientX: number, clientY: number): PlotId | null => {
-      if (!appRef.current) return null;
+    const pick = (clientX: number, clientY: number): SceneDropTarget => {
+      const empty: SceneDropTarget = { plotId: null, ground: null };
+      if (!appRef.current) return empty;
       const bounds = app.canvas.getBoundingClientRect();
       if (bounds.width <= 0 || bounds.height <= 0 || clientX < bounds.left || clientX > bounds.right ||
-        clientY < bounds.top || clientY > bounds.bottom) return null;
+        clientY < bounds.top || clientY > bounds.bottom) return empty;
       const x = (clientX - bounds.left) * app.screen.width / bounds.width;
       const y = (clientY - bounds.top) * app.screen.height / bounds.height;
-      return hitsRef.current.find(hit => hit.shape.contains(x, y))?.id ?? null;
+      const { radius } = plotGeometry(app.screen.width, app.screen.height);
+      const dx = x - app.screen.width / 2, dy = y - app.screen.height / 2;
+      const ground = dx * dx + dy * dy <= (radius * 2.96) ** 2
+        ? { plotId: "P01" as PlotId, x: x / app.screen.width, y: y / app.screen.height }
+        : null;
+      return { plotId: hitsRef.current.find(hit => hit.shape.contains(x, y))?.id ?? null, ground };
     };
     void (async () => {
       try {
@@ -160,7 +239,10 @@ export function CrystalScene({ state, hoverPlotId, onChoose, onCollect, onRegist
         const repaint = () => {
           app.renderer.resize(Math.max(1, host.clientWidth), Math.max(1, host.clientHeight));
           hitsRef.current = draw(app, stateRef.current, hoverRef.current,
-            id => chooseRef.current(id), id => collectRef.current(id));
+            id => chooseRef.current(id), id => collectRef.current(id),
+            (plotId, plantId, leafId) => harvestRef.current(plotId, plantId, leafId),
+            id => selectRef.current(id),
+            (id, pointerId, x, y) => dragRef.current(id, pointerId, x, y));
         };
         observer = new ResizeObserver(repaint);
         observer.observe(host);
@@ -185,7 +267,10 @@ export function CrystalScene({ state, hoverPlotId, onChoose, onCollect, onRegist
   useEffect(() => {
     const app = appRef.current;
     if (app) hitsRef.current = draw(app, state, hoverPlotId,
-      id => chooseRef.current(id), id => collectRef.current(id));
+      id => chooseRef.current(id), id => collectRef.current(id),
+      (plotId, plantId, leafId) => harvestRef.current(plotId, plantId, leafId),
+      id => selectRef.current(id),
+      (id, pointerId, x, y) => dragRef.current(id, pointerId, x, y));
   }, [state, hoverPlotId]);
 
   return (
