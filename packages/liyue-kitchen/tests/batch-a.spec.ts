@@ -87,7 +87,8 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   const originalDay = record.day;
   await expect(page.getByTestId("order-requirement")).toContainText("完整水瓜");
   await page.getByTestId("accept-order").click();
-  await page.mouse.click(...Object.values(await fruitAt(page, record.indices[0])) as [number, number]);
+  const firstPos = await fruitAt(page, record.indices[0]);
+  await page.mouse.click(firstPos.x, firstPos.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
   const fruitId = await page.getByTestId("item-id").innerText();
@@ -190,6 +191,8 @@ test("Batch A deadline: order accepted on due day; confirmed night expires and o
     });
   });
   await page.reload();
+  await expect(page.getByTestId("loading-save")).toHaveCount(0);
+  if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   await expect(page.getByTestId("order-status")).toContainText("待接受");
   const oldId = await page.getByTestId("active-order").getAttribute("data-order-id");
   await page.getByTestId("accept-order").click();
