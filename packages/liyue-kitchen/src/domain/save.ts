@@ -127,7 +127,7 @@ export function validateSave(value: unknown): GameState | null {
   const a = g.adeptalEnergy;
   if (![a.balance, a.earnedTotal, a.spentTotal].every(n =>
         Number.isSafeInteger(n) && (n as number) >= 0) ||
-      a.earnedTotal - a.spentTotal !== a.balance ||
+      (a.earnedTotal as number) - (a.spentTotal as number) !== a.balance ||
       !Array.isArray(a.rewardedIds) ||
       a.rewardedIds.some(id => typeof id !== "string" || !id) ||
       new Set(a.rewardedIds).size !== a.rewardedIds.length) return null;
@@ -138,8 +138,8 @@ export function validateSave(value: unknown): GameState | null {
     sourceKeys.add(key);
   }
   const unlockedCost = PLOT_IDS.slice(1).reduce((sum, id) =>
-    sum + (g.plots[id].open ? ECONOMY_CANDIDATE.plotCosts[id as keyof typeof ECONOMY_CANDIDATE.plotCosts] : 0), 0);
-  if (a.spentTotal < unlockedCost) return null;
+    sum + ((g.plots as Record<string, { open: boolean }>)[id].open ? ECONOMY_CANDIDATE.plotCosts[id as keyof typeof ECONOMY_CANDIDATE.plotCosts] : 0), 0);
+  if ((a.spentTotal as number) < unlockedCost) return null;
   const usedDeliveryIds = new Set<string>();
   for (const [id, raw] of Object.entries(g.orders)) {
     if (!isObject(raw) || raw.id !== id || raw.visitorId !== "board" ||
@@ -160,7 +160,7 @@ export function validateSave(value: unknown): GameState | null {
         (raw.state === "accepted" && raw.acceptedDay === null) ||
         (raw.state === "available" && raw.acceptedDay !== null) ||
         (raw.state === "expired" && (raw.dueDay as number) >= (g.day as number)) ||
-        delivered.some(id => Object.hasOwn(g.items, id) || usedDeliveryIds.has(id))) return null;
+        delivered.some(id => Object.hasOwn(g.items as Record<string, unknown>, id) || usedDeliveryIds.has(id))) return null;
     for (const deliveredId of delivered) usedDeliveryIds.add(deliveredId);
   }
   if (Object.entries(g.items).some(([id, item]) => !validItem(id, item))) return null;
