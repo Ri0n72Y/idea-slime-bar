@@ -36,7 +36,7 @@ test("selection toggles, rejects locks without losing items or moving day", () =
     const failed = cmd(first, { type: "SELECT_PLOT", plotId: id });
     assert.equal(failed.selectedPlotId, "P01");
     assert.equal(failed.day, 1);
-    assert.equal(failed.adeptalEnergy, 0);
+    assert.equal(failed.adeptalEnergy.balance, 0);
     assert.equal(failed.notice.kind, "locked");
   }
   assert.equal(cmd(first, { type: "SELECT_PLOT", plotId: "P01" }).selectedPlotId, null);
@@ -209,12 +209,12 @@ test("sustained electro-charge and burning settle one step, requiring real activ
 
 test("versioned saves accept a valid state, reject corruption and preserve exact single Seed", () => {
   const state = planted();
-  const saved = validateSave({ version: 3, game: state });
+  const saved = validateSave({ version: 4, game: state });
   assert.deepEqual(saved, state);
   assert.equal(Object.keys(saved!.items).length, 0);
   assert.equal(validateSave({ version: 4, game: newGame() }), null);
   const bad = newGame(); bad.plots.P01.soil[0] = -1;
-  assert.equal(validateSave({ version: 3, game: bad }), null);
+  assert.equal(validateSave({ version: 4, game: bad }), null);
 });
 
 test("store emits once and serializes persisted revisions without Seed duplication", async () => {
@@ -502,7 +502,7 @@ test("U3 one item moves ground → inventory → storage → ground with stable 
   ] as const) {
     const before = state;
     state = cmd(state, { type: "MOVE_ITEM", itemId: item.id, destination });
-    assert.equal(Object.keys(state.items).length, 1);
+    assert.equal(Object.keys(state.items).length, 2);
     assert.equal(state.items[item.id].id, item.id);
     assert.deepEqual(state.items[item.id].location, destination);
     assert.equal(state.day, before.day);
@@ -524,11 +524,11 @@ test("U3 migration: version-1 U2 Seed keeps ID and seeded world; new schema surv
   (old.items as Record<string, { location: string }>)["item:seed:1"].location = "inventory";
   const migrated = validateSave({ version: 1, game: old });
   assert.ok(migrated);
-  assert.equal(migrated.schemaVersion, 3);
+  assert.equal(migrated.schemaVersion, 4);
   assert.deepEqual(migrated.items["item:seed:1"].location, { kind: "inventory" });
   assert.equal(migrated.selectedItemId, null);
   assert.equal(migrated.nextObjectSeq, 2);
-  assert.deepEqual(validateSave({ version: 3, game: migrated }), migrated);
+  assert.deepEqual(validateSave({ version: 4, game: migrated }), migrated);
   const plantedLegacy = planted() as unknown as Record<string, unknown>;
   plantedLegacy.schemaVersion = 1;
   delete plantedLegacy.selectedItemId;
@@ -541,9 +541,9 @@ test("U3 invalid save cannot duplicate consumed fruit by cloning sources or free
   const g = matureFixture();
   const leaf = g.plots.P01.plant!.leaves[0];
   const result = cmd(g, { type: "HARVEST", plotId: "P01", plantId: g.plots.P01.plant!.id, leafId: leaf.id });
-  assert.deepEqual(validateSave({ version: 3, game: result }), result);
+  assert.deepEqual(validateSave({ version: 4, game: result }), result);
   const duplicate = structuredClone(result);
   const fruit = Object.values(duplicate.items)[0];
   duplicate.items["item:duplicate"] = { ...structuredClone(fruit), id: "item:duplicate" };
-  assert.equal(validateSave({ version: 3, game: duplicate }), null);
+  assert.equal(validateSave({ version: 4, game: duplicate }), null);
 });

@@ -55,12 +55,12 @@ async function loadMatureGame(page: Page) {
     const mass = fruit.free.reduce((sum:number, v:number) => sum + v, 0) +
       Object.values(fruit.reaction.products).reduce((sum:number, v) => sum + Number(v), 0);
     await new Promise<void>((resolve, reject) => {
-      const open = indexedDB.open("liyue-kitchen", 3);
+      const open = indexedDB.open("liyue-kitchen", 4);
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const db = open.result;
         const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 3, game: g }, "primary");
+        tx.objectStore("game-saves").put({ version: 4, game: g }, "primary");
         tx.oncomplete = () => { db.close(); resolve(); };
         tx.onerror = () => { db.close(); reject(tx.error); };
       };
@@ -179,7 +179,7 @@ test("U4 browser migration: prior U3 IndexedDB save upgrades without duplicate s
     const old = newGame();
     old.schemaVersion = 2;
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 3);
+      const request = indexedDB.open("liyue-kitchen", 4);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
@@ -195,7 +195,7 @@ test("U4 browser migration: prior U3 IndexedDB save upgrades without duplicate s
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
   const saved = await page.evaluate(async () => {
     return new Promise<{version:number;schema:number;count:number}>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 3);
+      const request = indexedDB.open("liyue-kitchen", 4);
       request.onsuccess = () => {
         const db = request.result;
         const tx = db.transaction("game-saves", "readonly");
@@ -208,5 +208,5 @@ test("U4 browser migration: prior U3 IndexedDB save upgrades without duplicate s
       request.onerror = () => reject(request.error);
     });
   });
-  expect(saved).toEqual({ version: 3, schema: 3, count: 1 });
+  expect(saved).toEqual({ version: 4, schema: 4, count: 1 });
 });
