@@ -67,8 +67,30 @@ export function migrateDiscoveryEvidence(state: GameState): void {
       synthetic.push({ ...e, fact: "GROWTH_CONFIRMED", sourceId: e.message });
     if (e.kind === "order" && e.message.startsWith("已接受"))
       synthetic.push({ ...e, fact: "ORDER_ACCEPTED", sourceId: e.message });
-    if (e.kind === "order" && e.message.includes("委托完成"))
-      synthetic.push({ ...e, fact: "ORDER_DELIVERED", sourceId: e.message });
+    if (e.kind === "order" && e.message.includes("委托完成")) {
+      const orderId = e.message.match(/^(order:[^:]+):/)?.[1];
+      if (orderId && state.orders[orderId]?.state === "completed") {
+        synthetic.push({ ...e, fact: "ORDER_DELIVERED", sourceId: orderId });
+        synthetic.push({ ...e, fact: state.orders[orderId].itemKind === "aquamelon" ?
+          "FRUIT_ORDER_DELIVERED" : "JUICE_ORDER_DELIVERED", sourceId: orderId });
+      }
+    }
+    if (e.kind === "process" && /item:peeledflesh:\\d+/.test(e.message))
+      synthetic.push({ ...e, fact: "FRUIT_PEELED", sourceId: e.message });
+    if (e.kind === "process" && /item:aquamelonjuicecup:\\d+/.test(e.message))
+      synthetic.push({ ...e, fact: "JUICE_CUPPED", sourceId: e.message });
+  }
+  if (state.labor.manualBallIds.length === 3) {
+    const third = state.labor.manualBallIds[2];
+    const event = state.eventLog.find(e => e.kind === "collect" &&
+      e.message.includes(`收集 ${third}：`));
+    if (event) synthetic.push({ ...event, fact: "THIRD_MANUAL_COLLECTION", sourceId: third });
+  }
+  if (state.labor.wateredElements.length >= 2) {
+    const second = state.labor.wateredElements[1];
+    const event = state.eventLog.find(e => e.kind === "water" &&
+      e.message.startsWith(`灌注 ${second} `));
+    if (event) synthetic.push({ ...event, fact: "SECOND_ELEMENT_WATERED", sourceId: event.message });
   }
   reconcileDiscoveries(state, synthetic);
 }
