@@ -169,12 +169,15 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     const oldSnapshots = Object.fromEntries(PLOT_IDS.map(id => [id, snapshotPlot(state.plots[id])])) as
       Record<PlotId, ReturnType<typeof snapshotPlot>>;
     const nightEvents: string[] = [];
+    const grownPlots = new Set<PlotId>();
     // Never multiply a single-hour result by K. Time is advanced one actual model hour at a time.
     for (let n = 0; n < U2_CONFIG.nightUH; n++) {
       state.worldUH++;
       for (const id of PLOT_IDS) {
         const events: string[] = [];
+        const beforeGrowth = ledger.newTreeGrowthG + ledger.newOrganGrowthG;
         advancePlotOneUH(state.plots[id], state.worldUH, () => nextRandom(state), events, ledger);
+        if (ledger.newTreeGrowthG + ledger.newOrganGrowthG > beforeGrowth + 1e-9) grownPlots.add(id);
         for (const description of events) {
           nightEvents.push(`第 ${state.worldUH}uh · ${id} · ${description}`);
           event(state, "growth", description);
@@ -202,7 +205,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     // One completed, nutrient-fed night is the first verifiable planting-cycle reward.
     for (const id of PLOT_IDS) {
       const tree = state.plots[id].plant;
-      if (!tree || (tree.stage === "Seed" && vectorSum(tree.treeGrowth) <= 0)) continue;
+      if (!tree || !grownPlots.has(id)) continue;
       if (rewardEnergy(state, `cycle:${tree.id}`, ECONOMY_CANDIDATE.growthCycle)) {
         event(state, "reward", `有效种植周期 ${tree.id}：+${ECONOMY_CANDIDATE.growthCycle} 仙力`);
         nightEvents.push(`${id} 实际生长：获得 ${ECONOMY_CANDIDATE.growthCycle} 仙力。`);
