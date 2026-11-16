@@ -2,6 +2,7 @@ import "./u2.css";
 import "./u3.css";
 import "./u4.css";
 import "./batch-a.css";
+import "./batch-b.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
@@ -9,8 +10,9 @@ import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLoca
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
 import { ECONOMY_CANDIDATE } from "./domain/economy";
 import type { KitchenOrder } from "./domain/orders";
+import { visibleDiscoveries } from "./domain/discovery";
+import { COLLECT_BAG } from "./domain/technology";
 
-const unavailable = "后续阶段开放";
 type DropTarget = { zone: "inventory" | "storage" | WorkbenchSlot | null; scene: SceneDropTarget };
 type Drag = {
   itemId: string; kind: GameItem["kind"];
@@ -36,6 +38,7 @@ export function App() {
   const dragRef = useRef<Drag | null>(null);
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
 
   useEffect(() => { void gameStore.start().catch(() => {}); }, []);
   const registerDropTarget = useCallback((pick: (x: number, y: number) => SceneDropTarget) => {
@@ -148,6 +151,10 @@ export function App() {
         .slice(0, o.quantity).map(item => item.id);
     gameStore.dispatch({ type: "DELIVER_ORDER", orderId: o.id, itemIds: candidate });
   };
+  const discoveries = visibleDiscoveries(state);
+  const discoveredCount = discoveries.filter(x => x.status === "completed").length;
+  const eligibleForBag = state.labor.manualBallIds.length >= COLLECT_BAG.manualRequired &&
+    !!state.discoveries.A18;
   const report = state.lastNightReport;
   const showReport = !!report && report.toDay !== reportDismissed;
   return (
@@ -164,6 +171,13 @@ export function App() {
         </div>
         <button type="button" className="action" data-testid="condense" disabled={state.phase !== "DAY_WORK" || remainingCondenses(state) <= 0}
           onClick={() => gameStore.dispatch({ type: "CONDENSE" })}>凝聚元素</button>
+        {state.technology.collectBag && (
+          <button type="button" className="action" data-testid="collect-all"
+            disabled={state.phase !== "DAY_WORK" || !Object.keys(state.looseBalls).length}
+            onClick={() => gameStore.dispatch({ type: "COLLECT_ALL_BALLS" })}>
+            收集袋 · 全部收集
+          </button>
+        )}
         <button type="button" className="action" data-testid="end-day" disabled={state.phase !== "DAY_WORK"}
           onClick={() => gameStore.dispatch({ type: "REQUEST_END_DAY" })}>结束今日</button>
       </header>
@@ -231,9 +245,13 @@ export function App() {
           </section>
           <section className="region exploration" aria-label="探索地图" data-testid="region-exploration">
             <h2>探索地图</h2>
-            <div className="empty-state">等待第一项发现</div>
-            <p className="hint">U7 开放探索图谱</p>
-            <button type="button" disabled title={unavailable}>打开地图 · 未开放</button>
+            <div className="exploration-summary">
+              <strong data-testid="discovery-progress">已发现 {discoveredCount} 项</strong>
+              <small>通过真实种植、加工与交付留下证据</small>
+            </div>
+            <button type="button" data-testid="open-discoveries" onClick={() => setMapOpen(true)}>
+              查看探索图谱与科技
+            </button>
           </section>
         </aside>
       </main>
@@ -324,6 +342,48 @@ export function App() {
         </section>
       </div>
 
+      {mapOpen && (
+        <div className="dialog-backdrop discovery-dialog" role="dialog" aria-modal="true"
+          aria-label="探索图谱与科技" data-testid="discovery-dialog">
+          <div className="dialog-pane discovery-pane">
+            <header className="discovery-pane-header">
+              <h2>探索图谱</h2>
+              <button type="button" data-testid="close-discoveries" onClick={() => setMapOpen(false)}>
+                返回洞天
+              </button>
+            </header>
+            <p className="hint">进度以真实劳动与材料证据记录。未发现的隐藏节点不会展示。</p>
+            <div className="discovery-nodes" data-testid="discovery-nodes">
+              {discoveries.map(({ node, record, status }) => (
+                <div className={`discovery-node discovery-node-${status}`}
+                  data-testid="discovery-node" data-node-id={node.id} data-status={status} key={node.id}>
+                  <strong>{status === "locked" ? "未解锁的分支" : node.title}</strong>
+                  <span>{status === "completed" ? `已发现 · 第 ${record?.completedAtDay} 天` :
+                    status === "available" ? `待探索 · ${node.hint}` :
+                    status === "hinted" ? "已有线索" : "尚无前置发现"}</span>
+                  {record && <small data-testid={`discovery-evidence-${node.id}`}>
+                    证据：{record.eventId} · {record.sourceId}
+                  </small>}
+                </div>
+              ))}
+            </div>
+            <section className="technology-panel" data-testid="technology-panel">
+              <h3>省力科技 · {COLLECT_BAG.title}</h3>
+              <p>亲手收集 {COLLECT_BAG.manualRequired} 枚元素球后，消耗 {COLLECT_BAG.cost} 洞天仙力购买。</p>
+              <p data-testid="bag-qualification">
+                {state.technology.collectBag ? "已永久解锁" :
+                  `手动收集 ${state.labor.manualBallIds.length}/${COLLECT_BAG.manualRequired} · ${eligibleForBag ? "可购买" : "尚未满足条件"}`}
+              </p>
+              <button type="button" data-testid="buy-collect-bag"
+                disabled={state.phase !== "DAY_WORK" || !!state.technology.collectBag}
+                onClick={() => gameStore.dispatch({ type: "UNLOCK_TECH", techId: "collectBag" })}>
+                {state.technology.collectBag ? "收集袋已解锁" : `购买收集袋 · ${COLLECT_BAG.cost} 仙力`}
+              </button>
+              {state.notice.kind === "locked" && <p data-testid="tech-feedback">{state.notice.message}</p>}
+            </section>
+          </div>
+        </div>
+      )}
       {selectedItem && selectedItem.kind !== "Seed" && (
         <div className="item-inspector" data-testid="selected-item">
           <strong data-testid="item-id">{selectedItem.id}</strong>
