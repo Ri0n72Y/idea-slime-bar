@@ -1,9 +1,11 @@
 import { PLOT_IDS, type GameItem, type GameState, type ItemLocation } from "./game.ts";
+import { ECONOMY_CANDIDATE, newEnergyAccount } from "./economy.ts";
+import { createOrder, type KitchenOrder } from "./orders.ts";
 
 const DB_NAME = "liyue-kitchen";
 const STORE_NAME = "game-saves";
 const SAVE_KEY = "primary";
-export const SAVE_VERSION = 3 as const;
+export const SAVE_VERSION = 4 as const;
 
 type SaveRecord = { version: number; game: unknown };
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -34,7 +36,8 @@ const validSource = (value: unknown): boolean =>
 const validItem = (id: string, value: unknown): value is GameItem => {
   if (!isObject(value) || value.id !== id || !validLocation(value.location)) return false;
   const loc = value.location;
-  if (value.kind === "Seed") return loc.kind === "inventory";
+  if (value.kind === "Seed") return loc.kind === "inventory" &&
+    (!Object.hasOwn(value, "origin") || validSource(value.origin));
   if (!validSource(value.source)) return false;
   if (value.kind === "Shell")
     return loc.kind !== "workbench" && typeof value.parentItemId === "string" &&
@@ -53,9 +56,9 @@ const validItem = (id: string, value: unknown): value is GameItem => {
   return true;
 };
 
-/** Validate and migrate U2 (v1) / U3 (v2) to the current U4 material schema. */
+/** Validate U2/U3/U4 snapshots and upgrade to U5/U6 without minting resources. */
 export function validateSave(value: unknown): GameState | null {
-  if (!isObject(value) || (value.version !== 1 && value.version !== 2 && value.version !== SAVE_VERSION) ||
+  if (!isObject(value) || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== SAVE_VERSION) ||
       !isObject(value.game)) return null;
   const legacySeed = value.version === 1;
   const g = structuredClone(value.game);
@@ -72,8 +75,10 @@ export function validateSave(value: unknown): GameState | null {
   if (g.phase === "DAY_WORK" && g.pendingEndDay !== null) return null;
   for (const [index, id] of PLOT_IDS.entries()) {
     const plot = g.plots[id];
-    if (!isObject(plot) || plot.id !== id || plot.open !== (index === 0) || !isVector(plot.soil) ||
+    if (!isObject(plot) || plot.id !== id || typeof plot.open !== "boolean" || (index === 0 && !plot.open) ||
+        (value.version < 4 && plot.open !== (index === 0)) || !isVector(plot.soil) ||
         plot.soil.reduce((a, b) => a + b, 0) > 1000 + 1e-6) return null;
+    if (!plot.open && plot.plant !== null) return null;
     if (plot.plant !== null) {
       const tree = plot.plant;
       if (!isObject(tree) || typeof tree.id !== "string" || !isVector(tree.treeGrowth) ||
@@ -99,7 +104,65 @@ export function validateSave(value: unknown): GameState | null {
     }
     g.selectedItemId = null;
   }
+  if (value.version < SAVE_VERSION) {
+    // Existing U4 items have a real harvested source and must survive future replanting.
+    const archived = new Set<string>();
+    for (const item of Object.values(g.items)) if (isObject(item) && isObject(item.source)) {
+      const src = item.source;
+      if (!validSource(src)) return null;
+      const plot = g.plots[src.plotId as string];
+      if (!isObject(plot) || !isObject(plot.plant) || plot.plant.id !== src.plantId ||
+          !Array.isArray(plot.plant.leaves) ||
+          !plot.plant.leaves.some(l => isObject(l) && l.id === src.leafId && l.fruit === null))
+        return null;
+      archived.add(`${src.plotId}/${src.plantId}/${src.leafId}`);
+    }
+    g.harvestedSources = [...archived];
+    g.adeptalEnergy = newEnergyAccount();
+    g.orders = { "order:first": createOrder("order:first", g.day as number, "aquamelon", true) };
+  }
   g.schemaVersion = SAVE_VERSION;
+  if (!isObject(g.adeptalEnergy) || !isObject(g.orders) ||
+      !Array.isArray(g.harvestedSources)) return null;
+  const a = g.adeptalEnergy;
+  if (![a.balance, a.earnedTotal, a.spentTotal].every(n =>
+        Number.isSafeInteger(n) && (n as number) >= 0) ||
+      (a.earnedTotal as number) - (a.spentTotal as number) !== a.balance ||
+      !Array.isArray(a.rewardedIds) ||
+      a.rewardedIds.some(id => typeof id !== "string" || !id) ||
+      new Set(a.rewardedIds).size !== a.rewardedIds.length) return null;
+  const sourceKeys = new Set<string>();
+  for (const key of g.harvestedSources) {
+    if (typeof key !== "string" || !/^P0[1-7]\/[^/]+\/[^/]+$/.test(key) ||
+        sourceKeys.has(key)) return null;
+    sourceKeys.add(key);
+  }
+  const unlockedCost = PLOT_IDS.slice(1).reduce((sum, id) =>
+    sum + ((g.plots as Record<string, { open: boolean }>)[id].open ? ECONOMY_CANDIDATE.plotCosts[id as keyof typeof ECONOMY_CANDIDATE.plotCosts] : 0), 0);
+  if ((a.spentTotal as number) < unlockedCost) return null;
+  const usedDeliveryIds = new Set<string>();
+  for (const [id, raw] of Object.entries(g.orders)) {
+    if (!isObject(raw) || raw.id !== id || raw.visitorId !== "board" ||
+        (raw.itemKind !== "aquamelon" && raw.itemKind !== "juice_cup") ||
+        !Number.isSafeInteger(raw.postedDay) || (raw.postedDay as number) < 1 ||
+        !Number.isSafeInteger(raw.dueDay) || (raw.dueDay as number) < (raw.postedDay as number) ||
+        !Number.isSafeInteger(raw.rewards) || (raw.rewards as number) <= 0 ||
+        !Number.isSafeInteger(raw.quantity) || (raw.quantity as number) < 1 ||
+        !["available", "accepted", "completed", "expired"].includes(String(raw.state)) ||
+        !Array.isArray(raw.deliveredItemIds) ||
+        raw.deliveredItemIds.some(x => typeof x !== "string" || !x) ||
+        (raw.acceptedDay !== null && (!Number.isSafeInteger(raw.acceptedDay) ||
+           (raw.acceptedDay as number) < (raw.postedDay as number) ||
+           (raw.acceptedDay as number) > (raw.dueDay as number)))) return null;
+    const delivered = raw.deliveredItemIds as string[];
+    if ((raw.state === "completed") !== (delivered.length === raw.quantity) ||
+        (raw.state === "completed") !== a.rewardedIds.includes(`order:${id}`) ||
+        (raw.state === "accepted" && raw.acceptedDay === null) ||
+        (raw.state === "available" && raw.acceptedDay !== null) ||
+        (raw.state === "expired" && (raw.dueDay as number) >= (g.day as number)) ||
+        delivered.some(id => Object.hasOwn(g.items as Record<string, unknown>, id) || usedDeliveryIds.has(id))) return null;
+    for (const deliveredId of delivered) usedDeliveryIds.add(deliveredId);
+  }
   if (Object.entries(g.items).some(([id, item]) => !validItem(id, item))) return null;
   const plotsById = g.plots as Record<string, unknown>;
   if (Object.values(g.items).some(item => isObject(item) && isObject(item.location) &&
@@ -113,16 +176,27 @@ export function validateSave(value: unknown): GameState | null {
       ball.initialV !== 50 || !Number.isInteger(ball.createdUH) ||
       (ball.createdUH as number) > (g.worldUH as number))) return null;
 
-  // Each source may own at most one edible material and one zero-G shell.
+  // A harvested source can persist after its tree is replaced, but its
+  // material and seed IDs remain unique and traceable in the archived ledger.
   const edibleSources = new Set<string>(), shellSources = new Set<string>();
-  const occupiedSlots = new Set<string>();
+  const originSeeds = new Set<string>(), occupiedSlots = new Set<string>();
   for (const item of Object.values(g.items)) {
-    if (!isObject(item) || item.kind === "Seed") continue;
+    if (!isObject(item)) return null;
+    if (item.kind === "Seed") {
+      if (Object.hasOwn(item, "origin")) {
+        const src = item.origin as { plotId: string; plantId: string; leafId: string };
+        const key = `${src.plotId}/${src.plantId}/${src.leafId}`;
+        if (!sourceKeys.has(key) || originSeeds.has(key)) return null;
+        originSeeds.add(key);
+      }
+      continue;
+    }
     const source = item.source as { plotId: string; plantId: string; leafId: string };
     const key = `${source.plotId}/${source.plantId}/${source.leafId}`;
-    const sources = item.kind === "Shell" ? shellSources : edibleSources;
-    if (sources.has(key)) return null;
-    sources.add(key);
+    if (!sourceKeys.has(key)) return null;
+    const sourceSet = item.kind === "Shell" ? shellSources : edibleSources;
+    if (sourceSet.has(key)) return null;
+    sourceSet.add(key);
     const loc = item.location;
     if (isObject(loc) && loc.kind === "workbench") {
       if (occupiedSlots.has(String(loc.slot))) return null;
@@ -131,9 +205,10 @@ export function validateSave(value: unknown): GameState | null {
     const plot = plotsById[source.plotId];
     if (!isObject(plot) || plot.open !== true) return null;
     const tree = plot.plant;
-    if (!isObject(tree) || tree.id !== source.plantId || !Array.isArray(tree.leaves)) return null;
-    const leaf = tree.leaves.find(l => isObject(l) && l.id === source.leafId);
-    if (!isObject(leaf) || leaf.fruit !== null) return null;
+    if (isObject(tree) && tree.id === source.plantId && Array.isArray(tree.leaves)) {
+      const leaf = tree.leaves.find(l => isObject(l) && l.id === source.leafId);
+      if (!isObject(leaf) || leaf.fruit !== null) return null;
+    }
   }
   for (const item of Object.values(g.items)) {
     if (!isObject(item) || item.kind !== "Shell") continue;

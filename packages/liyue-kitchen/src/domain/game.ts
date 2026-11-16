@@ -3,6 +3,8 @@ import { ELEMENTS, U2_CONFIG, elementIndex, vectorSum, zeros, type Element, type
 import { advancePlotOneUH, newLedger, newTree, type GardenPlot, type NightLedger, type TreeStage } from "./growth.ts";
 import { reproductiveMass, type ReactionState } from "./reactions.ts";
 import { processWorkbench, type ProcessAction } from "./processing.ts";
+import { ECONOMY_CANDIDATE, newEnergyAccount, rewardEnergy, unlockPlot, type EnergyAccount } from "./economy.ts";
+import { acceptOrder, advanceOrdersAtMorning, deliverOrder, initialOrders, type KitchenOrder } from "./orders.ts";
 
 export const PLOT_IDS = ["P01", "P02", "P03", "P04", "P05", "P06", "P07"] as const;
 export type PlotId = (typeof PLOT_IDS)[number];
@@ -17,7 +19,7 @@ export type ItemLocation =
   | { kind: "ground"; plotId: PlotId; x: number; y: number }
   | { kind: "workbench"; slot: WorkbenchSlot };
 export type SourceIdentity = { plotId: PlotId; plantId: string; leafId: string };
-export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation };
+export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation; origin?: SourceIdentity };
 export type EdibleKind = "Aquamelon" | "PeeledFlesh" | "RawJuice" | "AquamelonJuiceCup";
 export type EdibleItem = {
   id: string; kind: EdibleKind; location: ItemLocation; source: SourceIdentity;
@@ -51,12 +53,15 @@ export type NightReport = {
   events: string[];
 };
 export type GameState = {
-  schemaVersion: 3;
+  schemaVersion: 4;
   day: number;
   worldUH: number;
   phase: "DAY_WORK" | "DAY_CONFIRM";
   pendingEndDay: number | null;
-  adeptalEnergy: number;
+  adeptalEnergy: EnergyAccount;
+  orders: Record<string, KitchenOrder>;
+  /** Harvested source IDs remain valid even if the parent plant is later replaced. */
+  harvestedSources: string[];
   plots: Record<PlotId, Plot>;
   selectedPlotId: PlotId | null;
   selectedItemId: string | null;
@@ -73,11 +78,14 @@ export type GameState = {
 };
 export type Command =
   | { type: "SELECT_PLOT"; plotId: PlotId }
+  | { type: "UNLOCK_PLOT"; plotId: PlotId }
   | { type: "PLANT_SEED"; itemId: string; plotId: PlotId }
   | { type: "HARVEST"; plotId: PlotId; plantId: string; leafId: string }
   | { type: "SELECT_ITEM"; itemId: string }
   | { type: "MOVE_ITEM"; itemId: string; destination: ItemLocation }
   | { type: "PROCESS_ITEM"; itemId: string; action: ProcessAction }
+  | { type: "ACCEPT_ORDER"; orderId: string }
+  | { type: "DELIVER_ORDER"; orderId: string; itemIds: string[] }
   | { type: "REJECT_DROP"; reason: string }
   | { type: "CONDENSE" }
   | { type: "COLLECT_BALL"; ballId: string }
@@ -91,8 +99,9 @@ export function newGame(seed = 0x17a5b7e1): GameState {
     id, open: i === 0, soil: zeros(), plant: null,
   }])) as Record<PlotId, Plot>;
   return {
-    schemaVersion: 3, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
-    adeptalEnergy: 0, plots, selectedPlotId: null, selectedItemId: null,
+    schemaVersion: 4, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
+    adeptalEnergy: newEnergyAccount(), orders: initialOrders(), harvestedSources: [],
+    plots, selectedPlotId: null, selectedItemId: null,
     items: { "item:seed:1": { id: "item:seed:1", kind: "Seed", location: { kind: "inventory" } } },
     looseBalls: {}, heldElements: zeros(), dayCondenseUsed: 0,
     dayCondenseLimit: U2_CONFIG.condensesPerDay, nextObjectSeq: 2,
@@ -136,7 +145,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     const p = validPlot(previous, command.plotId);
     if (!p) return previous;
     const state = structuredClone(previous);
-    if (!p.open) return notice(state, "locked", `${p.id} 尚未开垦。洞天仙力开垦将在后续阶段开放。`);
+    if (!p.open) return notice(state, "locked", `${p.id} 尚未开垦。消耗 ${ECONOMY_CANDIDATE.plotCosts[p.id as keyof typeof ECONOMY_CANDIDATE.plotCosts]} 洞天仙力可开垦。`);
     state.selectedPlotId = state.selectedPlotId === p.id ? null : p.id;
     return notice(state, state.selectedPlotId ? "success" : "info",
       state.selectedPlotId ? `已选中 ${p.id}，可以播种或浇灌。` : `已取消选择 ${p.id}。`);
@@ -160,12 +169,15 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     const oldSnapshots = Object.fromEntries(PLOT_IDS.map(id => [id, snapshotPlot(state.plots[id])])) as
       Record<PlotId, ReturnType<typeof snapshotPlot>>;
     const nightEvents: string[] = [];
+    const grownPlots = new Set<PlotId>();
     // Never multiply a single-hour result by K. Time is advanced one actual model hour at a time.
     for (let n = 0; n < U2_CONFIG.nightUH; n++) {
       state.worldUH++;
       for (const id of PLOT_IDS) {
         const events: string[] = [];
+        const beforeGrowth = ledger.newTreeGrowthG + ledger.newOrganGrowthG;
         advancePlotOneUH(state.plots[id], state.worldUH, () => nextRandom(state), events, ledger);
+        if (ledger.newTreeGrowthG + ledger.newOrganGrowthG > beforeGrowth + 1e-9) grownPlots.add(id);
         for (const description of events) {
           nightEvents.push(`第 ${state.worldUH}uh · ${id} · ${description}`);
           event(state, "growth", description);
@@ -190,6 +202,20 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       }];
     })) as NightReport["plots"];
     state.day++;
+    // One completed, nutrient-fed night is the first verifiable planting-cycle reward.
+    for (const id of PLOT_IDS) {
+      const tree = state.plots[id].plant;
+      if (!tree || !grownPlots.has(id)) continue;
+      if (rewardEnergy(state, `cycle:${tree.id}`, ECONOMY_CANDIDATE.growthCycle)) {
+        event(state, "reward", `有效种植周期 ${tree.id}：+${ECONOMY_CANDIDATE.growthCycle} 仙力`);
+        nightEvents.push(`${id} 实际生长：获得 ${ECONOMY_CANDIDATE.growthCycle} 仙力。`);
+      }
+    }
+    const orderEvents = advanceOrdersAtMorning(state);
+    for (const description of orderEvents) {
+      nightEvents.push(description);
+      event(state, "order", description);
+    }
     state.phase = "DAY_WORK";
     state.pendingEndDay = null;
     state.dayCondenseUsed = 0;
@@ -200,12 +226,39 @@ export function applyCommand(previous: GameState, command: Command): GameState {
   if (!work(previous)) return previous;
   const state = structuredClone(previous);
   switch (command.type) {
+    case "UNLOCK_PLOT": {
+      const result = unlockPlot(state, command.plotId);
+      if (!result.ok) return notice(state, "locked", result.reason);
+      event(state, "unlock", `${command.plotId} 已开垦，花费 ${result.cost} 仙力`);
+      state.selectedPlotId = command.plotId;
+      return notice(state, "success", `已开垦 ${command.plotId}，花费 ${result.cost} 仙力。`);
+    }
+    case "ACCEPT_ORDER": {
+      const result = acceptOrder(state, command.orderId);
+      if (!result.ok) return notice(state, "locked", result.reason);
+      event(state, "order", result.message);
+      return notice(state, "success", result.message);
+    }
+    case "DELIVER_ORDER": {
+      const result = deliverOrder(state, command.orderId, command.itemIds);
+      if (!result.ok) return notice(state, "locked", result.reason);
+      event(state, "order", `${command.orderId}: ${result.itemIds.join(",")}；${result.message}`);
+      return notice(state, "success", result.message);
+    }
     case "PLANT_SEED": {
       const p = validPlot(state, command.plotId);
       const seed = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
       if (!seed || seed.kind !== "Seed" || seed.location.kind !== "inventory") return notice(state, "locked", "种子已不存在，无法再次播种。");
       if (!p || !p.open) return notice(state, "locked", "此地格未开垦，种子未消耗。");
-      if (p.plant) return notice(state, "locked", "此地格已有植物，种子未消耗。");
+      if (p.plant) {
+        const old = p.plant;
+        // A cycle can be restarted only after a real harvest; never destroy attached fruit.
+        const harvested = state.harvestedSources.some(key =>
+          key.startsWith(`${p.id}/${old.id}/`));
+        if (!harvested || old.leaves.some(leaf => leaf.fruit !== null))
+          return notice(state, "locked", "此格仍在生长或有未采果实，不能更换植株。");
+        event(state, "recycle", `清理已采收植株 ${old.id}，在 ${p.id} 开启下一轮种植`);
+      }
       const tree = newTree(`plant:${state.nextObjectSeq++}`);
       p.plant = tree;
       delete state.items[seed.id];
@@ -238,9 +291,18 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       };
       leaf.fruit = null;
       state.items[id] = item;
+      const sourceKey = `${p.id}/${p.plant.id}/${leaf.id}`;
+      state.harvestedSources.push(sourceKey);
+      // One seed originates from exactly one real mature fruit. This makes every
+      // subsequent cycle possible even if the corresponding commission expires.
+      const seedId = `item:seed:${state.nextObjectSeq++}`;
+      state.items[seedId] = { id: seedId, kind: "Seed", location: { kind: "inventory" },
+        origin: { ...item.source } };
       state.selectedItemId = id;
-      event(state, "harvest", `采摘 ${leaf.id} → ${id}，${fruitMass(item).toFixed(3)}G`);
-      return notice(state, "success", `成熟水瓜已采摘到水晶球地面（${id}）。`);
+      rewardEnergy(state, `harvest:${sourceKey}`, ECONOMY_CANDIDATE.matureHarvest);
+      event(state, "harvest", `采摘 ${leaf.id} → ${id} + ${seedId}；${fruitMass(item).toFixed(3)}G`);
+      return notice(state, "success",
+        `成熟水瓜已采摘（${id}），留种 ${seedId}，获得 ${ECONOMY_CANDIDATE.matureHarvest} 仙力。`);
     }
     case "SELECT_ITEM": {
       const item = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;

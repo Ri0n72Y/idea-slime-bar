@@ -1,11 +1,14 @@
 import "./u2.css";
 import "./u3.css";
 import "./u4.css";
+import "./batch-a.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
 import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
+import { ECONOMY_CANDIDATE } from "./domain/economy";
+import type { KitchenOrder } from "./domain/orders";
 
 const unavailable = "后续阶段开放";
 type DropTarget = { zone: "inventory" | "storage" | WorkbenchSlot | null; scene: SceneDropTarget };
@@ -131,6 +134,20 @@ export function App() {
     Seed: "水瓜种子", Aquamelon: "完整水瓜", PeeledFlesh: "水瓜果肉",
     Shell: "水瓜果壳", RawJuice: "水瓜原汁", AquamelonJuiceCup: "杯装水瓜汁",
   })[item.kind];
+  const order = Object.values(state.orders).find(o => o.state === "available" || o.state === "accepted");
+  const recentOrders = Object.values(state.orders).filter(
+    o => o.state === "completed" || o.state === "expired").slice(-2).reverse();
+  const orderName = (o: KitchenOrder) => o.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁";
+  const deliver = (o: KitchenOrder) => {
+    const kind = o.itemKind === "aquamelon" ? "Aquamelon" : "AquamelonJuiceCup";
+    // The explicitly selected material wins, even when invalid; domain returns a rejection.
+    const candidate = state.selectedItemId && state.items[state.selectedItemId] ?
+      [state.selectedItemId] : Object.values(state.items)
+        .filter(item => item.kind === kind &&
+          (item.location.kind === "storage" || item.location.kind === "inventory"))
+        .slice(0, o.quantity).map(item => item.id);
+    gameStore.dispatch({ type: "DELIVER_ORDER", orderId: o.id, itemIds: candidate });
+  };
   const report = state.lastNightReport;
   const showReport = !!report && report.toDay !== reportDismissed;
   return (
@@ -142,7 +159,7 @@ export function App() {
         </div>
         <div className="header-stats">
           <span className="pill" data-testid="day">第 {state.day} 天</span>
-          <span className="pill" data-testid="energy">洞天仙力 {state.adeptalEnergy}</span>
+          <span className="pill" data-testid="energy">洞天仙力 {state.adeptalEnergy.balance}</span>
           <span className="pill" data-testid="quota">凝聚 {remainingCondenses(state)}/{state.dayCondenseLimit}</span>
         </div>
         <button type="button" className="action" data-testid="condense" disabled={state.phase !== "DAY_WORK" || remainingCondenses(state) <= 0}
@@ -174,16 +191,43 @@ export function App() {
             onRegisterDropTarget={registerDropTarget} />
           <div className="crystal-footer">
             <span data-testid="selected-plot">当前地格：{state.selectedPlotId ?? "未选择"}</span>
-            <span data-testid="plant-stage">{state.selectedPlotId ? stageLabel(state, state.selectedPlotId) : "拖放种子至中央地格"}</span>
+            <span data-testid="plant-stage">{state.selectedPlotId ? stageLabel(state, state.selectedPlotId) : "拖放种子至开放地格"}</span>
+            <div className="plot-purchases" data-testid="plot-purchases">
+              {(["P02", "P03", "P04", "P05", "P06", "P07"] as const)
+                .filter(id => !state.plots[id].open).map(id => (
+                <button key={id} type="button" data-testid={`unlock-${id}`}
+                  disabled={state.phase !== "DAY_WORK"}
+                  onClick={() => gameStore.dispatch({ type: "UNLOCK_PLOT", plotId: id })}>
+                  开垦 {id} · {ECONOMY_CANDIDATE.plotCosts[id]} 仙力
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
         <aside className="right-column">
           <section className="region orders" aria-label="限时委托" data-testid="region-orders">
             <h2>限时委托</h2>
-            <div className="empty-state">委托板尚未启用</div>
-            <p className="hint">U5 开放委托发布与交付</p>
-            <button type="button" disabled title={unavailable}>查看委托 · 未开放</button>
+            {order ? (
+              <div className="order-panel" data-testid="active-order" data-order-id={order.id}>
+                <p data-testid="order-requirement">{orderName(order)} × {order.quantity}</p>
+                <p data-testid="order-deadline">第 {order.dueDay} 天截止（含当日）</p>
+                <p>奖励 {order.rewards} 洞天仙力</p>
+                <p data-testid="order-status">{order.state === "available" ? "待接受" : "已接受"}</p>
+                {order.state === "available" ? (
+                  <button type="button" data-testid="accept-order" disabled={state.phase !== "DAY_WORK"}
+                    onClick={() => gameStore.dispatch({ type: "ACCEPT_ORDER", orderId: order.id })}>
+                    接受委托
+                  </button>
+                ) : (
+                  <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
+                    onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
+                )}
+              </div>
+            ) : <p className="hint">暂无可交付委托</p>}
+            {recentOrders.map(o => <p key={o.id} className="order-history" data-testid="order-history">
+              {o.id} · {orderName(o)} · {o.state === "completed" ? "已交付" : "已过期"}
+            </p>)}
           </section>
           <section className="region exploration" aria-label="探索地图" data-testid="region-exploration">
             <h2>探索地图</h2>
@@ -229,7 +273,7 @@ export function App() {
                 </div>
               ))}
               {!inventoryItems.length && <p className="hint">暂无物品</p>}
-              <span className="hint">拖动种子播种，拖动材料至工作台</span>
+              <span className="hint">成熟水瓜留种一枚；拖动后续种子播种，旧树已采完可换种</span>
             </div>
           </section>
           <section className="region storage" aria-label="仓储区" data-testid="region-storage" data-item-drop-zone="storage">
