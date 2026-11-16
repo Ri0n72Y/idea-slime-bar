@@ -54,7 +54,7 @@ test("Batch A: only nutrient-fed nights reward a planted cycle once; zero-growth
   g = tomorrow(g);
   assert.equal(g.adeptalEnergy.rewardedIds.length, 1);
   balance(g);
-  assert.deepEqual(validateSave({ version: 4, game: g }), g);
+  assert.deepEqual(validateSave({ version: 5, game: g }), g);
 });
 test("Batch A: a mature fruit yields exactly one provenance Seed and no duplicate harvest reward", () => {
   const start = newGame();
@@ -103,7 +103,7 @@ test("Batch A: accept, consume one exact fruit, award once, then juice cup is ne
   assert.deepEqual(again.items, g.items);
   assert.equal(again.adeptalEnergy.balance, g.adeptalEnergy.balance);
   balance(g);
-  assert.deepEqual(validateSave({ version: 4, game: g }), g);
+  assert.deepEqual(validateSave({ version: 5, game: g }), g);
 });
 test("Batch A: processing the true fruit to cup, rejecting raw juice, then delivering cup", () => {
   let g = harvestFixture();
@@ -137,7 +137,7 @@ test("Batch A: processing the true fruit to cup, rejecting raw juice, then deliv
   assert.ok(!g.items[cup.id]);
   assert.equal(g.adeptalEnergy.rewardedIds.filter(x => x.startsWith("order:")).length, 2);
   balance(g);
-  assert.deepEqual(validateSave({ version: 4, game: g }), g);
+  assert.deepEqual(validateSave({ version: 5, game: g }), g);
 });
 test("Batch A: due day remains playable; next morning expires and re-offers same type", () => {
   let a = newGame(), b = newGame();
@@ -153,7 +153,7 @@ test("Batch A: due day remains playable; next morning expires and re-offers same
   assert.equal(firstOrder(b).postedDay, b.day);
   assert.equal(firstOrder(b).state, "available");
   assert.equal(cmd(b, { type: "ACCEPT_ORDER", orderId: "order:first" }).notice.kind, "locked");
-  assert.deepEqual(validateSave({ version: 4, game: b }), b);
+  assert.deepEqual(validateSave({ version: 5, game: b }), b);
 });
 test("Batch A: two plots grow independently, N is global, unaffordable and repeat unlocks are atomic", () => {
   let g = newGame();
@@ -195,7 +195,7 @@ test("Batch A: two plots grow independently, N is global, unaffordable and repea
   assert.equal(g.plots.P01.open, true);
   assert.equal(g.dayCondenseLimit, 8);
   balance(g);
-  assert.deepEqual(validateSave({ version: 4, game: g }), g);
+  assert.deepEqual(validateSave({ version: 5, game: g }), g);
 });
 test("Batch A: harvested provenance remains valid after planting a replacement in the same plot", () => {
   let g = harvestFixture();
@@ -205,7 +205,7 @@ test("Batch A: harvested provenance remains valid after planting a replacement i
   g = cmd(g, { type: "PLANT_SEED", plotId: "P01", itemId: originalSeed.id });
   assert.notEqual(g.plots.P01.plant?.id, originalPlant);
   assert.deepEqual(g.items[fruit.id], fruit);
-  assert.deepEqual(validateSave({ version: 4, game: g }), g);
+  assert.deepEqual(validateSave({ version: 5, game: g }), g);
   assert.equal(g.harvestedSources.length, 1);
   assert.equal(g.items[originalSeed.id], undefined);
   // Replant cannot be used to instantly farm another growth-cycle reward.
@@ -218,21 +218,21 @@ test("Batch A: validation rejects energy minting, duplicate rewarded IDs, invali
   const original = harvestFixture();
   const minted = structuredClone(original);
   minted.adeptalEnergy.balance++;
-  assert.equal(validateSave({ version: 4, game: minted }), null);
+  assert.equal(validateSave({ version: 5, game: minted }), null);
   const repeated = structuredClone(original);
   repeated.adeptalEnergy.rewardedIds.push(repeated.adeptalEnergy.rewardedIds[0]);
-  assert.equal(validateSave({ version: 4, game: repeated }), null);
+  assert.equal(validateSave({ version: 5, game: repeated }), null);
   const forgedUnlock = structuredClone(original);
   forgedUnlock.plots.P02.open = true;
-  assert.equal(validateSave({ version: 4, game: forgedUnlock }), null);
+  assert.equal(validateSave({ version: 5, game: forgedUnlock }), null);
   const fruit = find(original, "Aquamelon");
   const clone = structuredClone(original);
   clone.items["item:clone"] = { ...fruit, id: "item:clone" };
-  assert.equal(validateSave({ version: 4, game: clone }), null);
+  assert.equal(validateSave({ version: 5, game: clone }), null);
   const clonedSeed = structuredClone(original);
   const savedSeed = Object.values(clonedSeed.items).find(
     x => x.kind === "Seed" && x.id !== "item:seed:1")!;
   clonedSeed.items["item:duplicate-seed"] = { ...savedSeed, id: "item:duplicate-seed" };
-  assert.equal(validateSave({ version: 4, game: clonedSeed }), null);
+  assert.equal(validateSave({ version: 5, game: clonedSeed }), null);
   for (const plot of PLOT_IDS.slice(1)) assert.equal(original.plots[plot].open, false);
 });
