@@ -212,7 +212,7 @@ test("versioned saves accept a valid state, reject corruption and preserve exact
   const saved = validateSave({ version: 4, game: state });
   assert.deepEqual(saved, state);
   assert.equal(Object.keys(saved!.items).length, 0);
-  assert.equal(validateSave({ version: 4, game: newGame() }), null);
+  assert.equal(validateSave({ version: 5, game: newGame() }), null);
   const bad = newGame(); bad.plots.P01.soil[0] = -1;
   assert.equal(validateSave({ version: 4, game: bad }), null);
 });
