@@ -10,9 +10,19 @@ import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLoca
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
 import { ECONOMY_CANDIDATE } from "./domain/economy";
 import type { KitchenOrder } from "./domain/orders";
-import { visibleDiscoveries } from "./domain/discovery";
+import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
 import { COLLECT_BAG } from "./domain/technology";
 
+/** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
+const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
+  A00: { x: 24, y: 250 }, A01: { x: 208, y: 40 },
+  A02: { x: 208, y: 255 }, A07: { x: 208, y: 468 },
+  A03: { x: 391, y: 40 }, A18: { x: 391, y: 255 },
+  H01: { x: 575, y: 374 }, A11: { x: 391, y: 468 },
+  A12: { x: 575, y: 40 }, A17: { x: 759, y: 40 },
+  A14: { x: 948, y: 40 }, A13: { x: 759, y: 260 },
+  A16: { x: 948, y: 468 },
+};
 type DropTarget = { zone: "inventory" | "storage" | WorkbenchSlot | null; scene: SceneDropTarget };
 type Drag = {
   itemId: string; kind: GameItem["kind"];
@@ -39,6 +49,7 @@ export function App() {
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [graphZoom, setGraphZoom] = useState(0.8);
 
   useEffect(() => { void gameStore.start().catch(() => {}); }, []);
   const registerDropTarget = useCallback((pick: (x: number, y: number) => SceneDropTarget) => {
@@ -152,6 +163,7 @@ export function App() {
     gameStore.dispatch({ type: "DELIVER_ORDER", orderId: o.id, itemIds: candidate });
   };
   const discoveries = visibleDiscoveries(state);
+  const visibleNodeIds = new Set(discoveries.map(x => x.node.id));
   const discoveredCount = discoveries.filter(x => x.status === "completed").length;
   const eligibleForBag = state.labor.manualBallIds.length >= COLLECT_BAG.manualRequired &&
     !!state.discoveries.A18;
@@ -352,20 +364,53 @@ export function App() {
                 返回洞天
               </button>
             </header>
-            <p className="hint">进度以真实劳动与材料证据记录。未发现的隐藏节点不会展示。</p>
-            <div className="discovery-nodes" data-testid="discovery-nodes">
-              {discoveries.map(({ node, record, status }) => (
-                <div className={`discovery-node discovery-node-${status}`}
-                  data-testid="discovery-node" data-node-id={node.id} data-status={status} key={node.id}>
-                  <strong>{status === "locked" ? "未解锁的分支" : node.title}</strong>
-                  <span>{status === "completed" ? `已发现 · 第 ${record?.completedAtDay} 天` :
-                    status === "available" ? `待探索 · ${node.hint}` :
-                    status === "hinted" ? "已有线索" : "尚无前置发现"}</span>
-                  {record && <small data-testid={`discovery-evidence-${node.id}`}>
-                    证据：{record.eventId} · {record.sourceId}
-                  </small>}
+            <div className="graph-controls">
+              <p className="hint">节点按真实事件点亮；未发现的隐藏节点及其连线不显示。</p>
+              <button type="button" data-testid="zoom-out"
+                disabled={graphZoom <= 0.6}
+                onClick={() => setGraphZoom(z => Math.max(0.6, +(z - 0.1).toFixed(2)))}>
+                缩小
+              </button>
+              <span data-testid="graph-zoom">{Math.round(graphZoom * 100)}%</span>
+              <button type="button" data-testid="zoom-in"
+                disabled={graphZoom >= 1.5}
+                onClick={() => setGraphZoom(z => Math.min(1.5, +(z + 0.1).toFixed(2)))}>
+                放大
+              </button>
+            </div>
+            <div className="discovery-viewport" data-testid="discovery-viewport">
+              <div className="discovery-zoom-space"
+                style={{ width: 1140 * graphZoom, height: 600 * graphZoom }}>
+                <div className="discovery-graph"
+                  style={{ transform: `scale(${graphZoom})` }}>
+                  <svg className="discovery-links" viewBox="0 0 1140 600" aria-hidden="true">
+                    {discoveries.flatMap(({ node }) => node.prerequisites
+                      .filter(id => visibleNodeIds.has(id))
+                      .map(parent => (
+                        <line key={`${parent}-${node.id}`}
+                          x1={graphCoordinates[parent].x + 155}
+                          y1={graphCoordinates[parent].y + 38}
+                          x2={graphCoordinates[node.id].x}
+                          y2={graphCoordinates[node.id].y + 38} />
+                      )))}
+                  </svg>
+                  <div className="discovery-nodes" data-testid="discovery-nodes">
+                    {discoveries.map(({ node, record, status }) => (
+                      <div className={`discovery-node discovery-node-${status}`}
+                        style={{ left: graphCoordinates[node.id].x, top: graphCoordinates[node.id].y }}
+                        data-testid="discovery-node" data-node-id={node.id} data-status={status} key={node.id}>
+                        <strong>{status === "locked" ? "未解锁的分支" : node.title}</strong>
+                        <span>{status === "completed" ? `已发现 · 第 ${record?.completedAtDay} 天` :
+                          status === "available" ? `待探索 · ${node.hint}` :
+                          status === "hinted" ? "已有线索" : "尚无前置发现"}</span>
+                        {record && <small data-testid={`discovery-evidence-${node.id}`}>
+                          证据：{record.eventId} · {record.sourceId}
+                        </small>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
+              </div>
             </div>
             <section className="technology-panel" data-testid="technology-panel">
               <h3>省力科技 · {COLLECT_BAG.title}</h3>

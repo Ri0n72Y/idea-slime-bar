@@ -111,6 +111,9 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
     expect(state.discoveries).toContain(id);
   await press(page,"open-discoveries",touch);
   await expect(page.locator('[data-node-id="H01"]')).toHaveAttribute("data-status","completed");
+  await expect(page.getByTestId("graph-zoom")).toContainText("80%");
+  await press(page,"zoom-in",touch);
+  await expect(page.getByTestId("graph-zoom")).toContainText("90%");
   await expect(page.getByTestId("discovery-evidence-A12")).toContainText("plant:");
   await press(page,"close-discoveries",touch);
 

@@ -5,9 +5,17 @@
 .discovery-pane { width: min(880px, 88%); max-height: 92%; display: flex; flex-direction: column; gap: .55em; }
 .discovery-pane-header { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
 .discovery-pane-header h2 { margin: 0; }
-.discovery-nodes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5em;
-  overflow-y: auto; min-height: 0; }
-.discovery-node { min-width: 0; border: 1px solid #527460; padding: .55em; display: grid; gap: .2em;
+.graph-controls { display: flex; align-items: center; gap: .6em; font-size: .78em; }
+.graph-controls p { margin: 0; flex: 1; }
+.graph-controls button { padding: .2em .55em; }
+.discovery-viewport { flex: 1; min-height: 200px; overflow: auto; border: 1px solid #567362;
+  background: #162b23; touch-action: pan-x pan-y; }
+.discovery-zoom-space { position: relative; }
+.discovery-graph { position: absolute; inset: 0; width: 1140px; height: 600px; transform-origin: top left; }
+.discovery-links { position: absolute; inset: 0; width: 1140px; height: 600px;
+  fill: none; stroke: #729888; stroke-width: 2; opacity: .8; pointer-events: none; }
+.discovery-nodes { position: absolute; inset: 0; }
+.discovery-node { position: absolute; width: 155px; min-width: 0; border: 1px solid #527460; padding: .55em; display: grid; gap: .2em;
   font-size: .74em; background: #1e312a; }
 .discovery-node-completed { border-color: #d7c38a; }
 .discovery-node-locked { opacity: .63; }
@@ -19,6 +27,5 @@
 .technology-panel p { margin: 0; }
 @media (max-width: 800px) {
   .discovery-pane { padding: .65em; }
-  .discovery-nodes { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25em; }
   .discovery-node { font-size: .68em; padding: .3em; }
 }
