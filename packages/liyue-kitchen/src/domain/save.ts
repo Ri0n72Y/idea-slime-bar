@@ -142,7 +142,7 @@ export function validateSave(value: unknown): GameState | null {
       const el = e.message.match(/^灌注 (Fire|Hydro|Anemo|Electro|Dendro|Cryo|Geo) /)?.[1];
       if (el) elements.add(el);
     }
-    (g.labor as ReturnType<typeof newLabor>).wateredElements = [...elements];
+    (g.labor as ReturnType<typeof newLabor>).wateredElements = [...elements] as ReturnType<typeof newLabor>["wateredElements"];
     migrateDiscoveryEvidence(g as GameState);
   }
   g.schemaVersion = SAVE_VERSION;
@@ -169,7 +169,7 @@ export function validateSave(value: unknown): GameState | null {
   if (bag !== null && (!isObject(bag) || !Number.isSafeInteger(bag.unlockedAtDay) ||
       (bag.unlockedAtDay as number) < 1 || (bag.unlockedAtDay as number) > (g.day as number) ||
       !Array.isArray(bag.evidenceIds) || (bag.evidenceIds as unknown[]).length !== COLLECT_BAG.manualRequired ||
-      !manual.every(id => bag.evidenceIds.includes(id)) ||
+      !manual.every(id => (bag.evidenceIds as string[]).includes(id)) ||
       !Object.hasOwn(g.discoveries, "A18"))) return null;
   if (!isObject(g.adeptalEnergy) || !isObject(g.orders) ||
       !Array.isArray(g.harvestedSources)) return null;
