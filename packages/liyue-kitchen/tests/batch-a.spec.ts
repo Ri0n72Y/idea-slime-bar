@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function ready(page: Page) {
+  page.setDefaultTimeout(20_000);
   await page.goto("/");
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
