@@ -132,7 +132,7 @@ export function validateSave(value: unknown): GameState | null {
     // from the retained event journal; never invent missing labor.
     const recorded = new Set<string>();
     for (const e of g.eventLog) if (isObject(e) && e.kind === "collect") {
-      const found = typeof e.message === "string" ? e.message.match(/(ball:\\d+)/) : null;
+      const found = typeof e.message === "string" ? e.message.match(/(ball:\d+)/) : null;
       if (found && !recorded.has(found[1]) && recorded.size < COLLECT_BAG.manualRequired)
         recorded.add(found[1]);
     }
@@ -160,7 +160,7 @@ export function validateSave(value: unknown): GameState | null {
   const manual = g.labor.manualBallIds;
   const elements = g.labor.wateredElements;
   if (manual.length > COLLECT_BAG.manualRequired ||
-      manual.some(id => typeof id !== "string" || !/^ball:\\d+$/.test(id)) ||
+      manual.some(id => typeof id !== "string" || !/^ball:\d+$/.test(id)) ||
       new Set(manual).size !== manual.length ||
       elements.some(el => !ELEMENTS.includes(el as never)) ||
       new Set(elements).size !== elements.length ||
