@@ -92,7 +92,11 @@ test("Tool cannot be bought without actual work; costs once; collector preserves
   assert.equal(reject.adeptalEnergy.spentTotal, 0);
   assert.equal(act(g, { type: "COLLECT_ALL_BALLS" }).notice.kind, "locked");
   const actual = realMaturity().g;
-  g = actual;
+  const harvested = harvestOne(actual);
+  g = act(harvested.g, { type: "MOVE_ITEM", itemId: harvested.fruitId,
+    destination: { kind: "storage" } });
+  g = act(g, { type: "DELIVER_ORDER", orderId: "order:first",
+    itemIds: [harvested.fruitId] });
   assert.equal(g.labor.manualBallIds.length, 3);
   assert.ok(g.discoveries.A18);
   assert.ok(g.adeptalEnergy.balance >= COLLECT_BAG.cost);
