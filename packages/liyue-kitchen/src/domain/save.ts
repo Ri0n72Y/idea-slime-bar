@@ -136,13 +136,13 @@ export function validateSave(value: unknown): GameState | null {
       if (found && !recorded.has(found[1]) && recorded.size < COLLECT_BAG.manualRequired)
         recorded.add(found[1]);
     }
-    g.labor.manualBallIds = [...recorded];
+    (g.labor as ReturnType<typeof newLabor>).manualBallIds = [...recorded];
     const elements = new Set<string>();
     for (const e of g.eventLog) if (isObject(e) && e.kind === "water" && typeof e.message === "string") {
       const el = e.message.match(/^灌注 (Fire|Hydro|Anemo|Electro|Dendro|Cryo|Geo) /)?.[1];
       if (el) elements.add(el);
     }
-    g.labor.wateredElements = [...elements];
+    (g.labor as ReturnType<typeof newLabor>).wateredElements = [...elements];
     migrateDiscoveryEvidence(g as GameState);
   }
   g.schemaVersion = SAVE_VERSION;
@@ -168,7 +168,7 @@ export function validateSave(value: unknown): GameState | null {
   const bag = g.technology.collectBag;
   if (bag !== null && (!isObject(bag) || !Number.isSafeInteger(bag.unlockedAtDay) ||
       (bag.unlockedAtDay as number) < 1 || (bag.unlockedAtDay as number) > (g.day as number) ||
-      !Array.isArray(bag.evidenceIds) || bag.evidenceIds.length !== COLLECT_BAG.manualRequired ||
+      !Array.isArray(bag.evidenceIds) || (bag.evidenceIds as unknown[]).length !== COLLECT_BAG.manualRequired ||
       !manual.every(id => bag.evidenceIds.includes(id)) ||
       !Object.hasOwn(g.discoveries, "A18"))) return null;
   if (!isObject(g.adeptalEnergy) || !isObject(g.orders) ||
