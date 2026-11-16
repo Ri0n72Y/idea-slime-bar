@@ -5,12 +5,14 @@ import { reproductiveMass, type ReactionState } from "./reactions.ts";
 import { processWorkbench, type ProcessAction } from "./processing.ts";
 import { ECONOMY_CANDIDATE, newEnergyAccount, rewardEnergy, unlockPlot, type EnergyAccount } from "./economy.ts";
 import { acceptOrder, advanceOrdersAtMorning, deliverOrder, initialOrders, type KitchenOrder } from "./orders.ts";
+import { reconcileDiscoveries, type DiscoveryId, type DiscoveryRecord } from "./discovery.ts";
+import { newLabor, newTechnology, purchaseCollectBag, type LaborRecord, type TechnologyRecord } from "./technology.ts";
 
 export const PLOT_IDS = ["P01", "P02", "P03", "P04", "P05", "P06", "P07"] as const;
 export type PlotId = (typeof PLOT_IDS)[number];
 export type Plot = GardenPlot & { id: PlotId };
 export type Notice = Readonly<{ kind: "info" | "success" | "locked"; message: string }>;
-export type GameEvent = { id: string; day: number; worldUH: number; kind: string; message: string };
+export type GameEvent = { id: string; day: number; worldUH: number; kind: string; message: string; fact?: string; sourceId?: string };
 /** A world item has one persistent ID and exactly one location. */
 export type WorkbenchSlot = "peel" | "juice";
 export type ItemLocation =
@@ -53,7 +55,7 @@ export type NightReport = {
   events: string[];
 };
 export type GameState = {
-  schemaVersion: 4;
+  schemaVersion: 5;
   day: number;
   worldUH: number;
   phase: "DAY_WORK" | "DAY_CONFIRM";
@@ -62,6 +64,9 @@ export type GameState = {
   orders: Record<string, KitchenOrder>;
   /** Harvested source IDs remain valid even if the parent plant is later replaced. */
   harvestedSources: string[];
+  discoveries: Partial<Record<DiscoveryId, DiscoveryRecord>>;
+  technology: { collectBag: TechnologyRecord | null };
+  labor: LaborRecord;
   plots: Record<PlotId, Plot>;
   selectedPlotId: PlotId | null;
   selectedItemId: string | null;
@@ -89,6 +94,8 @@ export type Command =
   | { type: "REJECT_DROP"; reason: string }
   | { type: "CONDENSE" }
   | { type: "COLLECT_BALL"; ballId: string }
+  | { type: "COLLECT_ALL_BALLS" }
+  | { type: "UNLOCK_TECH"; techId: "collectBag" }
   | { type: "WATER_PLOT"; element: Element; plotId: PlotId }
   | { type: "REQUEST_END_DAY" }
   | { type: "CANCEL_END_DAY" }
@@ -99,13 +106,19 @@ export function newGame(seed = 0x17a5b7e1): GameState {
     id, open: i === 0, soil: zeros(), plant: null,
   }])) as Record<PlotId, Plot>;
   return {
-    schemaVersion: 4, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
+    schemaVersion: 5, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
     adeptalEnergy: newEnergyAccount(), orders: initialOrders(), harvestedSources: [],
+    discoveries: { A00: { id: "A00", completedAtDay: 1,
+      eventId: "event:initial-seed", sourceId: "item:seed:1" } },
+    technology: newTechnology(), labor: newLabor(),
     plots, selectedPlotId: null, selectedItemId: null,
     items: { "item:seed:1": { id: "item:seed:1", kind: "Seed", location: { kind: "inventory" } } },
     looseBalls: {}, heldElements: zeros(), dayCondenseUsed: 0,
     dayCondenseLimit: U2_CONFIG.condensesPerDay, nextObjectSeq: 2,
-    randomState: (seed >>> 0) || 1, eventLog: [], lastNightReport: null,
+    randomState: (seed >>> 0) || 1,
+    eventLog: [{ id: "event:initial-seed", day: 1, worldUH: 0, kind: "seed",
+      message: "获得唯一开局种子 item:seed:1", fact: "SEED_OBTAINED",
+      sourceId: "item:seed:1" }], lastNightReport: null,
     notice: { kind: "info", message: "拖动物品栏中唯一的种子到水晶球中心地格。" },
   };
 }
@@ -116,10 +129,26 @@ export function nextRandom(state: GameState): number {
   state.randomState = x >>> 0;
   return state.randomState / 0x100000000;
 }
-function event(state: GameState, kind: string, message: string) {
+function event(state: GameState, kind: string, message: string, fact?: string, sourceId?: string) {
   state.eventLog.push({ id: `event:${state.nextObjectSeq++}`, day: state.day,
-    worldUH: state.worldUH, kind, message });
+    worldUH: state.worldUH, kind, message, ...(fact && sourceId ? { fact, sourceId } : {}) });
   if (state.eventLog.length > 240) state.eventLog.splice(0, state.eventLog.length - 240);
+}
+function collectActualBall(state: GameState, ball: ElementBall, manual: boolean): boolean {
+  const amount = ball.initialV * Math.pow(0.5,
+    (state.worldUH - ball.createdUH) / U2_CONFIG.ballHalfLifeUH);
+  delete state.looseBalls[ball.id];
+  if (amount < 1) return false;
+  state.heldElements[elementIndex(ball.element)] += amount;
+  event(state, "collect", `收集 ${ball.id}：${ball.element} ${amount.toFixed(3)}V`,
+    "BALL_COLLECTED", ball.id);
+  if (manual && state.labor.manualBallIds.length < 3 &&
+      !state.labor.manualBallIds.includes(ball.id)) {
+    state.labor.manualBallIds.push(ball.id);
+    if (state.labor.manualBallIds.length === 3) event(state, "labor",
+      "已亲手收集三枚不同元素球", "THIRD_MANUAL_COLLECTION", ball.id);
+  }
+  return true;
 }
 function notice(state: GameState, kind: Notice["kind"], message: string) {
   state.notice = { kind, message };
@@ -141,6 +170,14 @@ function snapshotPlot(plot: Plot) {
 
 /** Every successful command atomically returns a cloned next state. Invalid identity is a no-op. */
 export function applyCommand(previous: GameState, command: Command): GameState {
+  const result = applyDomainCommand(previous, command);
+  if (result !== previous) {
+    const known = new Set(previous.eventLog.map(e => e.id));
+    reconcileDiscoveries(result, result.eventLog.filter(e => !known.has(e.id)));
+  }
+  return result;
+}
+function applyDomainCommand(previous: GameState, command: Command): GameState {
   if (command.type === "SELECT_PLOT") {
     const p = validPlot(previous, command.plotId);
     if (!p) return previous;
@@ -180,7 +217,9 @@ export function applyCommand(previous: GameState, command: Command): GameState {
         if (ledger.newTreeGrowthG + ledger.newOrganGrowthG > beforeGrowth + 1e-9) grownPlots.add(id);
         for (const description of events) {
           nightEvents.push(`第 ${state.worldUH}uh · ${id} · ${description}`);
-          event(state, "growth", description);
+          event(state, "growth", description,
+            description.includes("→ MatureFruit") ? "FRUIT_MATURED" : undefined,
+            state.plots[id].plant?.id);
         }
       }
     }
@@ -207,7 +246,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       const tree = state.plots[id].plant;
       if (!tree || !grownPlots.has(id)) continue;
       if (rewardEnergy(state, `cycle:${tree.id}`, ECONOMY_CANDIDATE.growthCycle)) {
-        event(state, "reward", `有效种植周期 ${tree.id}：+${ECONOMY_CANDIDATE.growthCycle} 仙力`);
+        event(state, "reward", `有效种植周期 ${tree.id}：+${ECONOMY_CANDIDATE.growthCycle} 仙力`, "GROWTH_CONFIRMED", tree.id);
         nightEvents.push(`${id} 实际生长：获得 ${ECONOMY_CANDIDATE.growthCycle} 仙力。`);
       }
     }
@@ -226,6 +265,14 @@ export function applyCommand(previous: GameState, command: Command): GameState {
   if (!work(previous)) return previous;
   const state = structuredClone(previous);
   switch (command.type) {
+    case "UNLOCK_TECH": {
+      if (command.techId !== "collectBag") return notice(state, "locked", "未知工具。");
+      const result = purchaseCollectBag(state);
+      if (!result.ok) return notice(state, "locked", result.reason);
+      event(state, "technology", `收集袋已解锁，扣除 ${result.cost} 仙力`,
+        "TECH_UNLOCKED", "collectBag");
+      return notice(state, "success", "已解锁收集袋，可一次收取场上全部元素球。");
+    }
     case "UNLOCK_PLOT": {
       const result = unlockPlot(state, command.plotId);
       if (!result.ok) return notice(state, "locked", result.reason);
@@ -236,13 +283,17 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     case "ACCEPT_ORDER": {
       const result = acceptOrder(state, command.orderId);
       if (!result.ok) return notice(state, "locked", result.reason);
-      event(state, "order", result.message);
+      event(state, "order", result.message, "ORDER_ACCEPTED", command.orderId);
       return notice(state, "success", result.message);
     }
     case "DELIVER_ORDER": {
       const result = deliverOrder(state, command.orderId, command.itemIds);
       if (!result.ok) return notice(state, "locked", result.reason);
-      event(state, "order", `${command.orderId}: ${result.itemIds.join(",")}；${result.message}`);
+      event(state, "order", `${command.orderId}: ${result.itemIds.join(",")}；${result.message}`,
+        "ORDER_DELIVERED", command.orderId);
+      event(state, "order", `实际交付 ${state.orders[command.orderId].itemKind}`,
+        state.orders[command.orderId].itemKind === "aquamelon" ?
+          "FRUIT_ORDER_DELIVERED" : "JUICE_ORDER_DELIVERED", command.orderId);
       return notice(state, "success", result.message);
     }
     case "PLANT_SEED": {
@@ -263,7 +314,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       p.plant = tree;
       delete state.items[seed.id];
       state.selectedPlotId = p.id;
-      event(state, "plant", `种植 ${tree.id} 到 ${p.id}，消耗 ${seed.id}`);
+      event(state, "plant", `种植 ${tree.id} 到 ${p.id}，消耗 ${seed.id}`, "TREE_PLANTED", tree.id);
       return notice(state, "success", `已在 ${p.id} 播下水瓜种子，开始凝聚元素并浇灌。`);
     }
     case "HARVEST": {
@@ -300,7 +351,7 @@ export function applyCommand(previous: GameState, command: Command): GameState {
         origin: { ...item.source } };
       state.selectedItemId = id;
       rewardEnergy(state, `harvest:${sourceKey}`, ECONOMY_CANDIDATE.matureHarvest);
-      event(state, "harvest", `采摘 ${leaf.id} → ${id} + ${seedId}；${fruitMass(item).toFixed(3)}G`);
+      event(state, "harvest", `采摘 ${leaf.id} → ${id} + ${seedId}；${fruitMass(item).toFixed(3)}G`, "FRUIT_HARVESTED", id);
       return notice(state, "success",
         `成熟水瓜已采摘（${id}），留种 ${seedId}，获得 ${ECONOMY_CANDIDATE.matureHarvest} 仙力。`);
     }
@@ -342,7 +393,10 @@ export function applyCommand(previous: GameState, command: Command): GameState {
     case "PROCESS_ITEM": {
       const result = processWorkbench(state, command.itemId, command.action);
       if (!result.ok) return notice(state, "locked", result.reason);
-      event(state, "process", `${result.inputId} → ${result.outputIds.join(" + ")}`);
+      event(state, "process", `${result.inputId} → ${result.outputIds.join(" + ")}`,
+        command.action === "PEEL" ? "FRUIT_PEELED" :
+          command.action === "CUP" ? "JUICE_CUPPED" : "FRUIT_JUICED",
+        command.action === "PEEL" ? result.outputIds[1] : result.outputIds[0]);
       return notice(state, "success", result.message);
     }
     case "CONDENSE": {
@@ -356,14 +410,22 @@ export function applyCommand(previous: GameState, command: Command): GameState {
       return notice(state, "success", `元素球已凝聚。请点击水晶球旁的元素球收集。`);
     }
     case "COLLECT_BALL": {
-      const ball = Object.hasOwn(state.looseBalls, command.ballId) ? state.looseBalls[command.ballId] : null;
+      const ball = Object.hasOwn(state.looseBalls, command.ballId) ?
+        state.looseBalls[command.ballId] : null;
       if (!ball) return previous;
-      const amount = ball.initialV * Math.pow(0.5, (state.worldUH - ball.createdUH) / U2_CONFIG.ballHalfLifeUH);
-      delete state.looseBalls[ball.id];
-      if (amount < 1) return notice(state, "locked", "元素球已消散。未获得养分。");
-      state.heldElements[elementIndex(ball.element)] += amount;
-      event(state, "collect", `收集 ${ball.id}：${ball.element} ${amount.toFixed(3)}V`);
+      if (!collectActualBall(state, ball, true))
+        return notice(state, "locked", "元素球已消散。未获得养分。");
       return notice(state, "success", `收集了 ${ball.element} 元素球。请选择地格浇灌。`);
+    }
+    case "COLLECT_ALL_BALLS": {
+      if (!state.technology.collectBag)
+        return notice(state, "locked", "尚未解锁收集袋。");
+      const balls = Object.values(state.looseBalls);
+      if (!balls.length) return notice(state, "locked", "场上没有可收集的元素球。");
+      let collected = 0;
+      for (const ball of balls) if (collectActualBall(state, ball, false)) collected++;
+      return notice(state, collected ? "success" : "locked",
+        `收集袋取回 ${collected} 枚元素球。原始元素量和每日额度不变。`);
     }
     case "WATER_PLOT": {
       const p = validPlot(state, command.plotId);
@@ -380,7 +442,13 @@ export function applyCommand(previous: GameState, command: Command): GameState {
         overflow = total - U2_CONFIG.soilCapacityV;
         for (let i = 0; i < 7; i++) p.soil[i] *= ratio;
       }
-      event(state, "water", `灌注 ${command.element} ${amount.toFixed(3)}V → ${p.id}; soil overflow ${overflow.toFixed(3)}V`);
+      event(state, "water", `灌注 ${command.element} ${amount.toFixed(3)}V → ${p.id}; soil overflow ${overflow.toFixed(3)}V`,
+        "SOIL_WATERED", `${p.id}/${command.element}`);
+      if (!state.labor.wateredElements.includes(command.element)) {
+        state.labor.wateredElements.push(command.element);
+        if (state.labor.wateredElements.length === 2) event(state, "discovery",
+          "两种不同元素首次注入土壤", "SECOND_ELEMENT_WATERED", `${p.id}/${command.element}`);
+      }
       return notice(state, "success", `${p.id} 土壤已浇灌 ${command.element}；夜间将按根系规则吸收。`);
     }
     case "REQUEST_END_DAY": {

@@ -1,11 +1,14 @@
 import { PLOT_IDS, type GameItem, type GameState, type ItemLocation } from "./game.ts";
 import { ECONOMY_CANDIDATE, newEnergyAccount } from "./economy.ts";
+import { DISCOVERY_NODES, migrateDiscoveryEvidence } from "./discovery.ts";
+import { COLLECT_BAG, newLabor, newTechnology } from "./technology.ts";
+import { ELEMENTS } from "./config.ts";
 import { createOrder, type KitchenOrder } from "./orders.ts";
 
 const DB_NAME = "liyue-kitchen";
 const STORE_NAME = "game-saves";
 const SAVE_KEY = "primary";
-export const SAVE_VERSION = 4 as const;
+export const SAVE_VERSION = 5 as const;
 
 type SaveRecord = { version: number; game: unknown };
 const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -58,7 +61,7 @@ const validItem = (id: string, value: unknown): value is GameItem => {
 
 /** Validate U2/U3/U4 snapshots and upgrade to U5/U6 without minting resources. */
 export function validateSave(value: unknown): GameState | null {
-  if (!isObject(value) || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== SAVE_VERSION) ||
+  if (!isObject(value) || (value.version !== 1 && value.version !== 2 && value.version !== 3 && value.version !== 4 && value.version !== SAVE_VERSION) ||
       !isObject(value.game)) return null;
   const legacySeed = value.version === 1;
   const g = structuredClone(value.game);
@@ -104,7 +107,7 @@ export function validateSave(value: unknown): GameState | null {
     }
     g.selectedItemId = null;
   }
-  if (value.version < SAVE_VERSION) {
+  if (value.version < 4) {
     // Existing U4 items have a real harvested source and must survive future replanting.
     const archived = new Set<string>();
     for (const item of Object.values(g.items)) if (isObject(item) && isObject(item.source)) {
@@ -121,7 +124,53 @@ export function validateSave(value: unknown): GameState | null {
     g.adeptalEnergy = newEnergyAccount();
     g.orders = { "order:first": createOrder("order:first", g.day as number, "aquamelon", true) };
   }
+  if (value.version < SAVE_VERSION) {
+    g.discoveries = {};
+    g.technology = newTechnology();
+    g.labor = newLabor();
+    // Prior games already performed real actions. Recover available evidence
+    // from the retained event journal; never invent missing labor.
+    const recorded = new Set<string>();
+    for (const e of g.eventLog) if (isObject(e) && e.kind === "collect") {
+      const found = typeof e.message === "string" ? e.message.match(/(ball:\d+)/) : null;
+      if (found && !recorded.has(found[1]) && recorded.size < COLLECT_BAG.manualRequired)
+        recorded.add(found[1]);
+    }
+    (g.labor as ReturnType<typeof newLabor>).manualBallIds = [...recorded];
+    const elements = new Set<string>();
+    for (const e of g.eventLog) if (isObject(e) && e.kind === "water" && typeof e.message === "string") {
+      const el = e.message.match(/^灌注 (Fire|Hydro|Anemo|Electro|Dendro|Cryo|Geo) /)?.[1];
+      if (el) elements.add(el);
+    }
+    (g.labor as ReturnType<typeof newLabor>).wateredElements = [...elements] as ReturnType<typeof newLabor>["wateredElements"];
+    migrateDiscoveryEvidence(g as GameState);
+  }
   g.schemaVersion = SAVE_VERSION;
+  if (!isObject(g.discoveries) || !isObject(g.technology) || !isObject(g.labor) ||
+      !Array.isArray(g.labor.manualBallIds) || !Array.isArray(g.labor.wateredElements))
+    return null;
+  const nodeDefs = new Map(DISCOVERY_NODES.map(n => [n.id, n]));
+  for (const [id, record] of Object.entries(g.discoveries)) {
+    if (!nodeDefs.has(id as never) || !isObject(record) || record.id !== id ||
+        !Number.isSafeInteger(record.completedAtDay) ||
+        (record.completedAtDay as number) < 1 || (record.completedAtDay as number) > (g.day as number) ||
+        typeof record.eventId !== "string" || !record.eventId ||
+        typeof record.sourceId !== "string" || !record.sourceId) return null;
+  }
+  const manual = g.labor.manualBallIds;
+  const elements = g.labor.wateredElements;
+  if (manual.length > COLLECT_BAG.manualRequired ||
+      manual.some(id => typeof id !== "string" || !/^ball:\d+$/.test(id)) ||
+      new Set(manual).size !== manual.length ||
+      elements.some(el => !ELEMENTS.includes(el as never)) ||
+      new Set(elements).size !== elements.length ||
+      !Object.hasOwn(g.technology, "collectBag")) return null;
+  const bag = g.technology.collectBag;
+  if (bag !== null && (!isObject(bag) || !Number.isSafeInteger(bag.unlockedAtDay) ||
+      (bag.unlockedAtDay as number) < 1 || (bag.unlockedAtDay as number) > (g.day as number) ||
+      !Array.isArray(bag.evidenceIds) || (bag.evidenceIds as unknown[]).length !== COLLECT_BAG.manualRequired ||
+      !manual.every(id => (bag.evidenceIds as string[]).includes(id)) ||
+      !Object.hasOwn(g.discoveries, "A18"))) return null;
   if (!isObject(g.adeptalEnergy) || !isObject(g.orders) ||
       !Array.isArray(g.harvestedSources)) return null;
   const a = g.adeptalEnergy;
@@ -139,7 +188,7 @@ export function validateSave(value: unknown): GameState | null {
   }
   const unlockedCost = PLOT_IDS.slice(1).reduce((sum, id) =>
     sum + ((g.plots as Record<string, { open: boolean }>)[id].open ? ECONOMY_CANDIDATE.plotCosts[id as keyof typeof ECONOMY_CANDIDATE.plotCosts] : 0), 0);
-  if ((a.spentTotal as number) < unlockedCost) return null;
+  if ((a.spentTotal as number) < unlockedCost + (bag ? COLLECT_BAG.cost : 0)) return null;
   const usedDeliveryIds = new Set<string>();
   for (const [id, raw] of Object.entries(g.orders)) {
     if (!isObject(raw) || raw.id !== id || raw.visitorId !== "board" ||
