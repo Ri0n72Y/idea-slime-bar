@@ -395,7 +395,8 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
       if (!result.ok) return notice(state, "locked", result.reason);
       event(state, "process", `${result.inputId} → ${result.outputIds.join(" + ")}`,
         command.action === "PEEL" ? "FRUIT_PEELED" :
-          command.action === "CUP" ? "JUICE_CUPPED" : "FRUIT_JUICED", result.outputIds[0]);
+          command.action === "CUP" ? "JUICE_CUPPED" : "FRUIT_JUICED",
+        command.action === "PEEL" ? result.outputIds[1] : result.outputIds[0]);
       return notice(state, "success", result.message);
     }
     case "CONDENSE": {

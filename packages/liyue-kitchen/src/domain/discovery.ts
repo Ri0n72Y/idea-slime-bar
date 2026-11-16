@@ -75,10 +75,14 @@ export function migrateDiscoveryEvidence(state: GameState): void {
           "FRUIT_ORDER_DELIVERED" : "JUICE_ORDER_DELIVERED", sourceId: orderId });
       }
     }
-    if (e.kind === "process" && /item:peeledflesh:\\d+/.test(e.message))
-      synthetic.push({ ...e, fact: "FRUIT_PEELED", sourceId: e.message });
-    if (e.kind === "process" && /item:aquamelonjuicecup:\\d+/.test(e.message))
-      synthetic.push({ ...e, fact: "JUICE_CUPPED", sourceId: e.message });
+    if (e.kind === "process" && e.message.includes("item:peeledflesh:")) {
+      const shellId = e.message.match(/item:shell:[0-9]+/)?.[0];
+      if (shellId) synthetic.push({ ...e, fact: "FRUIT_PEELED", sourceId: shellId });
+    }
+    if (e.kind === "process" && e.message.includes("item:aquamelonjuicecup:")) {
+      const cupId = e.message.match(/item:aquamelonjuicecup:[0-9]+/)?.[0];
+      if (cupId) synthetic.push({ ...e, fact: "JUICE_CUPPED", sourceId: cupId });
+    }
   }
   if (state.labor.manualBallIds.length === 3) {
     const third = state.labor.manualBallIds[2];

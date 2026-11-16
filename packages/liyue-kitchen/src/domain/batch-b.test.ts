@@ -68,6 +68,7 @@ test("Real growth, first two elements, third manual collection, harvest, orders 
   g = act(g, { type: "MOVE_ITEM", itemId: second.fruitId, destination: { kind: "workbench", slot: "peel" } });
   g = act(g, { type: "PROCESS_ITEM", itemId: second.fruitId, action: "PEEL" });
   assert.ok(g.discoveries.A17);
+  assert.ok(g.discoveries.A17?.sourceId.startsWith("item:shell:"));
   const flesh = Object.values(g.items).find(x => x.kind === "PeeledFlesh")!;
   g = act(g, { type: "MOVE_ITEM", itemId: flesh.id, destination: { kind: "workbench", slot: "juice" } });
   g = act(g, { type: "PROCESS_ITEM", itemId: flesh.id, action: "JUICE" });
@@ -119,6 +120,22 @@ test("Tool cannot be bought without actual work; costs once; collector preserves
   assert.equal(bulk.labor.manualBallIds.length, 3);
   assert.equal(bulk.adeptalEnergy.earnedTotal - bulk.adeptalEnergy.spentTotal, bulk.adeptalEnergy.balance);
   assert.deepEqual(validateSave({ version: 5, game: bulk }), bulk);
+});
+test("V4 manual collection records preserve the tool qualification", () => {
+  let g = newGame();
+  for (let i = 0; i < 3; i++) {
+    g = act(g, { type: "CONDENSE" });
+    const ball = Object.values(g.looseBalls).at(-1)!;
+    g = act(g, { type: "COLLECT_BALL", ballId: ball.id });
+  }
+  const historic = structuredClone(g) as unknown as Record<string, unknown>;
+  historic.schemaVersion = 4;
+  delete historic.discoveries; delete historic.labor; delete historic.technology;
+  const restored = validateSave({ version: 4, game: historic })!;
+  assert.equal(restored.labor.manualBallIds.length, 3);
+  assert.ok(restored.discoveries.A18);
+  assert.equal(restored.discoveries.A18?.sourceId, restored.labor.manualBallIds[2]);
+  assert.deepEqual(validateSave({ version: 5, game: restored }), restored);
 });
 test("Legacy v4 energy and items migrate without rewards; new v5 rejects forging", () => {
   const old = newGame() as unknown as Record<string, unknown>;
