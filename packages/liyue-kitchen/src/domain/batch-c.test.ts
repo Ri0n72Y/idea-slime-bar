@@ -132,7 +132,9 @@ test("Visitor's real cup order shares U5 inventory and reward ledger; thanks pay
   const cup = Object.values(g.items).find(x => x.kind === "AquamelonJuiceCup")!;
   g = act(g, { type: "MOVE_ITEM", itemId: cup.id, destination: { kind: "storage" } });
   const beforeDelivery = g.adeptalEnergy.earnedTotal;
+  const boardCount = Object.values(g.orders).filter(o => o.visitorId === "board").length;
   g = act(g, { type: "DELIVER_ORDER", orderId, itemIds: [cup.id] });
+  assert.equal(Object.values(g.orders).filter(o => o.visitorId === "board").length, boardCount);
   assert.equal(g.orders[orderId].state, "completed");
   assert.equal(g.items[cup.id], undefined);
   assert.equal(g.adeptalEnergy.earnedTotal - beforeDelivery, ECONOMY_CANDIDATE.orderDelivery);
