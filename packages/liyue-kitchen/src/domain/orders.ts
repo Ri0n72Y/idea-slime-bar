@@ -36,7 +36,7 @@ export function acceptOrder(state: GameState, orderId: string):
   return { ok: true, message: `已接受 ${order.id}，截止第 ${order.dueDay} 天。` };
 }
 export function deliverOrder(state: GameState, orderId: string, itemIds: string[]):
-  { ok: true; message: string; itemIds: string[]; nextOrderId: string } |
+  { ok: true; message: string; itemIds: string[]; nextOrderId: string | null } |
   { ok: false; reason: string } {
   const order = Object.hasOwn(state.orders, orderId) ? state.orders[orderId] : null;
   if (!order || order.state !== "accepted" || state.day > order.dueDay)
@@ -57,9 +57,9 @@ export function deliverOrder(state: GameState, orderId: string, itemIds: string[
   order.deliveredItemIds = [...itemIds];
   rewardEnergy(state, `order:${order.id}`, order.rewards);
   const nextKind = order.itemKind === "aquamelon" ? "juice_cup" : "aquamelon";
-  const next = nextOffer(state, nextKind);
+  const next = order.visitorId === "board" ? nextOffer(state, nextKind) : null;
   return { ok: true, message: `委托完成：交付 ${order.quantity} 件，获得 ${order.rewards} 仙力。`,
-    itemIds, nextOrderId: next.id };
+    itemIds, nextOrderId: next?.id ?? null };
 }
 /** Run once after the committed night increments the game day. */
 export function advanceOrdersAtMorning(state: GameState): string[] {
