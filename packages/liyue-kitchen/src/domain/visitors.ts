@@ -102,5 +102,5 @@ export function interactVisitor(state: GameState, action: VisitorAction): Intera
     }
   }
 }
-export function isVisitorOrderId(id: string): boolean =>
+export const isVisitorOrderId = (id: string): boolean =>
   /^order:visitor:yan:[0-9]+$/.test(id);
