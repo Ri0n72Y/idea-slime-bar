@@ -3,6 +3,7 @@ import "./u3.css";
 import "./u4.css";
 import "./batch-a.css";
 import "./batch-b.css";
+import "./batch-c.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
@@ -12,6 +13,7 @@ import { ECONOMY_CANDIDATE } from "./domain/economy";
 import type { KitchenOrder } from "./domain/orders";
 import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
 import { COLLECT_BAG } from "./domain/technology";
+import { VISITOR_ID, visitorChoices, visitorPresent } from "./domain/visitors";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -22,6 +24,7 @@ const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
   A12: { x: 575, y: 40 }, A17: { x: 759, y: 40 },
   A14: { x: 948, y: 40 }, A13: { x: 759, y: 260 },
   A16: { x: 948, y: 468 },
+  V01: { x: 24, y: 465 }, V02: { x: 575, y: 505 },
 };
 type DropTarget = { zone: "inventory" | "storage" | WorkbenchSlot | null; scene: SceneDropTarget };
 type Drag = {
@@ -147,8 +150,9 @@ export function App() {
   const itemLabel = (item: GameItem) => ({
     Seed: "水瓜种子", Aquamelon: "完整水瓜", PeeledFlesh: "水瓜果肉",
     Shell: "水瓜果壳", RawJuice: "水瓜原汁", AquamelonJuiceCup: "杯装水瓜汁",
+    VisitorGift: "旅人木牌",
   })[item.kind];
-  const order = Object.values(state.orders).find(o => o.state === "available" || o.state === "accepted");
+  const activeOrders = Object.values(state.orders).filter(o => o.state === "available" || o.state === "accepted");
   const recentOrders = Object.values(state.orders).filter(
     o => o.state === "completed" || o.state === "expired").slice(-2).reverse();
   const orderName = (o: KitchenOrder) => o.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁";
@@ -168,6 +172,8 @@ export function App() {
   const eligibleForBag = state.labor.manualBallIds.length >= COLLECT_BAG.manualRequired &&
     !!state.discoveries.A18;
   const report = state.lastNightReport;
+  const visiting = visitorPresent(state);
+  const choices = visitorChoices(state);
   const showReport = !!report && report.toDay !== reportDismissed;
   return (
     <div className="game-shell">
@@ -197,11 +203,39 @@ export function App() {
       <main className="main-area">
         <section className="region visitors" aria-label="访客区" data-testid="region-visitors">
           <h2>访客与对话</h2>
-          <div className="quiet-panel">
-            <span className="icon-disc">客</span>
-            <p>尚无访客</p>
-            <small>角色、来物与对话将在 U9 开放</small>
-          </div>
+          {visiting ? (
+            <div className="visitor-panel" data-testid="visitor-panel" data-visitor-id={VISITOR_ID}>
+              <div className="visitor-identity">
+                <div className="visitor-portrait" role="img" aria-label="阿砚的临时肖像占位，美术立绘待审核">
+                  <div className="portrait-silhouette"><span /></div>
+                </div>
+                <div>
+                  <strong data-testid="visitor-name">旅人 · 阿砚</strong>
+                  <small>山道商路的行脚旅人</small>
+                  <small>正式立绘待美术确认</small>
+                </div>
+              </div>
+              <p className="visitor-line" data-testid="visitor-line">{state.visitor.lastLine}</p>
+              <div className="visitor-actions" data-testid="visitor-choices">
+                {choices.map(choice => (
+                  <button type="button" key={choice.id}
+                    data-testid={`visitor-choice-${choice.id}`}
+                    title={choice.hint}
+                    disabled={state.phase !== "DAY_WORK"}
+                    onClick={() => gameStore.dispatch({ type: "TALK_VISITOR",
+                      visitorId: VISITOR_ID, action: choice.id })}>
+                    {choice.text}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="quiet-panel" data-testid="visitor-absent">
+              <span className="icon-disc">客</span>
+              <p>尚无访客</p>
+              <small>完成真实夜间生长后，旅人可能来访</small>
+            </div>
+          )}
           {report && <button type="button" className="report-reopen" data-testid="reopen-report"
             onClick={() => setReportDismissed(null)}>查看第 {report.fromDay} 天夜间简报</button>}
         </section>
@@ -234,8 +268,11 @@ export function App() {
         <aside className="right-column">
           <section className="region orders" aria-label="限时委托" data-testid="region-orders">
             <h2>限时委托</h2>
-            {order ? (
-              <div className="order-panel" data-testid="active-order" data-order-id={order.id}>
+            <div className="orders-scroller">
+            {activeOrders.length ? activeOrders.map(order => (
+              <div className="order-panel" key={order.id} data-testid="active-order"
+                data-order-id={order.id} data-visitor-id={order.visitorId}>
+                <p data-testid="order-origin">{order.visitorId === "board" ? "委托板" : "旅人阿砚"}</p>
                 <p data-testid="order-requirement">{orderName(order)} × {order.quantity}</p>
                 <p data-testid="order-deadline">第 {order.dueDay} 天截止（含当日）</p>
                 <p>奖励 {order.rewards} 洞天仙力</p>
@@ -250,10 +287,12 @@ export function App() {
                     onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
                 )}
               </div>
-            ) : <p className="hint">暂无可交付委托</p>}
+            )) : <p className="hint">暂无可交付委托</p>}
             {recentOrders.map(o => <p key={o.id} className="order-history" data-testid="order-history">
-              {o.id} · {orderName(o)} · {o.state === "completed" ? "已交付" : "已过期"}
+              {o.visitorId === "board" ? "委托板" : "旅人阿砚"} · {orderName(o)} · {o.state === "completed" ? "已交付" : "已过期"}
             </p>)}
+            </div>
+
           </section>
           <section className="region exploration" aria-label="探索地图" data-testid="region-exploration">
             <h2>探索地图</h2>
@@ -298,7 +337,7 @@ export function App() {
                   onPointerDown={e => startDrag(e, item.id)}
                   onClick={() => item.kind !== "Seed" && selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
-                  <span>{item.kind === "Seed" ? "🌰" : item.kind === "Shell" ? "🐚" : "🍈"}</span>
+                  <span>{item.kind === "Seed" ? "🌰" : item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"}</span>
                   <small>{itemLabel(item)} · {item.kind === "Seed" ? "" : item.id}</small>
                 </div>
               ))}
@@ -324,7 +363,7 @@ export function App() {
                   data-testid="fruit-storage" data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)} onClick={() => selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
-                  {item.kind === "Shell" ? "🐚" : "🍈"} <small>{itemLabel(item)} · {item.id}</small>
+                  {item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"} <small>{itemLabel(item)} · {item.id}</small>
                 </div>
               ))}
             </div>
@@ -433,12 +472,18 @@ export function App() {
         <div className="item-inspector" data-testid="selected-item">
           <strong data-testid="item-id">{selectedItem.id}</strong>
           <span>{itemLabel(selectedItem)}</span>
-          <span data-testid="item-mass">{selectedItem.kind === "Shell" ? "0.000" :
-            fruitMass(selectedItem).toFixed(3)}G</span>
-          <span>原植株：{selectedItem.source.plantId} / {selectedItem.source.leafId}</span>
+          {selectedItem.kind === "VisitorGift" ? (
+            <span>赠物来源：{selectedItem.visitorId} · {selectedItem.eventId}</span>
+          ) : (
+            <>
+              <span data-testid="item-mass">{selectedItem.kind === "Shell" ? "0.000" :
+                fruitMass(selectedItem).toFixed(3)}G</span>
+              <span>原植株：{selectedItem.source.plantId} / {selectedItem.source.leafId}</span>
+              <span>首反应：{selectedItem.kind === "Shell" ? "无" :
+                selectedItem.reaction.firstReaction ?? "无"}</span>
+            </>
+          )}
           <span>位置：{selectedItem.location.kind}</span>
-          <span>首反应：{selectedItem.kind === "Shell" ? "无" :
-            selectedItem.reaction.firstReaction ?? "无"}</span>
         </div>
       )}
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">
@@ -473,7 +518,7 @@ export function App() {
       )}
       {drag && <div className={`drag-ghost ${drag.target?.zone || drag.target?.scene.ground ? "valid-target" : ""}`}
         data-testid={drag.kind === "Seed" ? "seed-drag-ghost" : "fruit-drag-ghost"}
-        style={{ left: drag.x, top: drag.y }} aria-hidden="true">{drag.kind === "Seed" ? "🌰" : drag.kind === "Shell" ? "🐚" : "🍈"}</div>}
+        style={{ left: drag.x, top: drag.y }} aria-hidden="true">{drag.kind === "Seed" ? "🌰" : drag.kind === "Shell" ? "🐚" : drag.kind === "VisitorGift" ? "🎴" : "🍈"}</div>}
     </div>
   );
 }

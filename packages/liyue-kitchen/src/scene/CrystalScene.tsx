@@ -164,7 +164,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
       selectItem(item.id);
     });
     app.stage.addChild(symbol);
-    const tag = new Text({ text: item.kind === "Shell" ? "壳" : item.kind === "RawJuice" ? "汁" :
+    const tag = new Text({ text: item.kind === "VisitorGift" ? "牌" : item.kind === "Shell" ? "壳" : item.kind === "RawJuice" ? "汁" :
       item.kind === "AquamelonJuiceCup" ? "杯" : "瓜",
       style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(14, radius * 0.28),
         fill: 0x35291d, fontWeight: "bold" } });
@@ -172,7 +172,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
     tag.position.set(ix, iy);
     tag.eventMode = "none";
     app.stage.addChild(tag);
-    const label = new Text({ text: `${item.kind === "Shell" ? "0" : fruitMass(item).toFixed(1)}G`,
+    const label = new Text({ text: item.kind === "VisitorGift" ? "纪念物" : `${item.kind === "Shell" ? "0" : fruitMass(item).toFixed(1)}G`,
       style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(10, radius * 0.18),
         fill: 0xf3e6ba } });
     label.anchor.set(0.5);
