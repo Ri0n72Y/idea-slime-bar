@@ -15,6 +15,8 @@ export const DISCOVERY_NODES = [
   { id: "A13", title: "初次交货", category: "经营", prerequisites: ["A12", "A07"], visibility: "visible", hint: "交付一枚完整成熟水瓜", fact: "FRUIT_ORDER_DELIVERED" },
   { id: "A16", title: "交付果汁", category: "经营", prerequisites: ["A14", "A07"], visibility: "visible", hint: "交付真正的杯装水瓜汁", fact: "JUICE_ORDER_DELIVERED" },
   { id: "H01", title: "双元素滋养", category: "元素", prerequisites: ["A02"], visibility: "hidden", hint: "尝试新的土壤组合", fact: "SECOND_ELEMENT_WATERED" },
+  { id: "V01", title: "远方的商路", category: "访客", prerequisites: ["A00"], visibility: "hidden", hint: "与旅人追寻商路传说", fact: "VISITOR_CLUE_FOUND" },
+  { id: "V02", title: "路上的回信", category: "访客", prerequisites: ["V01"], visibility: "hidden", hint: "真实交单后倾听旅人的谢意", fact: "VISITOR_THANKED" },
 ] as const;
 export type DiscoveryId = (typeof DISCOVERY_NODES)[number]["id"];
 export type DiscoveryRecord = {

@@ -4,14 +4,14 @@ import { ECONOMY_CANDIDATE, rewardEnergy } from "./economy.ts";
 export type OrderKind = "aquamelon" | "juice_cup";
 export type OrderState = "available" | "accepted" | "completed" | "expired";
 export type KitchenOrder = {
-  id: string; visitorId: "board"; postedDay: number; acceptedDay: number | null;
+  id: string; visitorId: string; postedDay: number; acceptedDay: number | null;
   dueDay: number; itemKind: OrderKind; quantity: number;
   state: OrderState; deliveredItemIds: string[]; rewards: number;
 };
 /** Deadlines and rewards are candidates pending reproducible growth calibration. */
 export const ORDER_CANDIDATE = Object.freeze({ firstWindowDays: 45, renewalWindowDays: 40 });
-export function createOrder(id: string, day: number, kind: OrderKind, isFirst = false): KitchenOrder {
-  return { id, visitorId: "board", postedDay: day, acceptedDay: null,
+export function createOrder(id: string, day: number, kind: OrderKind, isFirst = false, visitorId = "board"): KitchenOrder {
+  return { id, visitorId, postedDay: day, acceptedDay: null,
     dueDay: day + (isFirst ? ORDER_CANDIDATE.firstWindowDays : ORDER_CANDIDATE.renewalWindowDays),
     itemKind: kind, quantity: 1, state: "available", deliveredItemIds: [],
     rewards: ECONOMY_CANDIDATE.orderDelivery };
@@ -36,7 +36,7 @@ export function acceptOrder(state: GameState, orderId: string):
   return { ok: true, message: `已接受 ${order.id}，截止第 ${order.dueDay} 天。` };
 }
 export function deliverOrder(state: GameState, orderId: string, itemIds: string[]):
-  { ok: true; message: string; itemIds: string[]; nextOrderId: string } |
+  { ok: true; message: string; itemIds: string[]; nextOrderId: string | null } |
   { ok: false; reason: string } {
   const order = Object.hasOwn(state.orders, orderId) ? state.orders[orderId] : null;
   if (!order || order.state !== "accepted" || state.day > order.dueDay)
@@ -57,9 +57,9 @@ export function deliverOrder(state: GameState, orderId: string, itemIds: string[
   order.deliveredItemIds = [...itemIds];
   rewardEnergy(state, `order:${order.id}`, order.rewards);
   const nextKind = order.itemKind === "aquamelon" ? "juice_cup" : "aquamelon";
-  const next = nextOffer(state, nextKind);
+  const next = order.visitorId === "board" ? nextOffer(state, nextKind) : null;
   return { ok: true, message: `委托完成：交付 ${order.quantity} 件，获得 ${order.rewards} 仙力。`,
-    itemIds, nextOrderId: next.id };
+    itemIds, nextOrderId: next?.id ?? null };
 }
 /** Run once after the committed night increments the game day. */
 export function advanceOrdersAtMorning(state: GameState): string[] {
@@ -70,10 +70,10 @@ export function advanceOrdersAtMorning(state: GameState): string[] {
       events.push(`${order.id} 已于第 ${order.dueDay} 天截止，未获奖励。`);
     }
   }
-  const active = Object.values(state.orders).some(
-    o => o.state === "available" || o.state === "accepted");
+  const boardOrders = Object.values(state.orders).filter(o => o.visitorId === "board");
+  const active = boardOrders.some(o => o.state === "available" || o.state === "accepted");
   if (!active) {
-    const last = Object.values(state.orders).at(-1);
+    const last = boardOrders.at(-1);
     const kind = last?.itemKind ?? "aquamelon"; // retry same kind; no permanent deadline trap
     const order = nextOffer(state, kind);
     events.push(`委托板发布 ${order.id}（${order.itemKind}），截止第 ${order.dueDay} 天。`);

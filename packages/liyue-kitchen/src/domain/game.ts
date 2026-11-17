@@ -7,6 +7,7 @@ import { ECONOMY_CANDIDATE, newEnergyAccount, rewardEnergy, unlockPlot, type Ene
 import { acceptOrder, advanceOrdersAtMorning, deliverOrder, initialOrders, type KitchenOrder } from "./orders.ts";
 import { reconcileDiscoveries, type DiscoveryId, type DiscoveryRecord } from "./discovery.ts";
 import { newLabor, newTechnology, purchaseCollectBag, type LaborRecord, type TechnologyRecord } from "./technology.ts";
+import { interactVisitor, newVisitor, type VisitorAction, type VisitorState } from "./visitors.ts";
 
 export const PLOT_IDS = ["P01", "P02", "P03", "P04", "P05", "P06", "P07"] as const;
 export type PlotId = (typeof PLOT_IDS)[number];
@@ -33,9 +34,11 @@ export type ShellItem = {
   id: string; kind: "Shell"; location: ItemLocation; source: SourceIdentity;
   parentItemId: string; // no edible E_free or Products on a shell
 };
-export type GameItem = SeedItem | EdibleItem | ShellItem;
+export type VisitorGiftItem = { id: string; kind: "VisitorGift"; location: ItemLocation;
+  visitorId: string; eventId: string; title: string };
+export type GameItem = SeedItem | EdibleItem | ShellItem | VisitorGiftItem;
 export function isEdible(item: GameItem): item is EdibleItem {
-  return item.kind !== "Seed" && item.kind !== "Shell";
+  return item.kind !== "Seed" && item.kind !== "Shell" && item.kind !== "VisitorGift";
 }
 export function fruitMass(item: EdibleItem): number {
   return reproductiveMass(item.free, item.reaction);
@@ -55,7 +58,7 @@ export type NightReport = {
   events: string[];
 };
 export type GameState = {
-  schemaVersion: 5;
+  schemaVersion: 6;
   day: number;
   worldUH: number;
   phase: "DAY_WORK" | "DAY_CONFIRM";
@@ -67,6 +70,7 @@ export type GameState = {
   discoveries: Partial<Record<DiscoveryId, DiscoveryRecord>>;
   technology: { collectBag: TechnologyRecord | null };
   labor: LaborRecord;
+  visitor: VisitorState;
   plots: Record<PlotId, Plot>;
   selectedPlotId: PlotId | null;
   selectedItemId: string | null;
@@ -96,6 +100,7 @@ export type Command =
   | { type: "COLLECT_BALL"; ballId: string }
   | { type: "COLLECT_ALL_BALLS" }
   | { type: "UNLOCK_TECH"; techId: "collectBag" }
+  | { type: "TALK_VISITOR"; visitorId: string; action: VisitorAction }
   | { type: "WATER_PLOT"; element: Element; plotId: PlotId }
   | { type: "REQUEST_END_DAY" }
   | { type: "CANCEL_END_DAY" }
@@ -106,11 +111,11 @@ export function newGame(seed = 0x17a5b7e1): GameState {
     id, open: i === 0, soil: zeros(), plant: null,
   }])) as Record<PlotId, Plot>;
   return {
-    schemaVersion: 5, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
+    schemaVersion: 6, day: 1, worldUH: 0, phase: "DAY_WORK", pendingEndDay: null,
     adeptalEnergy: newEnergyAccount(), orders: initialOrders(), harvestedSources: [],
     discoveries: { A00: { id: "A00", completedAtDay: 1,
       eventId: "event:initial-seed", sourceId: "item:seed:1" } },
-    technology: newTechnology(), labor: newLabor(),
+    technology: newTechnology(), labor: newLabor(), visitor: newVisitor(),
     plots, selectedPlotId: null, selectedItemId: null,
     items: { "item:seed:1": { id: "item:seed:1", kind: "Seed", location: { kind: "inventory" } } },
     looseBalls: {}, heldElements: zeros(), dayCondenseUsed: 0,
@@ -265,6 +270,15 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
   if (!work(previous)) return previous;
   const state = structuredClone(previous);
   switch (command.type) {
+    case "TALK_VISITOR": {
+      if (command.visitorId !== state.visitor.id)
+        return notice(state, "locked", "未知访客，不可执行对话。");
+      const result = interactVisitor(state, command.action);
+      if (!result.ok) return notice(state, "locked", result.reason);
+      if (result.fact && result.sourceId)
+        event(state, "visitor", result.message, result.fact, result.sourceId);
+      return notice(state, "success", result.message);
+    }
     case "UNLOCK_TECH": {
       if (command.techId !== "collectBag") return notice(state, "locked", "未知工具。");
       const result = purchaseCollectBag(state);

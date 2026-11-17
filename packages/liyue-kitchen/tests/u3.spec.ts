@@ -34,12 +34,12 @@ async function matureWorld(page: Page) {
     const beforeMass = leaf.fruit.free.reduce((a: number, b: number) => a + b, 0) +
       Object.values(leaf.fruit.reaction.products).reduce((a: number, b) => a + Number(b), 0);
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 5);
+      const request = indexedDB.open("liyue-kitchen", 6);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
         const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 5, game: g }, "primary");
+        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
         tx.oncomplete = () => { db.close(); resolve(); };
         tx.onerror = () => { db.close(); reject(tx.error); };
       };
@@ -178,7 +178,7 @@ test("U3 browser: legacy U2 IndexedDB record migrates without a second Seed", as
     delete g.selectedItemId;
     g.items["item:seed:1"].location = "inventory";
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 5);
+      const request = indexedDB.open("liyue-kitchen", 6);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
@@ -195,7 +195,7 @@ test("U3 browser: legacy U2 IndexedDB record migrates without a second Seed", as
   await expect(page.getByTestId("save-status")).toContainText("已保存");
   const version = await page.evaluate(async () => {
     return new Promise<number>((resolve, reject) => {
-      const r = indexedDB.open("liyue-kitchen", 5);
+      const r = indexedDB.open("liyue-kitchen", 6);
       r.onsuccess = () => {
         const db = r.result;
         const tx = db.transaction("game-saves", "readonly");
@@ -205,5 +205,5 @@ test("U3 browser: legacy U2 IndexedDB record migrates without a second Seed", as
       };
     });
   });
-  expect(version).toBe(5);
+  expect(version).toBe(6);
 });

@@ -62,12 +62,12 @@ async function mature(page: Page, count: number) {
     if (indices.length < wanted)
       throw new Error(`Only ${indices.length}/${wanted} actual MatureFruit after 130 days`);
     await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 5);
+      const request = indexedDB.open("liyue-kitchen", 6);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const db = request.result;
         const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 5, game: g }, "primary");
+        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
         tx.oncomplete = () => { db.close(); resolve(); };
         tx.onerror = () => { db.close(); reject(tx.error); };
       };
@@ -180,12 +180,12 @@ test("Batch A deadline: order accepted on due day; confirmed night expires and o
       g = applyCommand(requested, { type: "CONFIRM_END_DAY", expectedDay: g.day });
     }
     await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("liyue-kitchen", 5);
+      const req = indexedDB.open("liyue-kitchen", 6);
       req.onerror = () => reject(req.error);
       req.onsuccess = () => {
         const db = req.result;
         const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 5, game: g }, "primary");
+        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
         tx.oncomplete = () => { db.close(); resolve(); };
         tx.onerror = () => { db.close(); reject(tx.error); };
       };
