@@ -183,6 +183,7 @@ export function validateSave(value: unknown): GameState | null {
       new Set(g.visitor.issuedOrderIds).size !== g.visitor.issuedOrderIds.length)
     return null;
   const v = g.visitor;
+  const issued = v.issuedOrderIds as string[];
   for (const field of ["metAtDay", "clueAtDay", "giftAtDay", "thankedAtDay"]) {
     const day = v[field];
     if (day !== null && (!Number.isSafeInteger(day) || (day as number) < 2 || (day as number) > (g.day as number)))
@@ -190,8 +191,8 @@ export function validateSave(value: unknown): GameState | null {
   }
   if ((v.clueAtDay !== null && v.metAtDay === null) ||
       (v.giftAtDay !== null && v.clueAtDay === null) ||
-      (v.issuedOrderIds.length > 0 && v.clueAtDay === null) ||
-      (v.thankedAtDay !== null && (v.clueAtDay === null || !v.issuedOrderIds.length)) ||
+      (issued.length > 0 && v.clueAtDay === null) ||
+      (v.thankedAtDay !== null && (v.clueAtDay === null || !issued.length)) ||
       (v.clueAtDay !== null && (v.clueAtDay as number) < (v.metAtDay as number)) ||
       (v.giftAtDay !== null && (v.giftAtDay as number) < (v.clueAtDay as number)) ||
       (v.thankedAtDay !== null && (v.thankedAtDay as number) < (v.clueAtDay as number))) return null;
@@ -219,11 +220,12 @@ export function validateSave(value: unknown): GameState | null {
   const unlockedCost = PLOT_IDS.slice(1).reduce((sum, id) =>
     sum + ((g.plots as Record<string, { open: boolean }>)[id].open ? ECONOMY_CANDIDATE.plotCosts[id as keyof typeof ECONOMY_CANDIDATE.plotCosts] : 0), 0);
   if ((a.spentTotal as number) < unlockedCost + (bag ? COLLECT_BAG.cost : 0)) return null;
+  const orderRecords = g.orders as Record<string, unknown>;
   const usedDeliveryIds = new Set<string>();
   for (const [id, raw] of Object.entries(g.orders)) {
     if (!isObject(raw) || raw.id !== id ||
         (raw.visitorId !== "board" && raw.visitorId !== VISITOR_ID) ||
-        (raw.visitorId === VISITOR_ID) !== v.issuedOrderIds.includes(id) ||
+        (raw.visitorId === VISITOR_ID) !== issued.includes(id) ||
         (raw.itemKind !== "aquamelon" && raw.itemKind !== "juice_cup") ||
         !Number.isSafeInteger(raw.postedDay) || (raw.postedDay as number) < 1 ||
         !Number.isSafeInteger(raw.dueDay) || (raw.dueDay as number) < (raw.postedDay as number) ||
@@ -244,15 +246,15 @@ export function validateSave(value: unknown): GameState | null {
         delivered.some(id => Object.hasOwn(g.items as Record<string, unknown>, id) || usedDeliveryIds.has(id))) return null;
     for (const deliveredId of delivered) usedDeliveryIds.add(deliveredId);
   }
-  if (v.issuedOrderIds.some(id => !Object.hasOwn(g.orders, id) ||
-        (g.orders[id] as KitchenOrder).visitorId !== VISITOR_ID ||
-        (g.orders[id] as KitchenOrder).postedDay < (v.clueAtDay as number)) ||
-      v.issuedOrderIds.filter(id => {
-        const state = (g.orders[id] as KitchenOrder).state;
+  if (issued.some(id => !Object.hasOwn(orderRecords, id) ||
+        (orderRecords[id] as KitchenOrder).visitorId !== VISITOR_ID ||
+        (orderRecords[id] as KitchenOrder).postedDay < (v.clueAtDay as number)) ||
+      issued.filter(id => {
+        const state = (orderRecords[id] as KitchenOrder).state;
         return state === "available" || state === "accepted";
       }).length > 1 ||
-      (v.thankedAtDay !== null && !v.issuedOrderIds.some(id =>
-        (g.orders[id] as KitchenOrder).state === "completed"))) return null;
+      (v.thankedAtDay !== null && !issued.some(id =>
+        (orderRecords[id] as KitchenOrder).state === "completed"))) return null;
   if (Object.entries(g.items).some(([id, item]) => !validItem(id, item))) return null;
   const plotsById = g.plots as Record<string, unknown>;
   if (Object.values(g.items).some(item => isObject(item) && isObject(item.location) &&
