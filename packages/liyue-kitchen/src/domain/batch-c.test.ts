@@ -7,7 +7,7 @@ import { VISITOR_GIFT_ID, VISITOR_ID, visitorChoices, visitorPresent } from "./v
 import { visibleDiscoveries } from "./discovery.ts";
 
 const act = (s: GameState, c: Command): GameState => applyCommand(s, c);
-const talk = (s: GameState, action: Command & { type: "TALK_VISITOR" }["action"]) =>
+const talk = (s: GameState, action: Extract<Command, { type: "TALK_VISITOR" }>["action"]) =>
   act(s, { type: "TALK_VISITOR", visitorId: VISITOR_ID, action });
 function night(s: GameState): GameState {
   const requested = act(s, { type: "REQUEST_END_DAY" });
