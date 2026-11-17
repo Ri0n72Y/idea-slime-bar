@@ -84,7 +84,7 @@ test("Real growth, first two elements, third manual collection, harvest, orders 
   assert.ok(g.discoveries.A16);
   assert.equal(g.discoveries.A13?.sourceId, "order:first");
   assert.equal(g.discoveries.A16?.sourceId, order.id);
-  assert.deepEqual(validateSave({ version: 5, game: g }), g);
+  assert.deepEqual(validateSave({ version: 6, game: g }), g);
 });
 test("Tool cannot be bought without actual work; costs once; collector preserves N and exact V", () => {
   let g = newGame();
@@ -119,7 +119,7 @@ test("Tool cannot be bought without actual work; costs once; collector preserves
   assert.equal(bulk.dayCondenseLimit, quota);
   assert.equal(bulk.labor.manualBallIds.length, 3);
   assert.equal(bulk.adeptalEnergy.earnedTotal - bulk.adeptalEnergy.spentTotal, bulk.adeptalEnergy.balance);
-  assert.deepEqual(validateSave({ version: 5, game: bulk }), bulk);
+  assert.deepEqual(validateSave({ version: 6, game: bulk }), bulk);
 });
 test("V4 manual collection records preserve the tool qualification", () => {
   let g = newGame();
@@ -135,22 +135,22 @@ test("V4 manual collection records preserve the tool qualification", () => {
   assert.equal(restored.labor.manualBallIds.length, 3);
   assert.ok(restored.discoveries.A18);
   assert.equal(restored.discoveries.A18?.sourceId, restored.labor.manualBallIds[2]);
-  assert.deepEqual(validateSave({ version: 5, game: restored }), restored);
+  assert.deepEqual(validateSave({ version: 6, game: restored }), restored);
 });
 test("Legacy v4 energy and items migrate without rewards; new v5 rejects forging", () => {
   const old = newGame() as unknown as Record<string, unknown>;
   old.schemaVersion = 4;
   delete old.discoveries; delete old.labor; delete old.technology;
   const migrated = validateSave({ version: 4, game: old })!;
-  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.schemaVersion, 6);
   assert.equal(migrated.discoveries.A00?.sourceId, "item:seed:1");
   assert.equal(migrated.adeptalEnergy.balance, 0);
-  assert.deepEqual(validateSave({ version: 5, game: migrated }), migrated);
+  assert.deepEqual(validateSave({ version: 6, game: migrated }), migrated);
   const forged = structuredClone(migrated);
   forged.technology.collectBag = { unlockedAtDay: 1, evidenceIds: ["ball:1", "ball:2", "ball:3"] };
-  assert.equal(validateSave({ version: 5, game: forged }), null);
+  assert.equal(validateSave({ version: 6, game: forged }), null);
   const future = structuredClone(migrated);
   future.discoveries.A01 = { id: "A01", completedAtDay: future.day + 1,
     eventId: "event:fake", sourceId: "plant:fake" };
-  assert.equal(validateSave({ version: 5, game: future }), null);
+  assert.equal(validateSave({ version: 6, game: future }), null);
 });
