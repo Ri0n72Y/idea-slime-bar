@@ -205,5 +205,5 @@ test("U3 browser: legacy U2 IndexedDB record migrates without a second Seed", as
       };
     });
   });
-  expect(version).toBe(5);
+  expect(version).toBe(6);
 });

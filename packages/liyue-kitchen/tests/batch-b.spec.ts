@@ -70,11 +70,11 @@ async function mature(page: Page):Promise<number[]> {
     }
     if(indices.length<2 || g.day>46)throw Error("Real fruit maturity/deadline failed");
     await new Promise<void>((resolve,reject)=>{
-      const req=indexedDB.open("liyue-kitchen",5);
+      const req=indexedDB.open("liyue-kitchen",6);
       req.onerror=()=>reject(req.error);
       req.onsuccess=()=>{
         const db=req.result,tx=db.transaction("game-saves","readwrite");
-        tx.objectStore("game-saves").put({version:5,game:g},"primary");
+        tx.objectStore("game-saves").put({version:6,game:g},"primary");
         tx.oncomplete=()=>{db.close();resolve();};
         tx.onerror=()=>{db.close();reject(tx.error);};
       };
