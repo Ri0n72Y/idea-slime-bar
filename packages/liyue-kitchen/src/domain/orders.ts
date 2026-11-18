@@ -46,9 +46,12 @@ export function deliverOrder(state: GameState, orderId: string, itemIds: string[
     return { ok: false, reason: "交付数量不足或同一物品被重复选用。" };
   const wanted = neededKind(order.itemKind);
   const items = itemIds.map(id => Object.hasOwn(state.items, id) ? state.items[id] : null);
-  if (items.some(item => !item || item.kind !== wanted ||
-      (item.location.kind !== "inventory" && item.location.kind !== "storage")))
-    return { ok: false, reason: "材料类型不符或物品未放入物品栏/仓储，交付失败。" };
+  if (items.some(item => !item))
+    return { ok: false, reason: "交付物品不存在，请重新选择有效材料。" };
+  if (items.some(item => item?.kind !== wanted))
+    return { ok: false, reason: `所选材料类型不符，本单需要${order.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁"}，请重新选择。` };
+  if (items.some(item => item && item.location.kind !== "inventory" && item.location.kind !== "storage"))
+    return { ok: false, reason: "交付物品仍在水晶球地面或加工台，请先拖入物品栏/仓储区。" };
   if (state.adeptalEnergy.rewardedIds.includes(`order:${order.id}`))
     return { ok: false, reason: "此委托奖励已领取。" };
   for (const id of itemIds) delete state.items[id];
