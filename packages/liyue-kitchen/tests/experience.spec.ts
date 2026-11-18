@@ -100,7 +100,7 @@ test("harvest move prerequisite, rejected wrong material and explicit eligible c
   await expect(page.getByTestId(`order-candidates-${next.id}`)).toContainText("杯装水瓜汁");
   await page.getByTestId("deliver-order").click();
   await expect(page.getByTestId("feedback")).toContainText("所选材料类型不符");
-  await expect(page.getByTestId("fruit-storage")).toHaveAttribute("data-item-id", cup);
+  await expect(page.locator('[data-testid="fruit-storage"][data-item-id="'+cup+'"]')).toHaveCount(1);
   const choice = page.getByTestId(`choose-order-${next.id}-${cup}`);
   await choice.click();
   await expect(choice).toHaveAttribute("aria-pressed", "true");
@@ -108,5 +108,5 @@ test("harvest move prerequisite, rejected wrong material and explicit eligible c
   await page.screenshot({ path: info.outputPath("explicit-cup-selection.png") });
   await page.getByTestId("deliver-order").click();
   await expect(page.getByTestId("feedback")).toContainText("委托完成");
-  await expect(page.getByTestId("fruit-storage")).not.toHaveAttribute("data-item-id", cup);
+  await expect(page.locator('[data-testid="fruit-storage"][data-item-id="'+cup+'"]')).toHaveCount(0);
 });
