@@ -15,6 +15,8 @@ import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
 import { COLLECT_BAG } from "./domain/technology";
 import { VISITOR_ID, visitorChoices, visitorPresent } from "./domain/visitors";
 import { growthStageLabel, itemLocationLabel, playerEventText, plotLabel } from "./uiLabels";
+import { eligibleOrderItems, itemTitle, nextActionHint, orderItemTitle, orderSelectionWarning } from "./experience";
+import "./experience.css";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -53,6 +55,14 @@ export function App() {
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [showGuidance, setShowGuidance] = useState(() => {
+    try { return window.localStorage.getItem("liyue-kitchen-guidance") !== "hidden"; }
+    catch { return true; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("liyue-kitchen-guidance", showGuidance ? "shown" : "hidden"); }
+    catch { /* browser storage unavailable: in-session toggle still works */ }
+  }, [showGuidance]);
   const [graphZoom, setGraphZoom] = useState(1);
   const graphViewportRef = useRef<HTMLDivElement | null>(null);
   const navigateGraph = (direction: -1 | 1) => {
@@ -153,15 +163,14 @@ export function App() {
   const benchItems = Object.values(state.items).filter(item => item.location.kind === "workbench");
   const peelItem = benchItems.find(item => item.location.kind === "workbench" && item.location.slot === "peel");
   const juiceItem = benchItems.find(item => item.location.kind === "workbench" && item.location.slot === "juice");
-  const itemLabel = (item: GameItem) => ({
-    Seed: "水瓜种子", Aquamelon: "完整水瓜", PeeledFlesh: "水瓜果肉",
-    Shell: "水瓜果壳", RawJuice: "水瓜原汁", AquamelonJuiceCup: "杯装水瓜汁",
-    VisitorGift: "旅人木牌",
-  })[item.kind];
+  const itemLabel = itemTitle;
   const activeOrders = Object.values(state.orders).filter(o => o.state === "available" || o.state === "accepted");
   const recentOrders = Object.values(state.orders).filter(
     o => o.state === "completed" || o.state === "expired").slice(-2).reverse();
-  const orderName = (o: KitchenOrder) => o.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁";
+  const orderName = orderItemTitle;
+  const chooseOrderItem = (id: string) => {
+    if (state.selectedItemId !== id) gameStore.dispatch({ type: "SELECT_ITEM", itemId: id });
+  };
   const deliver = (o: KitchenOrder) => {
     const kind = o.itemKind === "aquamelon" ? "Aquamelon" : "AquamelonJuiceCup";
     // The explicitly selected material wins, even when invalid; domain returns a rejection.
@@ -283,6 +292,9 @@ export function App() {
                 <p data-testid="order-deadline">第 {order.dueDay} 天截止（含当日）</p>
                 <p>奖励 {order.rewards} 洞天仙力</p>
                 <p data-testid="order-status">{order.state === "available" ? "待接受" : "已接受"}</p>
+                <p className="order-location-hint" data-testid={`order-location-${order.id}`}>
+                  交单材料须放入物品栏或仓储区；水晶球地面的水瓜需先搬运。
+                </p>
                 {order.state === "available" ? (
                   <button type="button" data-testid="accept-order" disabled={state.phase !== "DAY_WORK"}
                     onClick={() => gameStore.dispatch({ type: "ACCEPT_ORDER", orderId: order.id })}>
@@ -499,6 +511,13 @@ export function App() {
         </div>
       )}
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">
+        <div className="experience-hint" data-testid="next-step-guide">
+          <button type="button" data-testid="guide-toggle" aria-expanded={showGuidance}
+            onClick={() => setShowGuidance(!showGuidance)}>
+            {showGuidance ? "收起提示" : "显示下一步"}
+          </button>
+          {showGuidance && <span data-testid="next-step-text">{nextActionHint(state)}</span>}
+        </div>
         <strong>状态反馈</strong>
         <span data-testid="feedback">{playerEventText(state.notice.message)}</span>
         <span className="version" data-testid="save-status">{saveStatus === "saved" ? "已保存" : saveStatus === "saving" ? "保存中…" : saveStatus === "error" ? "存档异常" : "已载入"}</span>
