@@ -14,6 +14,7 @@ import type { KitchenOrder } from "./domain/orders";
 import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
 import { COLLECT_BAG } from "./domain/technology";
 import { VISITOR_ID, visitorChoices, visitorPresent } from "./domain/visitors";
+import { growthStageLabel, itemLocationLabel, plotLabel } from "./uiLabels";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -52,7 +53,12 @@ export function App() {
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
-  const [graphZoom, setGraphZoom] = useState(0.8);
+  const [graphZoom, setGraphZoom] = useState(1);
+  const graphViewportRef = useRef<HTMLDivElement | null>(null);
+  const navigateGraph = (direction: -1 | 1) => {
+    const viewport = graphViewportRef.current;
+    if (viewport) viewport.scrollBy({ left: direction * Math.max(280, viewport.clientWidth * 0.7), behavior: "smooth" });
+  };
 
   useEffect(() => { void gameStore.start().catch(() => {}); }, []);
   const registerDropTarget = useCallback((pick: (x: number, y: number) => SceneDropTarget) => {
@@ -250,15 +256,15 @@ export function App() {
             onSelectItem={selectItem} onStartGroundDrag={startGroundDrag}
             onRegisterDropTarget={registerDropTarget} />
           <div className="crystal-footer">
-            <span data-testid="selected-plot">当前地格：{state.selectedPlotId ?? "未选择"}</span>
-            <span data-testid="plant-stage">{state.selectedPlotId ? stageLabel(state, state.selectedPlotId) : "拖放种子至开放地格"}</span>
+            <span data-testid="selected-plot">当前地格：{state.selectedPlotId ? plotLabel(state.selectedPlotId) : "未选择"}</span>
+            <span data-testid="plant-stage">{state.selectedPlotId ? growthStageLabel(stageLabel(state, state.selectedPlotId)) : "拖放种子至开放地格"}</span>
             <div className="plot-purchases" data-testid="plot-purchases">
               {(["P02", "P03", "P04", "P05", "P06", "P07"] as const)
                 .filter(id => !state.plots[id].open).map(id => (
                 <button key={id} type="button" data-testid={`unlock-${id}`}
                   disabled={state.phase !== "DAY_WORK"}
                   onClick={() => gameStore.dispatch({ type: "UNLOCK_PLOT", plotId: id })}>
-                  开垦 {id} · {ECONOMY_CANDIDATE.plotCosts[id]} 仙力
+                  开垦{plotLabel(id)} · {ECONOMY_CANDIDATE.plotCosts[id]}仙力
                 </button>
               ))}
             </div>
@@ -331,14 +337,14 @@ export function App() {
             <div className="inventory-line">
 {inventoryItems.map(item => (
                 <div key={item.id} role="button" tabIndex={0}
-                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽${itemLabel(item)} ${item.id}`}
+                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽${itemLabel(item)}`}
                   className="seed-item" data-testid={item.kind === "Seed" ? "seed-item" : "fruit-inventory"}
                   data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)}
                   onClick={() => item.kind !== "Seed" && selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
                   <span>{item.kind === "Seed" ? "🌰" : item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"}</span>
-                  <small>{itemLabel(item)} · {item.kind === "Seed" ? "" : item.id}</small>
+                  <small>{itemLabel(item)}</small>
                 </div>
               ))}
               {!inventoryItems.length && <p className="hint">暂无物品</p>}
@@ -363,7 +369,7 @@ export function App() {
                   data-testid="fruit-storage" data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)} onClick={() => selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
-                  {item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"} <small>{itemLabel(item)} · {item.id}</small>
+                  {item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"} <small>{itemLabel(item)}</small>
                 </div>
               ))}
             </div>
@@ -404,10 +410,14 @@ export function App() {
               </button>
             </header>
             <div className="graph-controls">
-              <p className="hint">节点按真实事件点亮；未发现的隐藏节点及其连线不显示。</p>
+              <p className="hint" data-testid="graph-navigation-hint">向右滚动或滑动查看后续发现；节点由实际行动点亮，尚未遇见的线索不会提前显示。</p>
+              <button type="button" data-testid="graph-left" aria-label="查看左侧探索节点"
+                onClick={() => navigateGraph(-1)}>向左查看</button>
+              <button type="button" data-testid="graph-right" aria-label="查看右侧探索节点"
+                onClick={() => navigateGraph(1)}>向右查看</button>
               <button type="button" data-testid="zoom-out"
-                disabled={graphZoom <= 0.6}
-                onClick={() => setGraphZoom(z => Math.max(0.6, +(z - 0.1).toFixed(2)))}>
+                disabled={graphZoom <= 1}
+                onClick={() => setGraphZoom(z => Math.max(1, +(z - 0.1).toFixed(2)))}>
                 缩小
               </button>
               <span data-testid="graph-zoom">{Math.round(graphZoom * 100)}%</span>
@@ -417,12 +427,13 @@ export function App() {
                 放大
               </button>
             </div>
-            <div className="discovery-viewport" data-testid="discovery-viewport">
+            <div className="discovery-viewport" data-testid="discovery-viewport" ref={graphViewportRef}
+              tabIndex={0} aria-label="探索节点图，使用方向键或左右按钮浏览">
               <div className="discovery-zoom-space"
-                style={{ width: 1140 * graphZoom, height: 600 * graphZoom }}>
+                style={{ width: 1140 * graphZoom, height: 660 * graphZoom }}>
                 <div className="discovery-graph"
                   style={{ transform: `scale(${graphZoom})` }}>
-                  <svg className="discovery-links" viewBox="0 0 1140 600" aria-hidden="true">
+                  <svg className="discovery-links" viewBox="0 0 1140 660" aria-hidden="true">
                     {discoveries.flatMap(({ node }) => node.prerequisites
                       .filter(id => visibleNodeIds.has(id))
                       .map(parent => (
@@ -442,8 +453,9 @@ export function App() {
                         <span>{status === "completed" ? `已发现 · 第 ${record?.completedAtDay} 天` :
                           status === "available" ? `待探索 · ${node.hint}` :
                           status === "hinted" ? "已有线索" : "尚无前置发现"}</span>
-                        {record && <small data-testid={`discovery-evidence-${node.id}`}>
-                          证据：{record.eventId} · {record.sourceId}
+                        {record && <small data-testid={`discovery-evidence-${node.id}`}
+                          data-event-id={record.eventId} data-source-id={record.sourceId}>
+                          实证：第 {record.completedAtDay} 天 · {node.hint}
                         </small>}
                       </div>
                     ))}
@@ -469,21 +481,21 @@ export function App() {
         </div>
       )}
       {selectedItem && selectedItem.kind !== "Seed" && (
-        <div className="item-inspector" data-testid="selected-item">
-          <strong data-testid="item-id">{selectedItem.id}</strong>
+        <div className="item-inspector" data-testid="selected-item" data-item-id={selectedItem.id}>
+          <strong data-testid="item-id">物件详情</strong>
           <span>{itemLabel(selectedItem)}</span>
           {selectedItem.kind === "VisitorGift" ? (
-            <span>赠物来源：{selectedItem.visitorId} · {selectedItem.eventId}</span>
+            <span>赠物来源：旅人阿砚</span>
           ) : (
             <>
               <span data-testid="item-mass">{selectedItem.kind === "Shell" ? "0.000" :
                 fruitMass(selectedItem).toFixed(3)}G</span>
-              <span>原植株：{selectedItem.source.plantId} / {selectedItem.source.leafId}</span>
+              <span>收获地格：{plotLabel(selectedItem.source.plotId)}</span>
               <span>首反应：{selectedItem.kind === "Shell" ? "无" :
                 selectedItem.reaction.firstReaction ?? "无"}</span>
             </>
           )}
-          <span>位置：{selectedItem.location.kind}</span>
+          <span>位置：{itemLocationLabel(selectedItem.location.kind)}</span>
         </div>
       )}
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">

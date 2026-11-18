@@ -111,10 +111,10 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
     expect(state.discoveries).toContain(id);
   await press(page,"open-discoveries",touch);
   await expect(page.locator('[data-node-id="H01"]')).toHaveAttribute("data-status","completed");
-  await expect(page.getByTestId("graph-zoom")).toContainText("80%");
+  await expect(page.getByTestId("graph-zoom")).toContainText("100%");
   await press(page,"zoom-in",touch);
-  await expect(page.getByTestId("graph-zoom")).toContainText("90%");
-  await expect(page.getByTestId("discovery-evidence-A12")).toContainText("plant:");
+  await expect(page.getByTestId("graph-zoom")).toContainText("110%");
+  await expect(page.getByTestId("discovery-evidence-A12")).toContainText("种出第一枚成熟水瓜");
   await press(page,"close-discoveries",touch);
 
   await tap(page,await scene(page,"fruit",indices[0]),touch);
@@ -159,7 +159,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   await press(page,"unlock-P02",touch);
   await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await drag(page,ctx,await center(page,"seed-item"),await scene(page,"plot",1),touch);
-  await expect(page.getByTestId("selected-plot")).toContainText("P02");
+  await expect(page.getByTestId("selected-plot")).toContainText("2号地");
   const nutrients=page.locator('[data-testid^="water-"]');
   while(await nutrients.count()){if(touch)await nutrients.first().tap();else await nutrients.first().click();}
   await press(page,"end-day",touch);await press(page,"confirm-day",touch);
@@ -169,7 +169,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   for(const id of ["A13","A14","A16","A17"])expect(state.discoveries).toContain(id);
   expect(state.energy.earnedTotal-state.energy.spentTotal).toBe(state.energy.balance);
   await press(page,"open-discoveries",touch);
-  await expect(page.getByTestId("discovery-evidence-A16")).toContainText("order:");
+  await expect(page.getByTestId("discovery-evidence-A16")).toContainText("交付真正的杯装水瓜汁");
   await page.screenshot({path:proof});
   await press(page,"close-discoveries",touch);
   await expect(page.getByTestId("save-status")).toContainText("已保存");

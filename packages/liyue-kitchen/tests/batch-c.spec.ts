@@ -161,8 +161,8 @@ async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screens
   await press(page, "open-discoveries", touch);
   await expect(page.locator('[data-node-id="V01"]')).toHaveAttribute("data-status", "completed");
   await expect(page.locator('[data-node-id="V02"]')).toHaveAttribute("data-status", "completed");
-  await expect(page.getByTestId("discovery-evidence-V01")).toContainText("visitor:yan:clue");
-  await expect(page.getByTestId("discovery-evidence-V02")).toContainText("visitor:yan:thanks");
+  await expect(page.getByTestId("discovery-evidence-V01")).toContainText("与旅人追寻商路传说");
+  await expect(page.getByTestId("discovery-evidence-V02")).toContainText("真实交单后倾听旅人的谢意");
   await page.screenshot({ path: screenshot, fullPage: true });
   await press(page, "close-discoveries", touch);
   await expect(page.getByTestId("save-status")).toContainText("已保存");

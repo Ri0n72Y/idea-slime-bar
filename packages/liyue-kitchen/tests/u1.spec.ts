@@ -40,12 +40,12 @@ test("desktop 1600x900: pointer selection, six locked plots, borders and screens
 
   const center = await plotPoint(page, 0);
   await page.mouse.click(center.x, center.y);
-  await expect(page.getByTestId("selected-plot")).toContainText("P01");
+  await expect(page.getByTestId("selected-plot")).toContainText("1号地");
   for (let index = 1; index < 7; index++) {
     const point = await plotPoint(page, index);
     await page.mouse.click(point.x, point.y);
     await expect(page.getByTestId("feedback")).toContainText(`P0${index + 1} 尚未开垦`);
-    await expect(page.getByTestId("selected-plot")).toContainText("P01");
+    await expect(page.getByTestId("selected-plot")).toContainText("1号地");
   }
   await page.mouse.click(center.x, center.y);
   await expect(page.getByTestId("selected-plot")).toContainText("未选择");
@@ -65,11 +65,11 @@ test("touch 1280x720: actual touchscreen, relayout and screenshot", async ({ bro
     await ready(page);
     const center = await plotPoint(page, 0);
     await page.touchscreen.tap(center.x, center.y);
-    await expect(page.getByTestId("selected-plot")).toContainText("P01");
+    await expect(page.getByTestId("selected-plot")).toContainText("1号地");
     const locked = await plotPoint(page, 1);
     await page.touchscreen.tap(locked.x, locked.y);
     await expect(page.getByTestId("feedback")).toContainText("P02 尚未开垦");
-    await expect(page.getByTestId("selected-plot")).toContainText("P01");
+    await expect(page.getByTestId("selected-plot")).toContainText("1号地");
     await page.touchscreen.tap(center.x, center.y);
     await expect(page.getByTestId("selected-plot")).toContainText("未选择");
     await page.screenshot({ path: info.outputPath("u1-touch-1280x720.png") });
@@ -88,6 +88,6 @@ test("reloads and resize do not duplicate Canvas or change game day", async ({ p
   await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
   const center = await plotPoint(page, 0);
   await page.mouse.click(center.x, center.y);
-  await expect(page.getByTestId("selected-plot")).toContainText("P01");
+  await expect(page.getByTestId("selected-plot")).toContainText("1号地");
   await expect(page.getByTestId("day")).toContainText("第 1 天");
 });

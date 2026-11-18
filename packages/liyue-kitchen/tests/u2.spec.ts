@@ -46,8 +46,8 @@ test("desktop 1600x900: actual pointer seed drag, reject invalid, condense colle
   await expect(page.getByTestId("feedback")).toContainText("未消耗");
   await dragSeed(page, await center(page));
   await expect(page.getByTestId("seed-item")).toHaveCount(0);
-  await expect(page.getByTestId("plant-stage")).toContainText("Seed");
-  await expect(page.getByTestId("selected-plot")).toContainText("P01");
+  await expect(page.getByTestId("plant-stage")).toContainText("种子期");
+  await expect(page.getByTestId("selected-plot")).toContainText("1号地");
   await page.getByTestId("condense").click();
   await expect(page.getByTestId("quota")).toContainText("7/8");
   const ball = await ballPoint(page);
@@ -67,7 +67,7 @@ test("desktop 1600x900: actual pointer seed drag, reject invalid, condense colle
   await expect(page.getByTestId("day")).toContainText("第 2 天");
   await expect(page.getByTestId("night-report")).toBeVisible();
   await expect(page.getByTestId("quota")).toContainText("8/8");
-  await expect(page.getByTestId("report-stage")).toContainText("Seed");
+  await expect(page.getByTestId("report-stage")).toContainText("种子期");
   await expect(page.getByTestId("report-stage")).toContainText("→");
   await page.getByTestId("close-report").click();
   await expect(page.getByTestId("save-status")).toContainText("已保存");
@@ -100,7 +100,7 @@ test("touch 1280x720: genuine press-move-release DOM seed to Pixi target", async
     await expect(page.getByTestId("seed-drag-ghost")).toBeVisible();
     await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     await expect(page.getByTestId("seed-item")).toHaveCount(0);
-    await expect(page.getByTestId("plant-stage")).toContainText("Seed");
+    await expect(page.getByTestId("plant-stage")).toContainText("种子期");
     await page.getByTestId("condense").tap();
     const b = await ballPoint(page);
     await page.touchscreen.tap(b.x, b.y);

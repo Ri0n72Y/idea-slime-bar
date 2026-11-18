@@ -86,7 +86,7 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   const at = await fruitButton(page, source.slot);
   await page.mouse.click(at.x, at.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
-  const id = await page.getByTestId("item-id").innerText();
+  const id = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
   const ground = await scenePoint(page, 0.36, 0.69);
 
@@ -98,10 +98,10 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   await page.keyboard.press("Escape");
   await page.mouse.up();
   await expect(page.getByTestId("fruit-drag-ghost")).toHaveCount(0);
-  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
   // A failed drop must also keep the same identity.
   await dragMouse(page, ground, { x: 5, y: 5 });
-  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
   await expect(page.getByTestId("feedback")).toContainText("未移动");
   // The same harvested leaf cannot generate a second fruit by clicking its old icon.
   await page.mouse.click(at.x, at.y);
@@ -115,7 +115,7 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   const center = await scenePoint(page, 0.5, 0.5);
   await dragMouse(page, await centerOf(page, "fruit-storage"), center);
   await expect(page.getByTestId("fruit-storage")).toHaveCount(0);
-  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
   // Ground item overlays plot: tapping it must not toggle P01 selection.
   const selection = await page.getByTestId("selected-plot").innerText();
@@ -128,7 +128,7 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   // The preceding item tap intentionally deselected it; select the persisted ground object again.
   await page.mouse.click(center.x, center.y);
-  await expect(page.getByTestId("item-id")).toHaveText(id);
+  await expect(page.getByTestId("selected-item")).toHaveAttribute("data-item-id", id);
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
 });
 
@@ -143,7 +143,7 @@ test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ bro
     const fruit = await fruitButton(page, source.slot);
     await page.touchscreen.tap(fruit.x, fruit.y);
     await expect(page.getByTestId("feedback")).toContainText("已采摘");
-    const id = await page.getByTestId("item-id").innerText();
+    const id = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
     const from = await scenePoint(page, 0.36, 0.69);
     const to = await centerOf(page, "region-storage");
     const cdp = await context.newCDPSession(page);
@@ -162,7 +162,7 @@ test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ bro
     await expect(page.getByTestId("fruit-inventory")).toHaveAttribute("data-item-id", id);
     await touchDrag(await centerOf(page, "fruit-inventory"), await scenePoint(page, 0.5, 0.5));
     await expect(page.getByTestId("fruit-inventory")).toHaveCount(0);
-    await expect(page.getByTestId("selected-item")).toContainText("ground");
+    await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
     await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
     await page.screenshot({ path: info.outputPath("u3-touch-harvest-1280x720.png") });
   } finally { await context.close(); }

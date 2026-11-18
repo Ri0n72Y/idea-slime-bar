@@ -4,6 +4,7 @@ import { ELEMENT_VIEW } from "../domain/config";
 import type { GameState, PlotId } from "../domain/game";
 import { fruitMass } from "../domain/game";
 import { stageLabel } from "../domain/game";
+import { growthStageLabel, plotLabel } from "../uiLabels";
 import { plotGeometry } from "./plotGeometry";
 
 export type SceneDropTarget = { plotId: PlotId | null; ground: { plotId: PlotId; x: number; y: number } | null };
@@ -69,7 +70,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
     plotHits.push({ id: pos.id, shape });
 
     const label = new Text({
-      text: pos.id,
+      text: plotLabel(pos.id),
       style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(12, radius * 0.31),
         fontWeight: "bold", fill: plot.open ? 0xf0f9db : 0xc3ceca },
     });
@@ -79,7 +80,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
     app.stage.addChild(label);
 
     const caption = new Text({
-      text: plot.open ? (plot.plant ? stageLabel(state, pos.id) : selected ? "已选中" : "可用") : "锁定",
+      text: plot.open ? (plot.plant ? growthStageLabel(stageLabel(state, pos.id)) : selected ? "已选中" : "可用") : "锁定",
       style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(10, radius * 0.17),
         fill: plot.open ? 0xe4f2da : 0xb0c3bd, wordWrap: true,
         wordWrapWidth: radius * 1.6, align: "center" },

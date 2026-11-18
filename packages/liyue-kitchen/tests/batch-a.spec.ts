@@ -92,7 +92,7 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   await page.mouse.click(firstPos.x, firstPos.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
-  const fruitId = await page.getByTestId("item-id").innerText();
+  const fruitId = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   await dragMouse(page, await scenePoint(page, 0.36, 0.69), await boxCenter(page, "region-storage"));
   await expect(page.getByTestId("fruit-storage")).toHaveAttribute("data-item-id", fruitId);
   await page.getByTestId("deliver-order").click();
@@ -120,8 +120,8 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   await page.getByTestId("unlock-P02").click();
   await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await dragMouse(page, await boxCenter(page, "seed-item"), await plotPoint(page, 1));
-  await expect(page.getByTestId("selected-plot")).toContainText("P02");
-  await expect(page.getByTestId("plant-stage")).toContainText("Seed");
+  await expect(page.getByTestId("selected-plot")).toContainText("2号地");
+  await expect(page.getByTestId("plant-stage")).toContainText("种子期");
   await expect(page.getByTestId("day")).toContainText(`第 ${originalDay} 天`);
   await expect(page.getByTestId("save-status")).toContainText("已保存");
   await page.screenshot({ path: info.outputPath("batch-a-desktop-1600x900.png") });
@@ -159,8 +159,8 @@ test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stre
     await page.getByTestId("unlock-P02").tap();
     await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
     await dragTouch(await boxCenter(page, "seed-item"), await plotPoint(page, 1));
-    await expect(page.getByTestId("selected-plot")).toContainText("P02");
-    await expect(page.getByTestId("plant-stage")).toContainText("Seed");
+    await expect(page.getByTestId("selected-plot")).toContainText("2号地");
+    await expect(page.getByTestId("plant-stage")).toContainText("种子期");
     await page.screenshot({ path: info.outputPath("batch-a-touch-1280x720.png") });
     await expect(page.getByTestId("save-status")).toContainText("已保存");
     await page.reload();

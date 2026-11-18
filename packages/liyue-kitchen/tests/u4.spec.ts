@@ -85,7 +85,7 @@ test("U4 desktop: real pointer processing, material ledger, rejected drop and pe
   const fruitAt = await matureFruitPoint(page, source.index);
   await page.mouse.click(fruitAt.x, fruitAt.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
-  const originalId = await page.getByTestId("item-id").innerText();
+  const originalId = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   const ground = await scenePoint(page, 0.36, 0.69);
   await dragMouse(page, ground, await center(page, "peel-drop"));
   await expect(page.getByTestId("peel-item")).toHaveAttribute("data-item-id", originalId);
