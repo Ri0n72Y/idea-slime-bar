@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 
 async function start(page: Page) {
@@ -81,7 +82,7 @@ test("desktop 1600x900: actual pointer seed drag, reject invalid, condense colle
 
 test("touch 1280x720: genuine press-move-release DOM seed to Pixi target", async ({ browser }, info) => {
   test.setTimeout(90_000); // Includes CDP touch sequence and full seed-to-night flow.
-  const context = await browser.newContext({
+  const context = await browser.newContext({ ...remoteBrowserContextOptions, 
     viewport: { width: 1280, height: 720 }, isMobile: true, hasTouch: true,
     deviceScaleFactor: 1,
   });

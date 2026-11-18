@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 import { newGame } from "../src/domain/game.ts";
 import { growRealFruit, putSavedGame } from "./support/worldFixture";
@@ -107,7 +108,7 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
 
 test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ browser }, info) => {
   test.setTimeout(180_000);
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, isMobile: true,
+  const context = await browser.newContext({ ...remoteBrowserContextOptions,  viewport: { width: 1280, height: 720 }, isMobile: true,
     hasTouch: true, deviceScaleFactor: 1 });
   try {
     const page = await context.newPage();

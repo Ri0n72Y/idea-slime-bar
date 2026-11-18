@@ -11,7 +11,8 @@ export default defineConfig({
     ...(remoteURL && bypassSecret ? {
       extraHTTPHeaders: { "x-vercel-protection-bypass": bypassSecret },
     } : {}),
-    trace: "retain-on-failure",
+    // Secret-bearing request headers must never enter uploaded Playwright traces.
+    trace: bypassSecret ? "off" : "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   // Remote acceptance must use deployed Vercel assets, never a local Vite fallback.

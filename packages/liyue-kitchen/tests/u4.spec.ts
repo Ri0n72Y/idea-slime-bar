@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 import { newGame } from "../src/domain/game.ts";
 import { growRealFruit, putSavedGame } from "./support/worldFixture";
@@ -107,7 +108,7 @@ test("U4 desktop: real pointer processing, material ledger, rejected drop and pe
 
 test("U4 simulated touchscreen: harvest, two workbenches, cup and storage", async ({ browser }, info) => {
   test.setTimeout(180_000);
-  const context = await browser.newContext({
+  const context = await browser.newContext({ ...remoteBrowserContextOptions, 
     viewport: { width: 1280, height: 720 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1,
   });
   try {

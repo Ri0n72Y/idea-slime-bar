@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { validateSave } from "../src/domain/save.ts";
 import { getSavedGame, growRealFruit, putSavedGame } from "./support/worldFixture";
@@ -173,7 +174,7 @@ test("U9 desktop 1600x900: visitor dialogue, gift, real cup delivery and saved c
 test("U9 simulated touch 1280x720: same real visitor and commission path",
   async ({ browser }, info) => {
     test.setTimeout(240_000);
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 },
+    const ctx = await browser.newContext({ ...remoteBrowserContextOptions,  viewport: { width: 1280, height: 720 },
       hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
     try { await scenario(await ctx.newPage(), ctx, true, info.outputPath("visitor-touch.png")); }
     finally { await ctx.close(); }

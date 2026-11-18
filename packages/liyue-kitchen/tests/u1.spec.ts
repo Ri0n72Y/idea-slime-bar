@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 
 const regions = [
@@ -54,7 +55,7 @@ test("desktop 1600x900: pointer selection, six locked plots, borders and screens
 });
 
 test("touch 1280x720: actual touchscreen, relayout and screenshot", async ({ browser }, info) => {
-  const context = await browser.newContext({
+  const context = await browser.newContext({ ...remoteBrowserContextOptions, 
     viewport: { width: 1280, height: 720 },
     isMobile: true,
     hasTouch: true,

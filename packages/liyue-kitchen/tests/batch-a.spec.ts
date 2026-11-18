@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 import { applyCommand, newGame } from "../src/domain/game.ts";
 import { growRealFruit, putSavedGame } from "./support/worldFixture";
@@ -105,7 +106,7 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
 
 test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stream", async ({ browser }, info) => {
   test.setTimeout(240_000);
-  const context = await browser.newContext({
+  const context = await browser.newContext({ ...remoteBrowserContextOptions, 
     viewport: { width: 1280, height: 720 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1,
   });
   try {

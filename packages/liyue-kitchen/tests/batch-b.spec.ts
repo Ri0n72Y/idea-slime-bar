@@ -1,3 +1,4 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { getSavedGame, growRealFruit, putSavedGame } from "./support/worldFixture";
 type Point = { x: number; y: number };
@@ -158,7 +159,7 @@ test("U8 mouse: real start through dual commission, discovery, technology and se
 });
 test("U8 simulated touch: same full workflow with actual pointer drags",async({browser},info)=>{
   test.setTimeout(240_000);
-  const ctx=await browser.newContext({viewport:{width:1280,height:720},isMobile:true,hasTouch:true,deviceScaleFactor:1});
+  const ctx=await browser.newContext({ ...remoteBrowserContextOptions, viewport:{width:1280,height:720},isMobile:true,hasTouch:true,deviceScaleFactor:1});
   try {await scenario(await ctx.newPage(),ctx,true,info.outputPath("core-loop-touch.png"));}
   finally {await ctx.close();}
 });

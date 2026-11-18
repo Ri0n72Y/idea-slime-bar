@@ -1,10 +1,11 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { growRealFruit, putSavedGame } from "./support/worldFixture";
 import { expect, test } from "@playwright/test";
 
 for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 720 }]) {
   test(`discovery graph is readable and navigable at ${viewport.width}x${viewport.height}`, async ({ browser }, info) => {
     const touch = viewport.width === 1280;
-    const context = await browser.newContext({ viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
+    const context = await browser.newContext({ ...remoteBrowserContextOptions,  viewport, hasTouch: touch, isMobile: touch, deviceScaleFactor: 1 });
     const page = await context.newPage();
     const press = (id: string) => touch ? page.getByTestId(id).tap() : page.getByTestId(id).click();
     await page.goto("/");
