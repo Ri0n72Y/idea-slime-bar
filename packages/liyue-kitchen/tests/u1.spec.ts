@@ -44,7 +44,7 @@ test("desktop 1600x900: pointer selection, six locked plots, borders and screens
   for (let index = 1; index < 7; index++) {
     const point = await plotPoint(page, index);
     await page.mouse.click(point.x, point.y);
-    await expect(page.getByTestId("feedback")).toContainText(`P0${index + 1} 尚未开垦`);
+    await expect(page.getByTestId("feedback")).toContainText(`${index + 1}号地 尚未开垦`);
     await expect(page.getByTestId("selected-plot")).toContainText("1号地");
   }
   await page.mouse.click(center.x, center.y);
@@ -68,7 +68,7 @@ test("touch 1280x720: actual touchscreen, relayout and screenshot", async ({ bro
     await expect(page.getByTestId("selected-plot")).toContainText("1号地");
     const locked = await plotPoint(page, 1);
     await page.touchscreen.tap(locked.x, locked.y);
-    await expect(page.getByTestId("feedback")).toContainText("P02 尚未开垦");
+    await expect(page.getByTestId("feedback")).toContainText("2号地 尚未开垦");
     await expect(page.getByTestId("selected-plot")).toContainText("1号地");
     await page.touchscreen.tap(center.x, center.y);
     await expect(page.getByTestId("selected-plot")).toContainText("未选择");
