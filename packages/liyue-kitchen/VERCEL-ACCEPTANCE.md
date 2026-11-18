@@ -1,11 +1,12 @@
 # Vercel 交互验收
 
-验证顺序：Coder 先提交 PR，GitHub 仅执行类型检查、领域测试、数值重放和构建；Vercel 为对应 HEAD 创建 Preview，确认 READY 和 Git SHA 一致后，在实际部署地址运行 Playwright。Reviewer 独立核对 PR、测试证据；Lead 合并后，Experience QA 再验收 Production。
+此验收在 PR 阶段自动触发，不依赖合并到 main。GitHub 代码工作流保留类型、领域测试、数值重放和构建；独立 `Vercel deployed browser acceptance` 工作流针对 **同一 PR HEAD 的真实 Preview 部署**运行浏览器交互。
 
-- 当前项目 Vercel ID：`prj_VzGBScFrTWp4UZA8IKqzX8Yjot8L`。Preview 需要明确核对与 PR HEAD 对应；不能用旧版 Production 代替。
-- 使用 GitHub Actions 的 `Vercel deployed browser acceptance` 手动运行，选择部署的**准确提交 ref**，填入该提交的 40 位 SHA 和 `https://*.vercel.app/` READY 部署 URL。脚本拒绝 ref/SHA 不一致以及无效 URL。
-- 若 Preview 使用 Vercel Authentication，配置仓库 `VERCEL_AUTOMATION_BYPASS_SECRET` Actions Secret（由有权限的管理员在 Vercel 创建 bypass 后填入 GitHub）；不可把 bypass 写入代码、工件、Issue 或输出。未配置时需要独立验证可访问性；HTTP 登录页不能当做游戏 PASS。
-- 本地复测：`PLAYWRIGHT_BASE_URL=https://<verified-deployment>.vercel.app pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e`。此模式不启动本地 Vite。需授权的站点应通过安全环境变量提供 bypass。
-- 证据包括准确部署 URL / SHA、桌面 1600×900 与模拟触摸 1280×720 的交互截图和测试状态；独立 QA 的真实玩家体验和手机真机仍单独判断。
+- Vercel Project：`prj_VzGBScFrTWp4UZA8IKqzX8Yjot8L`；项目与团队 ID 是公共标识，固定在仓库验收脚本中。必须由 Vercel API 验证 `projectId`、`meta.githubCommitSha`、`meta.githubCommitRef`、`readyState=READY`，不能使用用户手填 URL 或旧 Preview。
+- 需要由仓库管理员安全配置 `VERCEL_TOKEN` GitHub Actions Secret，且只能读取本 Vercel Project 的部署信息；无权限或未配置会明确失败，不能用本地测试冒充 Preview PASS。对来自 Fork 的外部 PR，GitHub 默认不提供 Secrets，因此远端验收会失败闭锁。涉及不可信代码时应在受保护环境审批后运行。
+- Preview 若有 Vercel Authentication，配置 `VERCEL_AUTOMATION_BYPASS_SECRET` Actions Secret（由管理员在 Vercel 创建）；不要把任何令牌写入源码、Issue、PR、工件或日志。登录页不得算作游戏通过。
+- 浏览器测试通过独立测试进程运行真实领域命令构造可复现世界，再写入**隔离的 Playwright 浏览器 Profile**；Vercel 的正式构建没有测试命令入口、测试服务路由或 `/src` 动态导入。UI 操作、存档恢复、材料消耗均由线上编译资源执行，保持原有游戏规则。
+- `PLAYWRIGHT_BASE_URL=https://<verified-deployment>.vercel.app/ pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e` 会关闭本地 webServer。自动工作流通过 Vercel API 获取并注入已验明的 URL。
+- 验收证据须同时包含：HEAD SHA、Vercel 部署 ID/URL/READY、桌面 1600×900、模拟触摸 1280×720 的实际浏览器交互结果及截图。生产版的用户体验、真实手机和最终视觉验收交给 Experience QA。
 
-禁止在未验明部署身份前把测试标记为通过。生产版验收不得依赖未合并的预览结果。
+禁止把 Dev Vite 的旧 Playwright PASS 或单纯 Vercel READY 当作当前 Preview 的完整交互验收。

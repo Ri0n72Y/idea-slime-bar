@@ -1,16 +1,12 @@
 name: Vercel deployed browser acceptance
 
+# PR triggers work before merge; no workflow_dispatch on a file absent from main.
 on:
-  workflow_dispatch:
-    inputs:
-      deployment_url:
-        description: 'Exact READY Vercel Preview/Production URL (https://*.vercel.app)'
-        required: true
-        type: string
-      expected_sha:
-        description: 'Full commit SHA of the deployed artifact'
-        required: true
-        type: string
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/liyue-kitchen/**'
+      - '.github/workflows/liyue-vercel-e2e.yml'
 
 permissions:
   contents: read
@@ -19,24 +15,9 @@ jobs:
   vercel-e2e:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate deployment identity and inputs
-        env:
-          DEPLOYMENT_URL: ${{ inputs.deployment_url }}
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-          GITHUB_SHA_ACTUAL: ${{ github.sha }}
-        run: |
-          node --input-type=module -e '
-            const url = new URL(process.env.DEPLOYMENT_URL);
-            if (url.protocol !== "https:" || !url.hostname.endsWith(".vercel.app") ||
-                url.username || url.password || url.search || url.hash ||
-                url.pathname !== "/") throw Error("Expected a bare HTTPS Vercel URL");
-            if (!/^[a-f0-9]{40}$/.test(process.env.EXPECTED_SHA)) throw Error("Invalid deployment SHA");
-            if (process.env.EXPECTED_SHA !== process.env.GITHUB_SHA_ACTUAL)
-              throw Error("Dispatch must select the exact deployed commit as workflow ref");
-          '
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - uses: pnpm/action-setup@v4
         with:
@@ -47,10 +28,17 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @idea-slime-bar/liyue-kitchen exec playwright install --with-deps chromium
-      - name: Exercise actual Vercel deployment
+      - name: Resolve and verify the READY Vercel Preview of this exact PR commit
+        id: deployment
         env:
-          PLAYWRIGHT_BASE_URL: ${{ inputs.deployment_url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BRANCH: ${{ github.head_ref }}
+        run: node packages/liyue-kitchen/scripts/verify-vercel-deployment.mjs
+      - run: pnpm --filter @idea-slime-bar/liyue-kitchen exec playwright install --with-deps chromium
+      - name: Exercise deployed production bundle (not local Vite)
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.deployment.outputs.url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e
       - if: always()

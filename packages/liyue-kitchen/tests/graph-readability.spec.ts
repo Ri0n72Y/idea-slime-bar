@@ -44,5 +44,5 @@ test("night report renders genuine growth events without technical identifiers",
   await expect(page.getByTestId("night-report")).toBeVisible();
   const list = page.locator(".event-list");
   await expect(list).toContainText("这片叶子");
-  await expect(list).not.toContainText(/plant:\\d|SmallLeaf|LargeLeaf|FibrousLeaf|FlowerBud|GreenFruit|MatureFruit|\\bBud\\b|\\bP01\\b/);
+  await expect(list).not.toContainText(/plant:\d|SmallLeaf|LargeLeaf|FibrousLeaf|FlowerBud|GreenFruit|MatureFruit|\bBud\b|\bP01\b/);
 });
