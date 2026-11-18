@@ -301,8 +301,31 @@ export function App() {
                     接受委托
                   </button>
                 ) : (
-                  <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
-                    onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
+                  <>
+                    {orderSelectionWarning(state, order) && (
+                      <p className="order-warning" role="status"
+                        data-testid={`order-warning-${order.id}`}>
+                        {orderSelectionWarning(state, order)}
+                      </p>
+                    )}
+                    {eligibleOrderItems(state, order).length > 0 && (
+                      <div className="order-candidates" data-testid={`order-candidates-${order.id}`}
+                        aria-label="本单可交付材料">
+                        {eligibleOrderItems(state, order).map(item => (
+                          <button key={item.id} type="button"
+                            data-testid={`choose-order-${order.id}-${item.id}`}
+                            aria-pressed={state.selectedItemId === item.id}
+                            disabled={state.phase !== "DAY_WORK"}
+                            onClick={() => chooseOrderItem(item.id)}>
+                            {state.selectedItemId === item.id ? "已选：" : "选用："}{itemTitle(item)}
+                            （{item.location.kind === "storage" ? "仓储" : "物品栏"}）
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
+                      onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
+                  </>
                 )}
               </div>
             )) : <p className="hint">暂无可交付委托</p>}
