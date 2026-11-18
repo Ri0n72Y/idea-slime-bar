@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { applyCommand, newGame, type GameState } from "../../src/domain/game.ts";
 
 /** Domain-only fixture preparation runs in the Node test process at the exact checkout SHA.
@@ -44,6 +44,8 @@ export async function putSavedGame(page: Page, game: unknown, version = 6): Prom
 }
 
 export async function getSavedGame(page: Page): Promise<GameState> {
+  // Observe the same serialized persistence boundary as the player UI.
+  await expect(page.getByTestId("save-status")).toContainText("已保存");
   return page.evaluate(async () => new Promise<GameState>((resolve, reject) => {
     const req = indexedDB.open("liyue-kitchen", 6);
     req.onerror = () => reject(req.error);
