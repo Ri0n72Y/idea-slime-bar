@@ -47,7 +47,6 @@ async function mature(page: Page, count: number) {
   await putSavedGame(page, game);
   const record = { indices, day: game.day, energy: game.adeptalEnergy.balance };
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   return record;

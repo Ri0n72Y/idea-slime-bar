@@ -42,7 +42,6 @@ async function loadMatureGame(page: Page) {
   const fruit = { index, mass, day: game.day };
   await putSavedGame(page, game);
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   await expect(page.getByTestId("day")).toContainText(`第 ${fruit.day} 天`);
@@ -152,7 +151,6 @@ test("U4 browser migration: prior U3 IndexedDB save upgrades without duplicate s
   legacy.schemaVersion = 2;
   await putSavedGame(page, legacy, 2);
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
   const saved = await page.evaluate(async () => {

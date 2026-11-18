@@ -53,7 +53,6 @@ async function mature(page: Page):Promise<number[]> {
   if (game.day > 46) throw Error("Real fruit maturity/deadline failed");
   await putSavedGame(page, game);
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if(await page.getByTestId("night-report").count())await page.getByTestId("close-report").click();
   return indices;

@@ -20,7 +20,6 @@ async function matureWorld(page: Page) {
     leafId: leaf.id, mass: beforeMass };
   await putSavedGame(page, game);
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("day")).toContainText(`第 ${result.maturity} 天`);
   const report = page.getByTestId("night-report");
@@ -150,7 +149,6 @@ test("U3 browser: legacy U2 IndexedDB record migrates without a second Seed", as
   legacy.items["item:seed:1"].location = "inventory";
   await putSavedGame(page, legacy, 1);
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
   await expect(page.getByTestId("save-status")).toContainText("已保存");

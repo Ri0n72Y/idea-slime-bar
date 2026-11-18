@@ -57,7 +57,6 @@ async function progress(page: Page, orderId: string): Promise<number> {
     throw Error("Actual commands failed save validation");
   await putSavedGame(page, game);
   await page.reload();
-  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   return index;
@@ -147,9 +146,9 @@ async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screens
   const before = await getSavedGame(page);
   const beforeView = { energy: before.adeptalEnergy, day: before.day, visitor: before.visitor,
     issued: before.visitor.issuedOrderIds, gift: before.items["item:visitor:yan:woodtag"],
-    order: Object.values(beforeView.orders).find(o => o.visitorId === "visitor:yan"),
+    order: Object.values(before.orders).find(o => o.visitorId === "visitor:yan"),
     discoveries: before.discoveries };
-  expect(beforeView.energy  expect(beforeView.energy.earnedTotal - beforeView.energy.spentTotal).toBe(beforeView.energy.balance);
+  expect(beforeView.energy.earnedTotal - beforeView.energy.spentTotal).toBe(beforeView.energy.balance);
   expect(beforeView.issued).toHaveLength(1);
   expect(beforeView.order?.state).toBe("completed");
   expect(beforeView.gift?.kind).toBe("VisitorGift");
