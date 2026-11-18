@@ -1,4 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newGame } from "../src/domain/game.ts";
+import { growRealFruit, putSavedGame } from "./support/worldFixture";
 
 async function ready(page: Page) {
   page.setDefaultTimeout(20_000);
@@ -41,40 +43,11 @@ async function dragMouse(page: Page, a: {x:number;y:number}, b: {x:number;y:numb
 
 /** Actual N=8,K=24 commands and U2 Growth/Reaction, no fabricated fruit or energy. */
 async function mature(page: Page, count: number) {
-  const record = await page.evaluate(async (wanted: number) => {
-    const { applyCommand, newGame } = await import(/* @vite-ignore */ "/src/domain/game.ts");
-    let g = applyCommand(newGame(), { type: "PLANT_SEED", itemId: "item:seed:1", plotId: "P01" });
-    let indices: number[] = [];
-    for (let d = 0; d < 130; d++) {
-      for (let n = 0; n < g.dayCondenseLimit; n++) {
-        g = applyCommand(g, { type: "CONDENSE" });
-        const ball = Object.values(g.looseBalls).at(-1) as {id:string;element:string};
-        g = applyCommand(g, { type: "COLLECT_BALL", ballId: ball.id });
-        g = applyCommand(g, { type: "WATER_PLOT", plotId: "P01", element: ball.element });
-      }
-      const requested = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(requested, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-      indices = g.plots.P01.plant.leaves.map(
-        (leaf: {fruit: {stage: string} | null}, i: number) => leaf.fruit?.stage === "MatureFruit" ? i : -1)
-        .filter((i: number) => i >= 0);
-      if (indices.length >= wanted) break;
-    }
-    if (indices.length < wanted)
-      throw new Error(`Only ${indices.length}/${wanted} actual MatureFruit after 130 days`);
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 6);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-    return { indices, day: g.day, energy: g.adeptalEnergy.balance };
-  }, count);
+  const { game, indices } = growRealFruit(newGame(), count, 130);
+  await putSavedGame(page, game);
+  const record = { indices, day: game.day, energy: game.adeptalEnergy.balance };
   await page.reload();
+  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   return record;

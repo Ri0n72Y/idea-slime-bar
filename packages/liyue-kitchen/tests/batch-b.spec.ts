@@ -1,4 +1,5 @@
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
+import { getSavedGame, growRealFruit, putSavedGame } from "./support/worldFixture";
 type Point = { x: number; y: number };
 async function center(page: Page, testId: string): Promise<Point> {
   const b = await page.getByTestId(testId).first().boundingBox();
@@ -37,51 +38,22 @@ async function drag(page: Page, ctx: BrowserContext, from: Point, to: Point, tou
     await cdp.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
   } finally { await cdp.detach(); }
 }
-async function snapshot(page:Page) {
-  return page.evaluate(async()=>{
-    const {gameStore}=await import(/* @vite-ignore */ "/src/domain/store.ts");
-    const g=gameStore.getSnapshot();
-    return { day:g.day, discoveries:Object.keys(g.discoveries), energy:g.adeptalEnergy,
-      used:g.dayCondenseUsed, limit:g.dayCondenseLimit,
-      ballCount:Object.keys(g.looseBalls).length,
-      held:g.heldElements.reduce((a,b)=>a+b,0),
-      bag:!!g.technology.collectBag,
-      P02Growth:g.plots.P02.plant?.treeGrowth.reduce((a,b)=>a+b,0)??0 };
-  });
+async function snapshot(page: Page) {
+  const g = await getSavedGame(page);
+  return { day: g.day, discoveries: Object.keys(g.discoveries), energy: g.adeptalEnergy,
+    used: g.dayCondenseUsed, limit: g.dayCondenseLimit,
+    ballCount: Object.keys(g.looseBalls).length,
+    held: g.heldElements.reduce((a, b) => a + b, 0),
+    bag: !!g.technology.collectBag,
+    P02Growth: g.plots.P02.plant?.treeGrowth.reduce((a, b) => a + b, 0) ?? 0 };
 }
 /** Only accelerates the real domain commands. No fake growth, fruit, or currency. */
 async function mature(page: Page):Promise<number[]> {
-  const indices=await page.evaluate(async()=>{
-    const {applyCommand}=await import(/* @vite-ignore */ "/src/domain/game.ts");
-    const {gameStore}=await import(/* @vite-ignore */ "/src/domain/store.ts");
-    let g=structuredClone(gameStore.getSnapshot());
-    let indices:number[]=[];
-    for(let d=0;d<90;d++){
-      for(let k=0;k<g.dayCondenseLimit;k++){
-        g=applyCommand(g,{type:"CONDENSE"});
-        const ball=Object.values(g.looseBalls).at(-1)!;
-        g=applyCommand(g,{type:"COLLECT_BALL",ballId:ball.id});
-        g=applyCommand(g,{type:"WATER_PLOT",plotId:"P01",element:ball.element});
-      }
-      const req=applyCommand(g,{type:"REQUEST_END_DAY"});
-      g=applyCommand(req,{type:"CONFIRM_END_DAY",expectedDay:g.day});
-      indices=g.plots.P01.plant!.leaves.flatMap((leaf,i)=>leaf.fruit?.stage==="MatureFruit"?[i]:[]);
-      if(indices.length>=2)break;
-    }
-    if(indices.length<2 || g.day>46)throw Error("Real fruit maturity/deadline failed");
-    await new Promise<void>((resolve,reject)=>{
-      const req=indexedDB.open("liyue-kitchen",6);
-      req.onerror=()=>reject(req.error);
-      req.onsuccess=()=>{
-        const db=req.result,tx=db.transaction("game-saves","readwrite");
-        tx.objectStore("game-saves").put({version:6,game:g},"primary");
-        tx.oncomplete=()=>{db.close();resolve();};
-        tx.onerror=()=>{db.close();reject(tx.error);};
-      };
-    });
-    return indices;
-  });
+  const { game, indices } = growRealFruit(await getSavedGame(page), 2, 90);
+  if (game.day > 46) throw Error("Real fruit maturity/deadline failed");
+  await putSavedGame(page, game);
   await page.reload();
+  await expect(page.getByTestId("loading-save"))  await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if(await page.getByTestId("night-report").count())await page.getByTestId("close-report").click();
   return indices;
