@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { newGame } from "../src/domain/game.ts";
+import { applyCommand, newGame } from "../src/domain/game.ts";
 import { growRealFruit, putSavedGame } from "./support/worldFixture";
 
 async function ready(page: Page) {
@@ -144,25 +144,12 @@ test("Batch A deadline: order accepted on due day; confirmed night expires and o
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1600, height: 900 });
   await ready(page);
-  await page.evaluate(async () => {
-    const { applyCommand, newGame } = await import(/* @vite-ignore */ "/src/domain/game.ts");
-    let g = newGame();
-    while (g.day < g.orders["order:first"].dueDay) {
-      const requested = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(requested, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-    }
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("liyue-kitchen", 6);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        const db = req.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-  });
+  let game = newGame();
+  while (game.day < game.orders["order:first"].dueDay) {
+    game = applyCommand(game, { type: "REQUEST_END_DAY" });
+    game = applyCommand(game, { type: "CONFIRM_END_DAY", expectedDay: game.day });
+  }
+  await putSavedGame(page, game);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
