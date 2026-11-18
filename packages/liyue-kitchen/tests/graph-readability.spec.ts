@@ -1,3 +1,4 @@
+import { growRealFruit, putSavedGame } from "./support/worldFixture";
 import { expect, test } from "@playwright/test";
 
 for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 720 }]) {
@@ -31,3 +32,17 @@ for (const viewport of [{ width: 1600, height: 900 }, { width: 1280, height: 720
     await context.close();
   });
 }
+
+test("night report renders genuine growth events without technical identifiers", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto("/");
+  await expect(page.getByTestId("loading-save")).toHaveCount(0);
+  const { game } = growRealFruit(undefined, 1, 70);
+  expect(game.lastNightReport?.events.length).toBeGreaterThan(0);
+  await putSavedGame(page, game);
+  await page.reload();
+  await expect(page.getByTestId("night-report")).toBeVisible();
+  const list = page.locator(".event-list");
+  await expect(list).toContainText("这片叶子");
+  await expect(list).not.toContainText(/plant:\\d|SmallLeaf|LargeLeaf|FibrousLeaf|FlowerBud|GreenFruit|MatureFruit|\\bBud\\b|\\bP01\\b/);
+});
