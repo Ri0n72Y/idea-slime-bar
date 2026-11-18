@@ -1,4 +1,4 @@
-name: Liyue Web U1
+name: Liyue domain validation
 
 on:
   pull_request:
@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
 
+# Keep the existing "u1" check identity for branch protection; visual and
+# interaction verification now runs against the exact Vercel deployment.
 jobs:
   u1:
     runs-on: ubuntu-latest
@@ -31,11 +33,3 @@ jobs:
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen test:domain
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen simulate:balance
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen build
-      - run: pnpm --filter @idea-slime-bar/liyue-kitchen exec playwright install --with-deps chromium
-      - run: pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e
-      - if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: liyue-u1-playwright
-          path: packages/liyue-kitchen/test-results/
-          if-no-files-found: ignore

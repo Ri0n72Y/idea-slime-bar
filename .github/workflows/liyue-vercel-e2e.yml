@@ -1,0 +1,61 @@
+name: Vercel deployed browser acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_url:
+        description: 'Exact READY Vercel Preview/Production URL (https://*.vercel.app)'
+        required: true
+        type: string
+      expected_sha:
+        description: 'Full commit SHA of the deployed artifact'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  vercel-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate deployment identity and inputs
+        env:
+          DEPLOYMENT_URL: ${{ inputs.deployment_url }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GITHUB_SHA_ACTUAL: ${{ github.sha }}
+        run: |
+          node --input-type=module -e '
+            const url = new URL(process.env.DEPLOYMENT_URL);
+            if (url.protocol !== "https:" || !url.hostname.endsWith(".vercel.app") ||
+                url.username || url.password || url.search || url.hash ||
+                url.pathname !== "/") throw Error("Expected a bare HTTPS Vercel URL");
+            if (!/^[a-f0-9]{40}$/.test(process.env.EXPECTED_SHA)) throw Error("Invalid deployment SHA");
+            if (process.env.EXPECTED_SHA !== process.env.GITHUB_SHA_ACTUAL)
+              throw Error("Dispatch must select the exact deployed commit as workflow ref");
+          '
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @idea-slime-bar/liyue-kitchen exec playwright install --with-deps chromium
+      - name: Exercise actual Vercel deployment
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ inputs.deployment_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liyue-vercel-playwright
+          path: packages/liyue-kitchen/test-results/
+          if-no-files-found: ignore
