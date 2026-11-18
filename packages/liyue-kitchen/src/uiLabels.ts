@@ -17,10 +17,10 @@ export function playerEventText(message: string): string {
     .replace(/plant:P0[1-7]:[0-9]+/g, "这株水瓜")
     .replace(/item:[a-zA-Z0-9:_-]+/g, "对应物件")
     .replace(/(?:event|order):[a-zA-Z0-9:_-]+/g, "相关记录")
-    .replace(/\\bP0([1-7])\\b/g, (_match, number: string) => `${Number(number)}号地`)
-    .replace(/\\b(Seedling|Sapling|Seed|FlowerBud|Flower|GreenFruit|MatureFruit)\\b/g,
+    .replace(/\bP0([1-7])\b/g, (_match, number: string) => `${Number(number)}号地`)
+    .replace(/\b(Seedling|Sapling|Seed|FlowerBud|Flower|GreenFruit|MatureFruit)\b/g,
       stage => stages[stage])
-    .replace(/\\b(Fire|Hydro|Anemo|Electro|Dendro|Cryo|Geo)\\b/g,
+    .replace(/\b(Fire|Hydro|Anemo|Electro|Dendro|Cryo|Geo)\b/g,
       element => ({ Fire: "火", Hydro: "水", Anemo: "风", Electro: "雷",
         Dendro: "草", Cryo: "冰", Geo: "岩" } as Record<string, string>)[element]);
 }
