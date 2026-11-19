@@ -34,7 +34,7 @@
 | --- | ---: | ---: |
 | Soil 每日保留率 | 0.99^24 ≈ 78.6% | **80%/d** |
 | Seed 根系总吸收速率上限 | 48V/d | **50V/d** |
-| Seedling 根系总吸收速率上限 | 44.4V/d | **45V/d** |
+| Seedling 根系总吸收速率上限 | 44.4V/d | **40V/d** |
 | Sapling 根系总吸收速率上限 | 384V/d | **400V/d** |
 | Sapling Growth 参考预算 B0 | 129.6V/d | **130V/d** |
 | 土壤容量（七维合计） | 1000V | **1000V** |
@@ -49,7 +49,7 @@
 | 原阶段事件 | 旧阈值 | 新候选 |
 | --- | ---: | ---: |
 | Seed → Seedling | Tree累计45G | **50G** |
-| Seedling → Sapling | 同一Tree累计90G | **100G** |
+| Seedling → Sapling | 同一Tree累计90G | **90G** |
 | Active Bud → SmallLeaf | Bud20G | **20G** |
 | SmallLeaf → LargeLeaf + FlowerBud | 本叶26G | **30G** |
 | FlowerBud → Flower | 生殖累计12G | **15G** |
@@ -81,7 +81,7 @@ Seed/Seedling的Tree Growth为同一累计账户；Sapling开始先转为Reserve
 | 当日关店结算 | 期望次晨可见结果 | 主要Growth账户 |
 | --- | --- | --- |
 | D1→D2 | Seedling | Tree 累计达到50G |
-| D2→D3 | Sapling＋首芽 | Tree 累计达到100G |
+| D2→D3 | Sapling＋首芽 | Tree 累计达到90G |
 | D3→D4 | SmallLeaf | Bud 达20G |
 | D4→D5 | LargeLeaf＋FlowerBud | Leaf 达30G |
 | D5→D6 | Flower→GreenFruit | 生殖累计达到40G，期间穿过15G开花门槛 |
@@ -97,7 +97,7 @@ Seed/Seedling的Tree Growth为同一累计账户；Sapling开始先转为Reserve
 
 ## 6. 下轮数值细拆：必须解决的约束
 
-**尚存一个直接数值冲突：**按照D1夜Seed最多50V/d、D2夜Seedling最多45V/d，并假设Tree在这两日1V→1G，D3晨的理论累计上限也只有 **50+45=95G**，低于候选Sapling门槛100G；真实土壤效率还会进一步降低吸收。当前数值表**不能据此声称D3必定进入Sapling**。下一轮需要审查每日真实净吸收、阶段阈值与视觉事件的对应关系，再共同选定修正方案。
+**已确认的前期整数候选：Seed根吸收上限50V/d，Seedling为40V/d；Tree累计50G进入Seedling，累计90G进入Sapling。**两个阶段若分别满额吸收，理论两日可累计 **50+40=90G**。但原根系规则仍乘土壤效率并受到七通道约束，因此真实每日吸收可能低于上限；D2发芽、D3幼树仍属体验目标，下一轮须校准实际到账与阶段时点，不能把90G当成自动保证。
 
 此外逐日拆解：
 1. D1–D3：七通道保底50V、共享土壤效率和50/45V/d上限共同决定实际Tree G；核算能否稳定越过出苗与幼树门槛。
