@@ -14,6 +14,9 @@ import type { KitchenOrder } from "./domain/orders";
 import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
 import { COLLECT_BAG } from "./domain/technology";
 import { VISITOR_ID, visitorChoices, visitorPresent } from "./domain/visitors";
+import { growthStageLabel, itemLocationLabel, playerEventText, plotLabel } from "./uiLabels";
+import { eligibleOrderItems, itemTitle, nextActionHint, orderItemTitle, orderSelectionWarning } from "./experience";
+import "./experience.css";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -52,7 +55,20 @@ export function App() {
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
-  const [graphZoom, setGraphZoom] = useState(0.8);
+  const [showGuidance, setShowGuidance] = useState(() => {
+    try { return window.localStorage.getItem("liyue-kitchen-guidance") !== "hidden"; }
+    catch { return true; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem("liyue-kitchen-guidance", showGuidance ? "shown" : "hidden"); }
+    catch { /* browser storage unavailable: in-session toggle still works */ }
+  }, [showGuidance]);
+  const [graphZoom, setGraphZoom] = useState(1);
+  const graphViewportRef = useRef<HTMLDivElement | null>(null);
+  const navigateGraph = (direction: -1 | 1) => {
+    const viewport = graphViewportRef.current;
+    if (viewport) viewport.scrollBy({ left: direction * Math.max(280, viewport.clientWidth * 0.7), behavior: "smooth" });
+  };
 
   useEffect(() => { void gameStore.start().catch(() => {}); }, []);
   const registerDropTarget = useCallback((pick: (x: number, y: number) => SceneDropTarget) => {
@@ -147,15 +163,14 @@ export function App() {
   const benchItems = Object.values(state.items).filter(item => item.location.kind === "workbench");
   const peelItem = benchItems.find(item => item.location.kind === "workbench" && item.location.slot === "peel");
   const juiceItem = benchItems.find(item => item.location.kind === "workbench" && item.location.slot === "juice");
-  const itemLabel = (item: GameItem) => ({
-    Seed: "水瓜种子", Aquamelon: "完整水瓜", PeeledFlesh: "水瓜果肉",
-    Shell: "水瓜果壳", RawJuice: "水瓜原汁", AquamelonJuiceCup: "杯装水瓜汁",
-    VisitorGift: "旅人木牌",
-  })[item.kind];
+  const itemLabel = itemTitle;
   const activeOrders = Object.values(state.orders).filter(o => o.state === "available" || o.state === "accepted");
   const recentOrders = Object.values(state.orders).filter(
     o => o.state === "completed" || o.state === "expired").slice(-2).reverse();
-  const orderName = (o: KitchenOrder) => o.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁";
+  const orderName = orderItemTitle;
+  const chooseOrderItem = (id: string) => {
+    if (state.selectedItemId !== id) gameStore.dispatch({ type: "SELECT_ITEM", itemId: id });
+  };
   const deliver = (o: KitchenOrder) => {
     const kind = o.itemKind === "aquamelon" ? "Aquamelon" : "AquamelonJuiceCup";
     // The explicitly selected material wins, even when invalid; domain returns a rejection.
@@ -250,15 +265,15 @@ export function App() {
             onSelectItem={selectItem} onStartGroundDrag={startGroundDrag}
             onRegisterDropTarget={registerDropTarget} />
           <div className="crystal-footer">
-            <span data-testid="selected-plot">当前地格：{state.selectedPlotId ?? "未选择"}</span>
-            <span data-testid="plant-stage">{state.selectedPlotId ? stageLabel(state, state.selectedPlotId) : "拖放种子至开放地格"}</span>
+            <span data-testid="selected-plot">当前地格：{state.selectedPlotId ? plotLabel(state.selectedPlotId) : "未选择"}</span>
+            <span data-testid="plant-stage">{state.selectedPlotId ? growthStageLabel(stageLabel(state, state.selectedPlotId)) : "拖放种子至开放地格"}</span>
             <div className="plot-purchases" data-testid="plot-purchases">
               {(["P02", "P03", "P04", "P05", "P06", "P07"] as const)
                 .filter(id => !state.plots[id].open).map(id => (
                 <button key={id} type="button" data-testid={`unlock-${id}`}
                   disabled={state.phase !== "DAY_WORK"}
                   onClick={() => gameStore.dispatch({ type: "UNLOCK_PLOT", plotId: id })}>
-                  开垦 {id} · {ECONOMY_CANDIDATE.plotCosts[id]} 仙力
+                  开垦{plotLabel(id)} · {ECONOMY_CANDIDATE.plotCosts[id]}仙力
                 </button>
               ))}
             </div>
@@ -277,14 +292,40 @@ export function App() {
                 <p data-testid="order-deadline">第 {order.dueDay} 天截止（含当日）</p>
                 <p>奖励 {order.rewards} 洞天仙力</p>
                 <p data-testid="order-status">{order.state === "available" ? "待接受" : "已接受"}</p>
+                <p className="order-location-hint" data-testid={`order-location-${order.id}`}>
+                  交单材料须放入物品栏或仓储区；水晶球地面的水瓜需先搬运。
+                </p>
                 {order.state === "available" ? (
                   <button type="button" data-testid="accept-order" disabled={state.phase !== "DAY_WORK"}
                     onClick={() => gameStore.dispatch({ type: "ACCEPT_ORDER", orderId: order.id })}>
                     接受委托
                   </button>
                 ) : (
-                  <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
-                    onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
+                  <>
+                    {orderSelectionWarning(state, order) && (
+                      <p className="order-warning" role="status"
+                        data-testid={`order-warning-${order.id}`}>
+                        {orderSelectionWarning(state, order)}
+                      </p>
+                    )}
+                    {eligibleOrderItems(state, order).length > 0 && (
+                      <div className="order-candidates" data-testid={`order-candidates-${order.id}`}
+                        aria-label="本单可交付材料">
+                        {eligibleOrderItems(state, order).map(item => (
+                          <button key={item.id} type="button"
+                            data-testid={`choose-order-${order.id}-${item.id}`}
+                            aria-pressed={state.selectedItemId === item.id}
+                            disabled={state.phase !== "DAY_WORK"}
+                            onClick={() => chooseOrderItem(item.id)}>
+                            {state.selectedItemId === item.id ? "已选：" : "选用："}{itemTitle(item)}
+                            （{item.location.kind === "storage" ? "仓储" : "物品栏"}）
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
+                      onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
+                  </>
                 )}
               </div>
             )) : <p className="hint">暂无可交付委托</p>}
@@ -331,14 +372,14 @@ export function App() {
             <div className="inventory-line">
 {inventoryItems.map(item => (
                 <div key={item.id} role="button" tabIndex={0}
-                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽${itemLabel(item)} ${item.id}`}
+                  aria-label={item.kind === "Seed" ? "拖拽水瓜种子" : `拖拽${itemLabel(item)}`}
                   className="seed-item" data-testid={item.kind === "Seed" ? "seed-item" : "fruit-inventory"}
                   data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)}
                   onClick={() => item.kind !== "Seed" && selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
                   <span>{item.kind === "Seed" ? "🌰" : item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"}</span>
-                  <small>{itemLabel(item)} · {item.kind === "Seed" ? "" : item.id}</small>
+                  <small>{itemLabel(item)}</small>
                 </div>
               ))}
               {!inventoryItems.length && <p className="hint">暂无物品</p>}
@@ -363,7 +404,7 @@ export function App() {
                   data-testid="fruit-storage" data-item-id={item.id}
                   onPointerDown={e => startDrag(e, item.id)} onClick={() => selectItem(item.id)}
                   onKeyDown={e => { if (e.key === "Enter") selectItem(item.id); }}>
-                  {item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"} <small>{itemLabel(item)} · {item.id}</small>
+                  {item.kind === "Shell" ? "🐚" : item.kind === "VisitorGift" ? "🎴" : "🍈"} <small>{itemLabel(item)}</small>
                 </div>
               ))}
             </div>
@@ -404,10 +445,14 @@ export function App() {
               </button>
             </header>
             <div className="graph-controls">
-              <p className="hint">节点按真实事件点亮；未发现的隐藏节点及其连线不显示。</p>
+              <p className="hint" data-testid="graph-navigation-hint">向右滚动或滑动查看后续发现；节点由实际行动点亮，尚未遇见的线索不会提前显示。</p>
+              <button type="button" data-testid="graph-left" aria-label="查看左侧探索节点"
+                onClick={() => navigateGraph(-1)}>向左查看</button>
+              <button type="button" data-testid="graph-right" aria-label="查看右侧探索节点"
+                onClick={() => navigateGraph(1)}>向右查看</button>
               <button type="button" data-testid="zoom-out"
-                disabled={graphZoom <= 0.6}
-                onClick={() => setGraphZoom(z => Math.max(0.6, +(z - 0.1).toFixed(2)))}>
+                disabled={graphZoom <= 1}
+                onClick={() => setGraphZoom(z => Math.max(1, +(z - 0.1).toFixed(2)))}>
                 缩小
               </button>
               <span data-testid="graph-zoom">{Math.round(graphZoom * 100)}%</span>
@@ -417,12 +462,13 @@ export function App() {
                 放大
               </button>
             </div>
-            <div className="discovery-viewport" data-testid="discovery-viewport">
+            <div className="discovery-viewport" data-testid="discovery-viewport" ref={graphViewportRef}
+              tabIndex={0} aria-label="探索节点图，使用方向键或左右按钮浏览">
               <div className="discovery-zoom-space"
-                style={{ width: 1140 * graphZoom, height: 600 * graphZoom }}>
+                style={{ width: 1140 * graphZoom, height: 660 * graphZoom }}>
                 <div className="discovery-graph"
                   style={{ transform: `scale(${graphZoom})` }}>
-                  <svg className="discovery-links" viewBox="0 0 1140 600" aria-hidden="true">
+                  <svg className="discovery-links" viewBox="0 0 1140 660" aria-hidden="true">
                     {discoveries.flatMap(({ node }) => node.prerequisites
                       .filter(id => visibleNodeIds.has(id))
                       .map(parent => (
@@ -442,8 +488,9 @@ export function App() {
                         <span>{status === "completed" ? `已发现 · 第 ${record?.completedAtDay} 天` :
                           status === "available" ? `待探索 · ${node.hint}` :
                           status === "hinted" ? "已有线索" : "尚无前置发现"}</span>
-                        {record && <small data-testid={`discovery-evidence-${node.id}`}>
-                          证据：{record.eventId} · {record.sourceId}
+                        {record && <small data-testid={`discovery-evidence-${node.id}`}
+                          data-event-id={record.eventId} data-source-id={record.sourceId}>
+                          实证：第 {record.completedAtDay} 天 · {node.hint}
                         </small>}
                       </div>
                     ))}
@@ -469,26 +516,33 @@ export function App() {
         </div>
       )}
       {selectedItem && selectedItem.kind !== "Seed" && (
-        <div className="item-inspector" data-testid="selected-item">
-          <strong data-testid="item-id">{selectedItem.id}</strong>
+        <div className="item-inspector" data-testid="selected-item" data-item-id={selectedItem.id}>
+          <strong data-testid="item-id">物件详情</strong>
           <span>{itemLabel(selectedItem)}</span>
           {selectedItem.kind === "VisitorGift" ? (
-            <span>赠物来源：{selectedItem.visitorId} · {selectedItem.eventId}</span>
+            <span>赠物来源：旅人阿砚</span>
           ) : (
             <>
               <span data-testid="item-mass">{selectedItem.kind === "Shell" ? "0.000" :
                 fruitMass(selectedItem).toFixed(3)}G</span>
-              <span>原植株：{selectedItem.source.plantId} / {selectedItem.source.leafId}</span>
+              <span>收获地格：{plotLabel(selectedItem.source.plotId)}</span>
               <span>首反应：{selectedItem.kind === "Shell" ? "无" :
                 selectedItem.reaction.firstReaction ?? "无"}</span>
             </>
           )}
-          <span>位置：{selectedItem.location.kind}</span>
+          <span>位置：{itemLocationLabel(selectedItem.location.kind)}</span>
         </div>
       )}
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">
+        <div className="experience-hint" data-testid="next-step-guide">
+          <button type="button" data-testid="guide-toggle" aria-expanded={showGuidance}
+            onClick={() => setShowGuidance(!showGuidance)}>
+            {showGuidance ? "收起提示" : "显示下一步"}
+          </button>
+          {showGuidance && <span data-testid="next-step-text">{nextActionHint(state)}</span>}
+        </div>
         <strong>状态反馈</strong>
-        <span data-testid="feedback">{state.notice.message}</span>
+        <span data-testid="feedback">{playerEventText(state.notice.message)}</span>
         <span className="version" data-testid="save-status">{saveStatus === "saved" ? "已保存" : saveStatus === "saving" ? "保存中…" : saveStatus === "error" ? "存档异常" : "已载入"}</span>
       </footer>
       {state.phase === "DAY_CONFIRM" && (
@@ -508,9 +562,9 @@ export function App() {
           <div className="dialog-pane report-pane">
             <h2>第 {report.toDay} 天 · 次晨简报</h2>
             <p>昨夜经过 {report.toUH - report.fromUH} uh。根系已实际吸收养分，土壤保留率与器官成长按小时结算。</p>
-            <p data-testid="report-stage">中心地格：{report.plots.P01.stageBefore ?? "空地"} → {report.plots.P01.stageAfter ?? "空地"}；叶片 {report.plots.P01.leafCountBefore} → {report.plots.P01.leafCountAfter}</p>
+            <p data-testid="report-stage">中心地格：{growthStageLabel(report.plots.P01.stageBefore ?? "空地")} → {growthStageLabel(report.plots.P01.stageAfter ?? "空地")}；叶片 {report.plots.P01.leafCountBefore} → {report.plots.P01.leafCountAfter}</p>
             <p>果实进度：当前 {report.plots.P01.fruitCountAfter} 个生殖器官；具体成长事件见下方。</p>
-            <ul className="event-list">{(report.events.length ? report.events.slice(-12) : ["昨夜没有新的阶段转换"]).map((item, i) => <li key={`${i}-${item}`}>{item}</li>)}</ul>
+            <ul className="event-list">{(report.events.length ? report.events.slice(-12) : ["昨夜没有新的阶段转换"]).map((item, i) => <li key={`${i}-${item}`}>{playerEventText(item)}</li>)}</ul>
             <p className="hint">凝聚额度已重置，可继续培育。</p>
             <button type="button" data-testid="close-report" onClick={() => setReportDismissed(report.toDay)}>继续劳动</button>
           </div>

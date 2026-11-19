@@ -1,4 +1,6 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
+import { getSavedGame, growRealFruit, putSavedGame } from "./support/worldFixture";
 type Point = { x: number; y: number };
 async function center(page: Page, testId: string): Promise<Point> {
   const b = await page.getByTestId(testId).first().boundingBox();
@@ -37,50 +39,20 @@ async function drag(page: Page, ctx: BrowserContext, from: Point, to: Point, tou
     await cdp.send("Input.dispatchTouchEvent",{type:"touchEnd",touchPoints:[]});
   } finally { await cdp.detach(); }
 }
-async function snapshot(page:Page) {
-  return page.evaluate(async()=>{
-    const {gameStore}=await import(/* @vite-ignore */ "/src/domain/store.ts");
-    const g=gameStore.getSnapshot();
-    return { day:g.day, discoveries:Object.keys(g.discoveries), energy:g.adeptalEnergy,
-      used:g.dayCondenseUsed, limit:g.dayCondenseLimit,
-      ballCount:Object.keys(g.looseBalls).length,
-      held:g.heldElements.reduce((a,b)=>a+b,0),
-      bag:!!g.technology.collectBag,
-      P02Growth:g.plots.P02.plant?.treeGrowth.reduce((a,b)=>a+b,0)??0 };
-  });
+async function snapshot(page: Page) {
+  const g = await getSavedGame(page);
+  return { day: g.day, discoveries: Object.keys(g.discoveries), energy: g.adeptalEnergy,
+    used: g.dayCondenseUsed, limit: g.dayCondenseLimit,
+    ballCount: Object.keys(g.looseBalls).length,
+    held: g.heldElements.reduce((a, b) => a + b, 0),
+    bag: !!g.technology.collectBag,
+    P02Growth: g.plots.P02.plant?.treeGrowth.reduce((a, b) => a + b, 0) ?? 0 };
 }
 /** Only accelerates the real domain commands. No fake growth, fruit, or currency. */
 async function mature(page: Page):Promise<number[]> {
-  const indices=await page.evaluate(async()=>{
-    const {applyCommand}=await import(/* @vite-ignore */ "/src/domain/game.ts");
-    const {gameStore}=await import(/* @vite-ignore */ "/src/domain/store.ts");
-    let g=structuredClone(gameStore.getSnapshot());
-    let indices:number[]=[];
-    for(let d=0;d<90;d++){
-      for(let k=0;k<g.dayCondenseLimit;k++){
-        g=applyCommand(g,{type:"CONDENSE"});
-        const ball=Object.values(g.looseBalls).at(-1)!;
-        g=applyCommand(g,{type:"COLLECT_BALL",ballId:ball.id});
-        g=applyCommand(g,{type:"WATER_PLOT",plotId:"P01",element:ball.element});
-      }
-      const req=applyCommand(g,{type:"REQUEST_END_DAY"});
-      g=applyCommand(req,{type:"CONFIRM_END_DAY",expectedDay:g.day});
-      indices=g.plots.P01.plant!.leaves.flatMap((leaf,i)=>leaf.fruit?.stage==="MatureFruit"?[i]:[]);
-      if(indices.length>=2)break;
-    }
-    if(indices.length<2 || g.day>46)throw Error("Real fruit maturity/deadline failed");
-    await new Promise<void>((resolve,reject)=>{
-      const req=indexedDB.open("liyue-kitchen",6);
-      req.onerror=()=>reject(req.error);
-      req.onsuccess=()=>{
-        const db=req.result,tx=db.transaction("game-saves","readwrite");
-        tx.objectStore("game-saves").put({version:6,game:g},"primary");
-        tx.oncomplete=()=>{db.close();resolve();};
-        tx.onerror=()=>{db.close();reject(tx.error);};
-      };
-    });
-    return indices;
-  });
+  const { game, indices } = growRealFruit(await getSavedGame(page), 2, 90);
+  if (game.day > 46) throw Error("Real fruit maturity/deadline failed");
+  await putSavedGame(page, game);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if(await page.getByTestId("night-report").count())await page.getByTestId("close-report").click();
@@ -111,10 +83,10 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
     expect(state.discoveries).toContain(id);
   await press(page,"open-discoveries",touch);
   await expect(page.locator('[data-node-id="H01"]')).toHaveAttribute("data-status","completed");
-  await expect(page.getByTestId("graph-zoom")).toContainText("80%");
+  await expect(page.getByTestId("graph-zoom")).toContainText("100%");
   await press(page,"zoom-in",touch);
-  await expect(page.getByTestId("graph-zoom")).toContainText("90%");
-  await expect(page.getByTestId("discovery-evidence-A12")).toContainText("plant:");
+  await expect(page.getByTestId("graph-zoom")).toContainText("110%");
+  await expect(page.getByTestId("discovery-evidence-A12")).toContainText("种出第一枚成熟水瓜");
   await press(page,"close-discoveries",touch);
 
   await tap(page,await scene(page,"fruit",indices[0]),touch);
@@ -159,7 +131,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   await press(page,"unlock-P02",touch);
   await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await drag(page,ctx,await center(page,"seed-item"),await scene(page,"plot",1),touch);
-  await expect(page.getByTestId("selected-plot")).toContainText("P02");
+  await expect(page.getByTestId("selected-plot")).toContainText("2号地");
   const nutrients=page.locator('[data-testid^="water-"]');
   while(await nutrients.count()){if(touch)await nutrients.first().tap();else await nutrients.first().click();}
   await press(page,"end-day",touch);await press(page,"confirm-day",touch);
@@ -169,7 +141,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   for(const id of ["A13","A14","A16","A17"])expect(state.discoveries).toContain(id);
   expect(state.energy.earnedTotal-state.energy.spentTotal).toBe(state.energy.balance);
   await press(page,"open-discoveries",touch);
-  await expect(page.getByTestId("discovery-evidence-A16")).toContainText("order:");
+  await expect(page.getByTestId("discovery-evidence-A16")).toContainText("交付真正的杯装水瓜汁");
   await page.screenshot({path:proof});
   await press(page,"close-discoveries",touch);
   await expect(page.getByTestId("save-status")).toContainText("已保存");
@@ -187,7 +159,7 @@ test("U8 mouse: real start through dual commission, discovery, technology and se
 });
 test("U8 simulated touch: same full workflow with actual pointer drags",async({browser},info)=>{
   test.setTimeout(240_000);
-  const ctx=await browser.newContext({viewport:{width:1280,height:720},isMobile:true,hasTouch:true,deviceScaleFactor:1});
+  const ctx=await browser.newContext({ ...remoteBrowserContextOptions, viewport:{width:1280,height:720},isMobile:true,hasTouch:true,deviceScaleFactor:1});
   try {await scenario(await ctx.newPage(),ctx,true,info.outputPath("core-loop-touch.png"));}
   finally {await ctx.close();}
 });

@@ -1,4 +1,7 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
+import { newGame } from "../src/domain/game.ts";
+import { growRealFruit, putSavedGame } from "./support/worldFixture";
 
 async function ready(page: Page) {
   await page.goto("/");
@@ -9,43 +12,14 @@ async function ready(page: Page) {
 
 /** Uses real U2 commands and nightly Growth to produce a harvest-ready saved world. */
 async function matureWorld(page: Page) {
-  const result = await page.evaluate(async () => {
-    const domain = "/src/domain/game.ts";
-    const { newGame, applyCommand } = await import(/* @vite-ignore */ domain);
-    let g = applyCommand(newGame(), { type: "PLANT_SEED", itemId: "item:seed:1", plotId: "P01" });
-    let maturity = -1;
-    let slot = -1;
-    for (let night = 0; night < 70; night++) {
-      for (let n = 0; n < g.dayCondenseLimit; n++) {
-        g = applyCommand(g, { type: "CONDENSE" });
-        const ball = Object.values(g.looseBalls).at(-1) as { id: string; element: string };
-        g = applyCommand(g, { type: "COLLECT_BALL", ballId: ball.id });
-        g = applyCommand(g, { type: "WATER_PLOT", plotId: "P01", element: ball.element });
-      }
-      const req = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(req, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-      slot = g.plots.P01.plant.leaves.findIndex(
-        (leaf: { fruit: { stage: string } | null }) => leaf.fruit?.stage === "MatureFruit");
-      if (slot >= 0) { maturity = g.day; break; }
-    }
-    if (maturity < 0) throw new Error("U2 actual growth did not reach MatureFruit after 70 nights");
-    const plant = g.plots.P01.plant;
-    const leaf = plant.leaves[slot];
-    const beforeMass = leaf.fruit.free.reduce((a: number, b: number) => a + b, 0) +
-      Object.values(leaf.fruit.reaction.products).reduce((a: number, b) => a + Number(b), 0);
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 6);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-    return { slot, maturity, plantId: plant.id, leafId: leaf.id, mass: beforeMass };
-  });
+  const { game, indices } = growRealFruit(newGame(), 1, 70);
+  const slot = indices[0];
+  const leaf = game.plots.P01.plant!.leaves[slot];
+  const beforeMass = leaf.fruit!.free.reduce((a, b) => a + b, 0) +
+    Object.values(leaf.fruit!.reaction.products).reduce((a, b) => a + Number(b), 0);
+  const result = { slot, maturity: game.day, plantId: game.plots.P01.plant!.id,
+    leafId: leaf.id, mass: beforeMass };
+  await putSavedGame(page, game);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("day")).toContainText(`第 ${result.maturity} 天`);
@@ -86,7 +60,7 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   const at = await fruitButton(page, source.slot);
   await page.mouse.click(at.x, at.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
-  const id = await page.getByTestId("item-id").innerText();
+  const id = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
   const ground = await scenePoint(page, 0.36, 0.69);
 
@@ -98,10 +72,10 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   await page.keyboard.press("Escape");
   await page.mouse.up();
   await expect(page.getByTestId("fruit-drag-ghost")).toHaveCount(0);
-  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
   // A failed drop must also keep the same identity.
   await dragMouse(page, ground, { x: 5, y: 5 });
-  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
   await expect(page.getByTestId("feedback")).toContainText("未移动");
   // The same harvested leaf cannot generate a second fruit by clicking its old icon.
   await page.mouse.click(at.x, at.y);
@@ -115,7 +89,7 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   const center = await scenePoint(page, 0.5, 0.5);
   await dragMouse(page, await centerOf(page, "fruit-storage"), center);
   await expect(page.getByTestId("fruit-storage")).toHaveCount(0);
-  await expect(page.getByTestId("selected-item")).toContainText("ground");
+  await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
   // Ground item overlays plot: tapping it must not toggle P01 selection.
   const selection = await page.getByTestId("selected-plot").innerText();
@@ -128,13 +102,13 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
   // The preceding item tap intentionally deselected it; select the persisted ground object again.
   await page.mouse.click(center.x, center.y);
-  await expect(page.getByTestId("item-id")).toHaveText(id);
+  await expect(page.getByTestId("selected-item")).toHaveAttribute("data-item-id", id);
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
 });
 
 test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ browser }, info) => {
   test.setTimeout(180_000);
-  const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, isMobile: true,
+  const context = await browser.newContext({ ...remoteBrowserContextOptions,  viewport: { width: 1280, height: 720 }, isMobile: true,
     hasTouch: true, deviceScaleFactor: 1 });
   try {
     const page = await context.newPage();
@@ -143,7 +117,7 @@ test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ bro
     const fruit = await fruitButton(page, source.slot);
     await page.touchscreen.tap(fruit.x, fruit.y);
     await expect(page.getByTestId("feedback")).toContainText("已采摘");
-    const id = await page.getByTestId("item-id").innerText();
+    const id = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
     const from = await scenePoint(page, 0.36, 0.69);
     const to = await centerOf(page, "region-storage");
     const cdp = await context.newCDPSession(page);
@@ -162,7 +136,7 @@ test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ bro
     await expect(page.getByTestId("fruit-inventory")).toHaveAttribute("data-item-id", id);
     await touchDrag(await centerOf(page, "fruit-inventory"), await scenePoint(page, 0.5, 0.5));
     await expect(page.getByTestId("fruit-inventory")).toHaveCount(0);
-    await expect(page.getByTestId("selected-item")).toContainText("ground");
+    await expect(page.getByTestId("selected-item")).toContainText("水晶球地面");
     await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
     await page.screenshot({ path: info.outputPath("u3-touch-harvest-1280x720.png") });
   } finally { await context.close(); }
@@ -170,25 +144,11 @@ test("U3 touch: harvest and move Pixi ground fruit to DOM storage", async ({ bro
 
 test("U3 browser: legacy U2 IndexedDB record migrates without a second Seed", async ({ page }) => {
   await ready(page);
-  await page.evaluate(async () => {
-    const modulePath = "/src/domain/game.ts";
-    const { newGame } = await import(/* @vite-ignore */ modulePath);
-    const g = newGame();
-    g.schemaVersion = 1;
-    delete g.selectedItemId;
-    g.items["item:seed:1"].location = "inventory";
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 6);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 1, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-  });
+  const legacy: any = newGame();
+  legacy.schemaVersion = 1;
+  delete legacy.selectedItemId;
+  legacy.items["item:seed:1"].location = "inventory";
+  await putSavedGame(page, legacy, 1);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("seed-item")).toHaveCount(1);

@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 4174",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test:domain": "node --experimental-strip-types --test src/domain/game.test.ts src/domain/u4.test.ts src/domain/batch-a.test.ts src/domain/batch-b.test.ts src/domain/batch-c.test.ts",
+    "test:domain": "node --experimental-strip-types --test src/domain/game.test.ts src/domain/u4.test.ts src/domain/batch-a.test.ts src/domain/batch-b.test.ts src/domain/batch-c.test.ts src/uiLabels.test.ts src/experience.test.ts",
     "test:e2e": "playwright test",
     "simulate:balance": "node --experimental-strip-types scripts/simulate-batch-a.ts"
   },

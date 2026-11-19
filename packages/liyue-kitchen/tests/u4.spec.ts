@@ -1,4 +1,7 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
+import { newGame } from "../src/domain/game.ts";
+import { growRealFruit, putSavedGame } from "./support/worldFixture";
 
 async function ready(page: Page) {
   await page.goto("/");
@@ -32,41 +35,13 @@ async function dragMouse(page: Page, a: {x:number;y:number}, b: {x:number;y:numb
 
 /** Replay actual U2 domain growth. Save only the matured state as an IndexedDB fixture. */
 async function loadMatureGame(page: Page) {
-  const fruit = await page.evaluate(async () => {
-    const url = "/src/domain/game.ts";
-    const { newGame, applyCommand } = await import(/* @vite-ignore */ url);
-    let g = applyCommand(newGame(), { type: "PLANT_SEED", itemId: "item:seed:1", plotId: "P01" });
-    let index = -1;
-    for (let d = 0; d < 70; d++) {
-      for (let i = 0; i < g.dayCondenseLimit; i++) {
-        g = applyCommand(g, { type: "CONDENSE" });
-        const ball = Object.values(g.looseBalls).at(-1) as {id:string;element:string};
-        g = applyCommand(g, { type: "COLLECT_BALL", ballId: ball.id });
-        g = applyCommand(g, { type: "WATER_PLOT", plotId: "P01", element: ball.element });
-      }
-      const ask = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(ask, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-      index = g.plots.P01.plant.leaves.findIndex(
-        (leaf: {fruit:{stage:string}|null}) => leaf.fruit?.stage === "MatureFruit");
-      if (index >= 0) break;
-    }
-    if (index < 0) throw new Error("Actual growth never reached MatureFruit");
-    const fruit = g.plots.P01.plant.leaves[index].fruit;
-    const mass = fruit.free.reduce((sum:number, v:number) => sum + v, 0) +
-      Object.values(fruit.reaction.products).reduce((sum:number, v) => sum + Number(v), 0);
-    await new Promise<void>((resolve, reject) => {
-      const open = indexedDB.open("liyue-kitchen", 6);
-      open.onerror = () => reject(open.error);
-      open.onsuccess = () => {
-        const db = open.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-    return { index, mass, day: g.day };
-  });
+  const { game, indices } = growRealFruit(newGame(), 1, 70);
+  const index = indices[0];
+  const source = game.plots.P01.plant!.leaves[index].fruit!;
+  const mass = source.free.reduce((a, v) => a + v, 0) +
+    Object.values(source.reaction.products).reduce((a, v) => a + Number(v), 0);
+  const fruit = { index, mass, day: game.day };
+  await putSavedGame(page, game);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
@@ -85,7 +60,7 @@ test("U4 desktop: real pointer processing, material ledger, rejected drop and pe
   const fruitAt = await matureFruitPoint(page, source.index);
   await page.mouse.click(fruitAt.x, fruitAt.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
-  const originalId = await page.getByTestId("item-id").innerText();
+  const originalId = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   const ground = await scenePoint(page, 0.36, 0.69);
   await dragMouse(page, ground, await center(page, "peel-drop"));
   await expect(page.getByTestId("peel-item")).toHaveAttribute("data-item-id", originalId);
@@ -133,7 +108,7 @@ test("U4 desktop: real pointer processing, material ledger, rejected drop and pe
 
 test("U4 simulated touchscreen: harvest, two workbenches, cup and storage", async ({ browser }, info) => {
   test.setTimeout(180_000);
-  const context = await browser.newContext({
+  const context = await browser.newContext({ ...remoteBrowserContextOptions, 
     viewport: { width: 1280, height: 720 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1,
   });
   try {
@@ -173,23 +148,9 @@ test("U4 simulated touchscreen: harvest, two workbenches, cup and storage", asyn
 
 test("U4 browser migration: prior U3 IndexedDB save upgrades without duplicate seed", async ({ page }) => {
   await ready(page);
-  await page.evaluate(async () => {
-    const url = "/src/domain/game.ts";
-    const { newGame } = await import(/* @vite-ignore */ url);
-    const old = newGame();
-    old.schemaVersion = 2;
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 6);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 2, game: old }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-  });
+  const legacy: any = newGame();
+  legacy.schemaVersion = 2;
+  await putSavedGame(page, legacy, 2);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("seed-item")).toHaveCount(1);

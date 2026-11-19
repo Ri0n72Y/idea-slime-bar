@@ -1,0 +1,49 @@
+name: Vercel deployed browser acceptance
+
+# PR triggers work before merge; no workflow_dispatch on a file absent from main.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/liyue-kitchen/**'
+      - '.github/workflows/liyue-vercel-e2e.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vercel-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve and verify the READY Vercel Preview of this exact PR commit
+        id: deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_BRANCH: ${{ github.head_ref }}
+        run: node packages/liyue-kitchen/scripts/verify-vercel-deployment.mjs
+      - run: pnpm --filter @idea-slime-bar/liyue-kitchen exec playwright install --with-deps chromium
+      - name: Exercise deployed production bundle (not local Vite)
+        env:
+          PLAYWRIGHT_BASE_URL: ${{ steps.deployment.outputs.url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liyue-vercel-playwright
+          path: packages/liyue-kitchen/test-results/
+          if-no-files-found: ignore

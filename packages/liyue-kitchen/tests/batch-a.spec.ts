@@ -1,4 +1,7 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
+import { applyCommand, newGame } from "../src/domain/game.ts";
+import { growRealFruit, putSavedGame } from "./support/worldFixture";
 
 async function ready(page: Page) {
   page.setDefaultTimeout(20_000);
@@ -41,39 +44,9 @@ async function dragMouse(page: Page, a: {x:number;y:number}, b: {x:number;y:numb
 
 /** Actual N=8,K=24 commands and U2 Growth/Reaction, no fabricated fruit or energy. */
 async function mature(page: Page, count: number) {
-  const record = await page.evaluate(async (wanted: number) => {
-    const { applyCommand, newGame } = await import(/* @vite-ignore */ "/src/domain/game.ts");
-    let g = applyCommand(newGame(), { type: "PLANT_SEED", itemId: "item:seed:1", plotId: "P01" });
-    let indices: number[] = [];
-    for (let d = 0; d < 130; d++) {
-      for (let n = 0; n < g.dayCondenseLimit; n++) {
-        g = applyCommand(g, { type: "CONDENSE" });
-        const ball = Object.values(g.looseBalls).at(-1) as {id:string;element:string};
-        g = applyCommand(g, { type: "COLLECT_BALL", ballId: ball.id });
-        g = applyCommand(g, { type: "WATER_PLOT", plotId: "P01", element: ball.element });
-      }
-      const requested = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(requested, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-      indices = g.plots.P01.plant.leaves.map(
-        (leaf: {fruit: {stage: string} | null}, i: number) => leaf.fruit?.stage === "MatureFruit" ? i : -1)
-        .filter((i: number) => i >= 0);
-      if (indices.length >= wanted) break;
-    }
-    if (indices.length < wanted)
-      throw new Error(`Only ${indices.length}/${wanted} actual MatureFruit after 130 days`);
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 6);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-    return { indices, day: g.day, energy: g.adeptalEnergy.balance };
-  }, count);
+  const { game, indices } = growRealFruit(newGame(), count, 130);
+  await putSavedGame(page, game);
+  const record = { indices, day: game.day, energy: game.adeptalEnergy.balance };
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
@@ -92,7 +65,7 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   await page.mouse.click(firstPos.x, firstPos.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
-  const fruitId = await page.getByTestId("item-id").innerText();
+  const fruitId = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   await dragMouse(page, await scenePoint(page, 0.36, 0.69), await boxCenter(page, "region-storage"));
   await expect(page.getByTestId("fruit-storage")).toHaveAttribute("data-item-id", fruitId);
   await page.getByTestId("deliver-order").click();
@@ -120,8 +93,8 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   await page.getByTestId("unlock-P02").click();
   await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await dragMouse(page, await boxCenter(page, "seed-item"), await plotPoint(page, 1));
-  await expect(page.getByTestId("selected-plot")).toContainText("P02");
-  await expect(page.getByTestId("plant-stage")).toContainText("Seed");
+  await expect(page.getByTestId("selected-plot")).toContainText("2号地");
+  await expect(page.getByTestId("plant-stage")).toContainText("种子期");
   await expect(page.getByTestId("day")).toContainText(`第 ${originalDay} 天`);
   await expect(page.getByTestId("save-status")).toContainText("已保存");
   await page.screenshot({ path: info.outputPath("batch-a-desktop-1600x900.png") });
@@ -133,7 +106,7 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
 
 test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stream", async ({ browser }, info) => {
   test.setTimeout(240_000);
-  const context = await browser.newContext({
+  const context = await browser.newContext({ ...remoteBrowserContextOptions, 
     viewport: { width: 1280, height: 720 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1,
   });
   try {
@@ -159,8 +132,8 @@ test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stre
     await page.getByTestId("unlock-P02").tap();
     await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
     await dragTouch(await boxCenter(page, "seed-item"), await plotPoint(page, 1));
-    await expect(page.getByTestId("selected-plot")).toContainText("P02");
-    await expect(page.getByTestId("plant-stage")).toContainText("Seed");
+    await expect(page.getByTestId("selected-plot")).toContainText("2号地");
+    await expect(page.getByTestId("plant-stage")).toContainText("种子期");
     await page.screenshot({ path: info.outputPath("batch-a-touch-1280x720.png") });
     await expect(page.getByTestId("save-status")).toContainText("已保存");
     await page.reload();
@@ -172,25 +145,12 @@ test("Batch A deadline: order accepted on due day; confirmed night expires and o
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1600, height: 900 });
   await ready(page);
-  await page.evaluate(async () => {
-    const { applyCommand, newGame } = await import(/* @vite-ignore */ "/src/domain/game.ts");
-    let g = newGame();
-    while (g.day < g.orders["order:first"].dueDay) {
-      const requested = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(requested, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-    }
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("liyue-kitchen", 6);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        const db = req.result;
-        const tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-  });
+  let game = newGame();
+  while (game.day < game.orders["order:first"].dueDay) {
+    game = applyCommand(game, { type: "REQUEST_END_DAY" });
+    game = applyCommand(game, { type: "CONFIRM_END_DAY", expectedDay: game.day });
+  }
+  await putSavedGame(page, game);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();

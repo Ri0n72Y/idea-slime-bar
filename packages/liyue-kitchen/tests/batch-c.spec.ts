@@ -1,4 +1,7 @@
+import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
+import { validateSave } from "../src/domain/save.ts";
+import { getSavedGame, growRealFruit, putSavedGame } from "./support/worldFixture";
 type Point = { x: number; y: number };
 async function at(page: Page, testId: string): Promise<Point> {
   const box = await page.getByTestId(testId).first().boundingBox();
@@ -47,39 +50,13 @@ async function pointTap(page: Page, pos: Point, touch: boolean) {
   else await page.mouse.click(pos.x, pos.y);
 }
 async function progress(page: Page, orderId: string): Promise<number> {
-  const index = await page.evaluate(async (id) => {
-    const { gameStore } = await import(/* @vite-ignore */ "/src/domain/store.ts");
-    const { applyCommand } = await import(/* @vite-ignore */ "/src/domain/game.ts");
-    const { validateSave } = await import(/* @vite-ignore */ "/src/domain/save.ts");
-    let g = structuredClone(gameStore.getSnapshot());
-    let index = -1;
-    for (let d = 0; d < 75; d++) {
-      for (let j = g.dayCondenseUsed; j < g.dayCondenseLimit; j++) {
-        g = applyCommand(g, { type: "CONDENSE" });
-        const ball = Object.values(g.looseBalls).at(-1)!;
-        g = applyCommand(g, { type: "COLLECT_BALL", ballId: ball.id });
-        g = applyCommand(g, { type: "WATER_PLOT", plotId: "P01", element: ball.element });
-      }
-      const requested = applyCommand(g, { type: "REQUEST_END_DAY" });
-      g = applyCommand(requested, { type: "CONFIRM_END_DAY", expectedDay: g.day });
-      index = g.plots.P01.plant!.leaves.findIndex(l => l.fruit?.stage === "MatureFruit");
-      if (index >= 0) break;
-    }
-    if (index < 0 || g.day > g.orders[id].dueDay ||
-        g.orders[id].state !== "accepted") throw Error("Actual fruit failed before visitor deadline");
-    if (!validateSave({ version: 6, game: g })) throw Error("Simulated official commands failed save validation");
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("liyue-kitchen", 6);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => {
-        const db = request.result, tx = db.transaction("game-saves", "readwrite");
-        tx.objectStore("game-saves").put({ version: 6, game: g }, "primary");
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onerror = () => { db.close(); reject(tx.error); };
-      };
-    });
-    return index;
-  }, orderId);
+  const { game, indices } = growRealFruit(await getSavedGame(page), 1, 75);
+  const index = indices[0];
+  if (game.day > game.orders[orderId].dueDay || game.orders[orderId].state !== "accepted")
+    throw Error("Actual fruit failed before visitor deadline");
+  if (!validateSave({ version: 6, game }))
+    throw Error("Actual commands failed save validation");
+  await putSavedGame(page, game);
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
@@ -161,37 +138,32 @@ async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screens
   await press(page, "open-discoveries", touch);
   await expect(page.locator('[data-node-id="V01"]')).toHaveAttribute("data-status", "completed");
   await expect(page.locator('[data-node-id="V02"]')).toHaveAttribute("data-status", "completed");
-  await expect(page.getByTestId("discovery-evidence-V01")).toContainText("visitor:yan:clue");
-  await expect(page.getByTestId("discovery-evidence-V02")).toContainText("visitor:yan:thanks");
+  await expect(page.getByTestId("discovery-evidence-V01")).toContainText("与旅人追寻商路传说");
+  await expect(page.getByTestId("discovery-evidence-V02")).toContainText("真实交单后倾听旅人的谢意");
   await page.screenshot({ path: screenshot, fullPage: true });
   await press(page, "close-discoveries", touch);
   await expect(page.getByTestId("save-status")).toContainText("已保存");
 
-  const before = await page.evaluate(async () => {
-    const { gameStore } = await import(/* @vite-ignore */ "/src/domain/store.ts");
-    const g = gameStore.getSnapshot();
-    return { energy: g.adeptalEnergy, day: g.day, visitor: g.visitor,
-      issued: g.visitor.issuedOrderIds, gift: g.items["item:visitor:yan:woodtag"],
-      order: Object.values(g.orders).find(o => o.visitorId === "visitor:yan"),
-      discoveries: g.discoveries };
-  });
-  expect(before.energy.earnedTotal - before.energy.spentTotal).toBe(before.energy.balance);
-  expect(before.issued).toHaveLength(1);
-  expect(before.order?.state).toBe("completed");
-  expect(before.gift?.kind).toBe("VisitorGift");
+  const before = await getSavedGame(page);
+  const beforeView = { energy: before.adeptalEnergy, day: before.day, visitor: before.visitor,
+    issued: before.visitor.issuedOrderIds, gift: before.items["item:visitor:yan:woodtag"],
+    order: Object.values(before.orders).find(o => o.visitorId === "visitor:yan"),
+    discoveries: before.discoveries };
+  expect(beforeView.energy.earnedTotal - beforeView.energy.spentTotal).toBe(beforeView.energy.balance);
+  expect(beforeView.issued).toHaveLength(1);
+  expect(beforeView.order?.state).toBe("completed");
+  expect(beforeView.gift?.kind).toBe("VisitorGift");
   await page.reload();
   await expect(page.getByTestId("visitor-panel")).toHaveCount(1);
   await expect(page.getByTestId("visitor-choice-thank")).toHaveCount(0);
   await expect(page.getByTestId("region-storage").locator(gift)).toHaveCount(1);
-  const restored = await page.evaluate(async () => {
-    const { gameStore } = await import(/* @vite-ignore */ "/src/domain/store.ts");
-    const g = gameStore.getSnapshot();
-    return { energy: g.adeptalEnergy, day: g.day, visitor: g.visitor,
-      issued: g.visitor.issuedOrderIds, gift: g.items["item:visitor:yan:woodtag"],
-      order: Object.values(g.orders).find(o => o.visitorId === "visitor:yan"),
-      discoveries: g.discoveries };
-  });
-  expect(restored).toEqual(before);
+  const restoredGame = await getSavedGame(page);
+  const restored = { energy: restoredGame.adeptalEnergy, day: restoredGame.day,
+    visitor: restoredGame.visitor, issued: restoredGame.visitor.issuedOrderIds,
+    gift: restoredGame.items["item:visitor:yan:woodtag"],
+    order: Object.values(restoredGame.orders).find(o => o.visitorId === "visitor:yan"),
+    discoveries: restoredGame.discoveries };
+  expect(restored).toEqual(beforeView);
 }
 test("U9 desktop 1600x900: visitor dialogue, gift, real cup delivery and saved clues",
   async ({ page }, info) => {
@@ -202,7 +174,7 @@ test("U9 desktop 1600x900: visitor dialogue, gift, real cup delivery and saved c
 test("U9 simulated touch 1280x720: same real visitor and commission path",
   async ({ browser }, info) => {
     test.setTimeout(240_000);
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 },
+    const ctx = await browser.newContext({ ...remoteBrowserContextOptions,  viewport: { width: 1280, height: 720 },
       hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
     try { await scenario(await ctx.newPage(), ctx, true, info.outputPath("visitor-touch.png")); }
     finally { await ctx.close(); }
