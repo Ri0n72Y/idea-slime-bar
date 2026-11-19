@@ -1,0 +1,13 @@
+.save-manager-backdrop { z-index: 90; }
+.save-manager-pane { width: min(560px, 90%); max-height: 90%; }
+.save-manager-heading { display:flex; justify-content:space-between; align-items:center; gap:1em; }
+.save-manager-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.7em; margin:1em 0; }
+.save-manager-pane p { line-height:1.5; overflow-wrap:anywhere; }
+.save-manager-actions .file-upload { display:inline-flex; align-items:center; cursor:pointer; border:1px solid #749886; border-radius:4px; background:#365445; color:#e8f2dd; padding:.45em .75em; }
+.save-manager-actions .file-upload.disabled { cursor:not-allowed; opacity:.55; }
+.save-manager-actions input[type="file"] { display:none; }
+.save-confirmation { padding:1em; border:1px solid #8b916e; background:#273b32; }
+.save-confirmation h3 { margin:0 0 .5em; color:#e6d8ac; }
+.save-danger { color:#f6b7a0; }
+.save-feedback { color:#d7ead9; }
+@media (max-width:800px) { .save-manager-pane { width:94%; } }
