@@ -1,3 +1,4 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { expect, test } from "@playwright/test";
 import { newGame, applyCommand, type Command, type GameState } from "../src/domain/game.ts";
 import { growRealFruit, putSavedGame } from "./support/worldFixture";
@@ -25,6 +26,7 @@ test("first play offers skippable guidance for sowing, condensing, collecting an
   await expect(page.getByTestId("next-step-text")).toHaveCount(0);
   await page.getByTestId("guide-toggle").click();
   await expect(page.getByTestId("next-step-text")).toContainText("播种");
+  await enterGarden(page);
   const start = await page.getByTestId("seed-item").boundingBox();
   if (!start) throw Error("Seed missing");
   const dest = await point(page, .5, .5);

@@ -1,10 +1,11 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 
 async function start(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await enterGarden(page);
   await expect(page.getByTestId("save-status")).toContainText("已保存");
 }
 async function center(page: Page) {

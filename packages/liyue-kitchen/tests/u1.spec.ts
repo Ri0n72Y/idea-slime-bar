@@ -1,17 +1,19 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 
 const regions = [
-  "header", "visitors", "crystal", "orders", "exploration",
+  "header", "visitors", "orders", "exploration",
   "peeling", "inventory", "storage", "juicing", "feedback",
 ];
 
 async function ready(page: Page) {
   await page.goto("/");
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await expect(page.getByTestId("workshop-scene")).toBeVisible();
   for (const name of regions) await expect(page.getByTestId(`region-${name}`)).toBeVisible();
   await expect(page.getByTestId("day")).toContainText("第 1 天");
   await expect(page.getByTestId("energy")).toContainText("0");
+  await enterGarden(page);
   await expect(page.getByTestId("condense")).toBeEnabled();
   await expect(page.getByTestId("end-day")).toBeEnabled();
   await expect(page.getByTestId("seed-item")).toHaveCount(1);

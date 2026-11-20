@@ -1,3 +1,4 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { getSavedGame, growRealFruit, putSavedGame } from "./support/worldFixture";
@@ -61,10 +62,12 @@ async function mature(page: Page):Promise<number[]> {
 async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string){
   page.setDefaultTimeout(20_000);
   await page.goto("/");
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await enterGarden(page,touch);
   await drag(page,ctx,await center(page,"seed-item"),await scene(page,"center"),touch);
   await expect(page.getByTestId("seed-item")).toHaveCount(0);
+  await backWorkshop(page,touch);
   await press(page,"accept-order",touch);
+  await enterGarden(page,touch);
   for(let i=0;i<3;i++)await press(page,"condense",touch);
   for(let i=0;i<3;i++)await tap(page,await scene(page,"ball",i),touch);
   const water=page.locator('[data-testid^="water-"]');
@@ -89,6 +92,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   await expect(page.getByTestId("discovery-evidence-A12")).toContainText("种出第一枚成熟水瓜");
   await press(page,"close-discoveries",touch);
 
+  await enterGarden(page,touch);
   await tap(page,await scene(page,"fruit",indices[0]),touch);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
   await drag(page,ctx,await scene(page,"center").then(async()=> {
@@ -96,6 +100,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
     if(!b)throw Error("canvas");return{x:b.x+b.width*.36,y:b.y+b.height*.69};
   }),await center(page,"region-storage"),touch);
   await expect(page.getByTestId("fruit-storage")).toHaveCount(1);
+  await backWorkshop(page,touch);
   await press(page,"deliver-order",touch);
   await expect(page.getByTestId("order-requirement")).toContainText("杯装水瓜汁");
   await press(page,"accept-order",touch);
@@ -115,12 +120,17 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   expect(after.limit).toBe(before.limit);
   expect(after.energy.earnedTotal-after.energy.spentTotal).toBe(after.energy.balance);
 
+  await enterGarden(page,touch);
   await tap(page,await scene(page,"fruit",indices[1]),touch);
   const b=await page.getByTestId("crystal-canvas").boundingBox();
   if(!b)throw Error("canvas");
   const ground={x:b.x+b.width*.36,y:b.y+b.height*.69};
-  await drag(page,ctx,ground,await center(page,"peel-drop"),touch);
+  await drag(page,ctx,ground,await center(page,"region-inventory"),touch);
+  await backWorkshop(page,touch);
+  await drag(page,ctx,await center(page,"fruit-inventory"),await center(page,"peel-drop"),touch);
   await press(page,"peel-action",touch);
+  await expect(page.getByTestId("feedback")).toContainText("剥壳完成");
+  await expect(page.getByTestId("peel-item")).toContainText("果肉");
   await drag(page,ctx,await center(page,"peel-item"),await center(page,"juice-drop"),touch);
   await press(page,"juice-action",touch);
   await press(page,"cup-action",touch);
@@ -128,6 +138,7 @@ async function scenario(page:Page,ctx:BrowserContext,touch:boolean,proof:string)
   await press(page,"deliver-order",touch);
   await expect(page.getByTestId("order-history").first()).toContainText("已交付");
 
+  await enterGarden(page,touch);
   await press(page,"unlock-P02",touch);
   await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await drag(page,ctx,await center(page,"seed-item"),await scene(page,"plot",1),touch);

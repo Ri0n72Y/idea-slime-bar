@@ -1,3 +1,4 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 import { newGame } from "../src/domain/game.ts";
@@ -6,7 +7,7 @@ import { growRealFruit, putSavedGame } from "./support/worldFixture";
 async function ready(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await expect(page.getByTestId("workshop-scene")).toBeVisible();
   await expect(page.getByTestId("save-status")).toContainText("已保存");
 }
 async function center(page: Page, testId: string) {
@@ -57,12 +58,16 @@ test("U4 desktop: real pointer processing, material ledger, rejected drop and pe
   await expect(page.getByTestId("juice-action")).toBeDisabled();
   await expect(page.getByTestId("cup-action")).toBeDisabled();
   const source = await loadMatureGame(page);
+  await enterGarden(page);
   const fruitAt = await matureFruitPoint(page, source.index);
   await page.mouse.click(fruitAt.x, fruitAt.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
   const originalId = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   const ground = await scenePoint(page, 0.36, 0.69);
-  await dragMouse(page, ground, await center(page, "peel-drop"));
+  await dragMouse(page, ground, await center(page, "region-inventory"));
+  await expect(page.getByTestId("fruit-inventory")).toHaveAttribute("data-item-id", originalId);
+  await backWorkshop(page);
+  await dragMouse(page, await center(page, "fruit-inventory"), await center(page, "peel-drop"));
   await expect(page.getByTestId("peel-item")).toHaveAttribute("data-item-id", originalId);
   await expect(page.getByTestId("peel-action")).toBeEnabled();
   await page.getByTestId("peel-action").click();
@@ -115,6 +120,7 @@ test("U4 simulated touchscreen: harvest, two workbenches, cup and storage", asyn
     const page = await context.newPage();
     await ready(page);
     const source = await loadMatureGame(page);
+    await enterGarden(page, true);
     const at = await matureFruitPoint(page, source.index);
     await page.touchscreen.tap(at.x, at.y);
     await expect(page.getByTestId("feedback")).toContainText("已采摘");
@@ -128,9 +134,14 @@ test("U4 simulated touchscreen: harvest, two workbenches, cup and storage", asyn
       await expect(page.getByTestId("fruit-drag-ghost")).toBeVisible();
       await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     };
-    await dragTouch(await scenePoint(page, 0.36, 0.69), await center(page, "peel-drop"));
+    await dragTouch(await scenePoint(page, 0.36, 0.69), await center(page, "region-inventory"));
+    await expect(page.getByTestId("fruit-inventory")).toHaveCount(1);
+    await backWorkshop(page, true);
+    await dragTouch(await center(page, "fruit-inventory"), await center(page, "peel-drop"));
     await expect(page.getByTestId("peel-action")).toBeEnabled();
     await page.getByTestId("peel-action").tap();
+    await expect(page.getByTestId("feedback")).toContainText("剥壳完成");
+    await expect(page.getByTestId("peel-item")).toContainText("果肉");
     await dragTouch(await center(page, "peel-item"), await center(page, "juice-drop"));
     await page.getByTestId("juice-action").tap();
     await page.getByTestId("cup-action").tap();
