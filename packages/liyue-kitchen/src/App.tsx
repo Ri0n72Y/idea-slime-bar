@@ -17,6 +17,7 @@ import { VISITOR_ID, visitorChoices, visitorPresent } from "./domain/visitors";
 import { growthStageLabel, itemLocationLabel, playerEventText, plotLabel } from "./uiLabels";
 import { eligibleOrderItems, itemTitle, nextActionHint, orderItemTitle, orderSelectionWarning } from "./experience";
 import "./experience.css";
+import { SaveManager } from "./SaveManager";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -55,6 +56,16 @@ export function App() {
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [saveManagerOpen, setSaveManagerOpen] = useState(false);
+  const [worldEpoch, setWorldEpoch] = useState(0);
+  const worldChanged = () => {
+    dragRef.current = null;
+    setDrag(null);
+    setMapOpen(false);
+    setReportDismissed(null);
+    setWorldEpoch(epoch => epoch + 1);
+    setSaveManagerOpen(false);
+  };
   const [showGuidance, setShowGuidance] = useState(() => {
     try { return window.localStorage.getItem("liyue-kitchen-guidance") !== "hidden"; }
     catch { return true; }
@@ -211,6 +222,7 @@ export function App() {
             收集袋 · 全部收集
           </button>
         )}
+        <button type="button" className="action" data-testid="save-open" onClick={() => setSaveManagerOpen(true)}>存档</button>
         <button type="button" className="action" data-testid="end-day" disabled={state.phase !== "DAY_WORK"}
           onClick={() => gameStore.dispatch({ type: "REQUEST_END_DAY" })}>结束今日</button>
       </header>
@@ -260,7 +272,7 @@ export function App() {
             <h2>洞天水晶球</h2>
             <span>{Object.keys(state.looseBalls).length} 枚元素球待收集 · 点击收集</span>
           </div>
-          <CrystalScene state={state} hoverPlotId={drag?.target?.scene.plotId ?? null}
+          <CrystalScene key={worldEpoch} state={state} hoverPlotId={drag?.target?.scene.plotId ?? null}
             onChoose={choosePlot} onCollect={collectBall} onHarvest={harvestFruit}
             onSelectItem={selectItem} onStartGroundDrag={startGroundDrag}
             onRegisterDropTarget={registerDropTarget} />
@@ -570,6 +582,7 @@ export function App() {
           </div>
         </div>
       )}
+      {saveManagerOpen && <SaveManager onClose={() => setSaveManagerOpen(false)} onWorldChanged={worldChanged} />}
       {drag && <div className={`drag-ghost ${drag.target?.zone || drag.target?.scene.ground ? "valid-target" : ""}`}
         data-testid={drag.kind === "Seed" ? "seed-drag-ghost" : "fruit-drag-ghost"}
         style={{ left: drag.x, top: drag.y }} aria-hidden="true">{drag.kind === "Seed" ? "🌰" : drag.kind === "Shell" ? "🐚" : drag.kind === "VisitorGift" ? "🎴" : "🍈"}</div>}

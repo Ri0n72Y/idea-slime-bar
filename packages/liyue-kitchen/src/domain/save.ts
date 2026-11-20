@@ -74,7 +74,8 @@ export function validateSave(value: unknown): GameState | null {
       !Number.isSafeInteger(g.nextObjectSeq) || (g.nextObjectSeq as number) < 2 ||
       !Number.isSafeInteger(g.dayCondenseLimit) || !Number.isSafeInteger(g.dayCondenseUsed) ||
       (g.dayCondenseUsed as number) > (g.dayCondenseLimit as number) ||
-      !Number.isSafeInteger(g.randomState) || !isVector(g.heldElements) ||
+      !Number.isSafeInteger(g.randomState) || (g.randomState as number) < 1 ||
+      (g.randomState as number) > 0xffffffff || !isVector(g.heldElements) ||
       !isObject(g.plots) || !isObject(g.items) || !isObject(g.looseBalls) ||
       !Array.isArray(g.eventLog) || (g.phase !== "DAY_WORK" && g.phase !== "DAY_CONFIRM"))
     return null;
@@ -348,7 +349,11 @@ export async function loadGame(): Promise<GameState | null> {
   if (record.version !== SAVE_VERSION) await saveGame(game);
   return game;
 }
+/** Share the exact IndexedDB save envelope with downloadable backups. */
+export function saveEnvelope(game: GameState): SaveRecord {
+  return { version: SAVE_VERSION, game: structuredClone(game) };
+}
 export async function saveGame(game: GameState): Promise<void> {
-  const record: SaveRecord = { version: SAVE_VERSION, game: structuredClone(game) };
+  const record = saveEnvelope(game);
   await transact<IDBValidKey>("readwrite", store => store.put(record, SAVE_KEY));
 }
