@@ -2,7 +2,7 @@
 
 > Art Lead 设计稿，2026-11-20。**候选尺寸，未做当前 Production 浏览器视觉验收；非 Coder 实现完成证明。**
 >
-> 约束来源：[用户确认的工坊优先双场景](../../mvp/liyue-kitchen/10-workshop-first-layout.md)、[工程 #69](https://github.com/Ri0n72Y/idea-slime-bar/issues/69)、[美术工作 #62](https://github.com/Ri0n72Y/idea-slime-bar/issues/62)。本轮新要求：**把视觉重心适当转回种植培养，缩小 NPC 窗口，扩大可识别的球形水晶球与实时植物缩略图，缩减引导区。保留工坊优先＋独立园地，不引入租金经营压力。**
+> 约束来源：[用户确认的工坊优先双场景](https://github.com/Ri0n72Y/idea-slime-bar/blob/design/liyue-daily-growth-workshop-1d/mvp/liyue-kitchen/10-workshop-first-layout.md)、[工程 #69](https://github.com/Ri0n72Y/idea-slime-bar/issues/69)、[美术工作 #62](https://github.com/Ri0n72Y/idea-slime-bar/issues/62)。本轮新要求：**把视觉重心适当转回种植培养，缩小 NPC 窗口，扩大可识别的球形水晶球与实时植物缩略图，缩减引导区。保留工坊优先＋独立园地，不引入租金经营压力。**
 
 ## 1. 当前主分区（以 main 代码为准）
 
@@ -104,7 +104,7 @@
 
 ## 8. 参考与后续
 
-- [设计基线：工坊优先布局](../../mvp/liyue-kitchen/10-workshop-first-layout.md)
+- [设计基线：工坊优先布局](https://github.com/Ri0n72Y/idea-slime-bar/blob/design/liyue-daily-growth-workshop-1d/mvp/liyue-kitchen/10-workshop-first-layout.md)
 - [完整的 UI 策划与制作接口 #69](https://github.com/Ri0n72Y/idea-slime-bar/issues/69)
 - [现有美术及 M03 讨论 #62](https://github.com/Ri0n72Y/idea-slime-bar/issues/62)
 - [Probably Stolen 实机画面（布局参考）](https://store.steampowered.com/app/4348910/Probably_Stolen__Cyberpunk_Pawnshop_Simulator/)
