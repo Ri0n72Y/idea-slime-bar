@@ -11,8 +11,8 @@ on:
 permissions:
   contents: read
 
-# Keep the existing "u1" check identity for branch protection; visual and
-# interaction verification now runs against the exact Vercel deployment.
+# Keep the existing "u1" check identity for branch protection.
+# Vercel deployment identity and later player UI acceptance are handled separately.
 jobs:
   u1:
     runs-on: ubuntu-latest

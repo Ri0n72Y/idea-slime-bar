@@ -1,12 +1,39 @@
-# Vercel 交互验收
+# Vercel 部署核验与浏览器验收
 
-此验收在 PR 阶段自动触发，不依赖合并到 main。GitHub 代码工作流保留类型、领域测试、数值重放和构建；独立 `Vercel deployed browser acceptance` 工作流针对 **同一 PR HEAD 的真实 Preview 部署**运行浏览器交互。
+## 授权与职责
 
-- Vercel Project：`prj_VzGBScFrTWp4UZA8IKqzX8Yjot8L`；项目与团队 ID 是公共标识，固定在仓库验收脚本中。必须由 Vercel API 验证 `projectId`、`meta.githubCommitSha`、`meta.githubCommitRef`、`readyState=READY`，不能使用用户手填 URL 或旧 Preview。
-- 需要由仓库管理员安全配置 `VERCEL_TOKEN` GitHub Actions Secret，且只能读取本 Vercel Project 的部署信息；无权限或未配置会明确失败，不能用本地测试冒充 Preview PASS。对来自 Fork 的外部 PR，GitHub 默认不提供 Secrets，因此远端验收会失败闭锁。涉及不可信代码时应在受保护环境审批后运行。
-- Preview 若有 Vercel Authentication，配置 `VERCEL_AUTOMATION_BYPASS_SECRET` Actions Secret（由管理员在 Vercel 创建）；不要把任何令牌写入源码、Issue、PR、工件或日志。登录页不得算作游戏通过。
-- 浏览器测试通过独立测试进程运行真实领域命令构造可复现世界，再写入**隔离的 Playwright 浏览器 Profile**；Vercel 的正式构建没有测试命令入口、测试服务路由或 `/src` 动态导入。显式创建的触摸 BrowserContext 也继承远端 URL 和安全访问请求头。开启 bypass 时禁用可能记录敏感请求头的 Playwright trace 工件。UI 操作、存档恢复、材料消耗均由线上编译资源执行，保持原有游戏规则。
-- `PLAYWRIGHT_BASE_URL=https://<verified-deployment>.vercel.app/ pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e` 会关闭本地 webServer。自动工作流通过 Vercel API 获取并注入已验明的 URL。
-- 验收证据须同时包含：HEAD SHA、Vercel 部署 ID/URL/READY、桌面 1600×900、模拟触摸 1280×720 的实际浏览器交互结果及截图。生产版的用户体验、真实手机和最终视觉验收交给 Experience QA。
+项目通过已连接的 **Vercel 插件**读取部署信息；GitHub 与 Vercel 的现有集成负责构建及部署 Preview/Production。**不使用 `VERCEL_TOKEN` GitHub Actions Secret，也不把插件授权复制到 CI。**
 
-禁止把 Dev Vite 的旧 Playwright PASS 或单纯 Vercel READY 当作当前 Preview 的完整交互验收。
+- **Coder**：在 PR 中提交可复现的领域测试、类型检查、构建与 Playwright 技术证据。
+- **Independent Reviewer**：核对源码、实际 PR HEAD、领域合同及技术 CI，不替代 UI/玩家体验验收。
+- **Experience QA**：待 D/E/F 和正式美术集成达到统一验收节点、Lead 明确派发后，执行实际 Vercel 浏览器交互及视觉验收；物理手机另行记录。
+
+## 通过 Vercel 插件核对部署身份
+
+1. 从 GitHub 确定目标 PR 的 **HEAD SHA、分支**，以及对应的 Preview 或 Production 环境；不能凭旧 Preview URL 推断部署版本。
+2. 通过已连接的 Vercel 插件，按项目 `idea-slime-bar`（Project ID：`prj_VzGBScFrTWp4UZA8IKqzX8Yjot8L`）、分支及提交查找部署；必要时读取部署详情。
+3. 对照 **部署 ID、项目、Git Commit SHA、Git Branch、环境、URL、READY 状态**。PR 核验应选择 Preview，生产核验应选择 Production；提交不符、未就绪或认证不可用均明确记录为未核验，不算通过。
+4. 在 PR 或 QA 证据中记录准确 HEAD、部署 ID、URL、状态和核对结果。插件读到 `READY` 只证明部署状态与身份，不构成浏览器交互通过。
+
+## Playwright 与实际交互
+
+保留原有 Playwright 用例及配置。开发时可在本地 Vite 上运行：
+
+```sh
+pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e
+```
+
+当实际浏览器环境有权访问经插件核实的部署时，可对该部署运行用例：
+
+```sh
+PLAYWRIGHT_BASE_URL=https://<verified-deployment>.vercel.app/ pnpm --filter @idea-slime-bar/liyue-kitchen test:e2e
+```
+
+远端 URL 必须来自本轮身份核对；受保护 Preview 的登录页不能算作游戏验收结果。不能把本地 Vite 测试或单纯 `READY` 记作线上交互 PASS。完整 QA 需核对实际鼠标/触摸操作、领域状态、成功/拒绝反馈与屏幕证据，包括桌面 1600×900 及模拟触摸 1280×720，另行记录未验证项。
+
+## 保留的 GitHub 技术 CI
+
+- `.github/workflows/liyue-u1-ci.yml`：类型检查、领域测试、现有数值重放、构建。
+- `.github/workflows/web-ci.yml`：Web 类型检查和构建。
+
+上述工作流不依赖 Vercel 插件权限。Vercel 插件读取部署与定期统一体验 QA 分开实施；仓库不再运行原来的 GitHub Vercel 自动验收工作流。
