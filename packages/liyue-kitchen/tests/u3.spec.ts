@@ -1,3 +1,4 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 import { newGame } from "../src/domain/game.ts";
@@ -7,7 +8,7 @@ async function ready(page: Page) {
   await page.goto("/");
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   await expect(page.getByTestId("save-status")).toContainText("已保存");
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await enterGarden(page);
 }
 
 /** Uses real U2 commands and nightly Growth to produce a harvest-ready saved world. */
@@ -25,6 +26,7 @@ async function matureWorld(page: Page) {
   await expect(page.getByTestId("day")).toContainText(`第 ${result.maturity} 天`);
   const report = page.getByTestId("night-report");
   if (await report.count()) await page.getByTestId("close-report").click();
+  await enterGarden(page);
   return result;
 }
 
@@ -100,8 +102,10 @@ test("U3 desktop: actual mature harvest, no duplication, true ground/inventory/s
   await page.reload();
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
   if (await page.getByTestId("night-report").count()) await page.getByTestId("close-report").click();
-  // The preceding item tap intentionally deselected it; select the persisted ground object again.
-  await page.mouse.click(center.x, center.y);
+  // Re-enter the garden, then use the new canvas coordinates for the persisted ground object.
+  await enterGarden(page);
+  const persisted = await scenePoint(page, 0.5, 0.5);
+  await page.mouse.click(persisted.x, persisted.y);
   await expect(page.getByTestId("selected-item")).toHaveAttribute("data-item-id", id);
   await expect(page.getByTestId("item-mass")).toContainText(source.mass.toFixed(3));
 });

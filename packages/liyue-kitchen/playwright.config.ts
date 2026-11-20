@@ -22,5 +22,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
-  outputDir: "./test-results",
+  // Concurrent Playwright invocations must never delete one another's traces.
+  // Worker shards within one invocation share this run directory through config.
+  outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR ||
+    `./test-results/run-${process.pid}-${Date.now()}`,
 });

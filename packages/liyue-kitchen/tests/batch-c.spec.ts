@@ -1,3 +1,4 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page, type BrowserContext } from "@playwright/test";
 import { validateSave } from "../src/domain/save.ts";
@@ -65,9 +66,10 @@ async function progress(page: Page, orderId: string): Promise<number> {
 async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screenshot: string) {
   page.setDefaultTimeout(25_000);
   await page.goto("/");
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await expect(page.getByTestId("workshop-scene")).toBeVisible();
   await expect(page.getByTestId("visitor-absent")).toHaveCount(1);
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
+  await enterGarden(page,touch);
   await drag(page, ctx, await at(page, "seed-item"), await scene(page, "center"), touch);
   await expect(page.getByTestId("seed-item")).toHaveCount(0);
   for (let i = 0; i < 4; i++) await press(page, "condense", touch);
@@ -79,6 +81,7 @@ async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screens
   await press(page, "end-day", touch);
   await press(page, "confirm-day", touch);
   await press(page, "close-report", touch);
+  await backWorkshop(page,touch);
   await expect(page.getByTestId("visitor-panel")).toHaveAttribute("data-visitor-id", "visitor:yan");
   await expect(page.getByTestId("visitor-name")).toContainText("阿砚");
   await press(page, "visitor-choice-greet", touch);
@@ -96,6 +99,7 @@ async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screens
   await expect(page.getByTestId("region-storage").locator(gift)).toHaveCount(1);
 
   await press(page, "visitor-choice-request_order", touch);
+  await expect(page.getByTestId("feedback")).toContainText("访客发布");
   const guestOrder = page.locator('[data-testid="active-order"][data-visitor-id="visitor:yan"]');
   const boardOrder = page.locator('[data-testid="active-order"][data-visitor-id="board"]');
   await expect(guestOrder).toHaveCount(1);
@@ -110,12 +114,15 @@ async function scenario(page: Page, ctx: BrowserContext, touch: boolean, screens
   // Only the repeated multi-day *actions* run via production commands; no fake
   // fruit, visitor events, item IDs or energy are inserted into the world.
   const fruitIndex = await progress(page, orderId);
+  await enterGarden(page,touch);
   await pointTap(page, await scene(page, "fruit", fruitIndex), touch);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
   const b = await page.getByTestId("crystal-canvas").boundingBox();
   if (!b) throw Error("Canvas absent");
   const floor = { x: b.x + b.width * .36, y: b.y + b.height * .69 };
-  await drag(page, ctx, floor, await at(page, "peel-drop"), touch);
+  await drag(page, ctx, floor, await at(page, "region-inventory"), touch);
+  await backWorkshop(page,touch);
+  await drag(page, ctx, await at(page, "fruit-inventory"), await at(page, "peel-drop"), touch);
   await press(page, "peel-action", touch);
   await drag(page, ctx, await at(page, "peel-item"), await at(page, "juice-drop"), touch);
   await press(page, "juice-action", touch);

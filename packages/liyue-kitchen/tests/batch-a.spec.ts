@@ -1,3 +1,4 @@
+import { enterGarden, backWorkshop } from "./support/sceneNavigation";
 import { remoteBrowserContextOptions } from "./support/browserContextOptions";
 import { expect, test, type Page } from "@playwright/test";
 import { applyCommand, newGame } from "../src/domain/game.ts";
@@ -7,7 +8,7 @@ async function ready(page: Page) {
   page.setDefaultTimeout(20_000);
   await page.goto("/");
   await expect(page.getByTestId("loading-save")).toHaveCount(0);
-  await expect(page.getByTestId("crystal-canvas")).toHaveCount(1);
+  await expect(page.getByTestId("workshop-scene")).toBeVisible();
   await expect(page.getByTestId("save-status")).toContainText("已保存");
 }
 async function boxCenter(page: Page, id: string) {
@@ -61,6 +62,7 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   const originalDay = record.day;
   await expect(page.getByTestId("order-requirement")).toContainText("完整水瓜");
   await page.getByTestId("accept-order").click();
+  await enterGarden(page);
   const firstPos = await fruitAt(page, record.indices[0]);
   await page.mouse.click(firstPos.x, firstPos.y);
   await expect(page.getByTestId("feedback")).toContainText("已采摘");
@@ -68,17 +70,21 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   const fruitId = (await page.getByTestId("selected-item").getAttribute("data-item-id"))!;
   await dragMouse(page, await scenePoint(page, 0.36, 0.69), await boxCenter(page, "region-storage"));
   await expect(page.getByTestId("fruit-storage")).toHaveAttribute("data-item-id", fruitId);
+  await backWorkshop(page);
   await page.getByTestId("deliver-order").click();
   await expect(page.getByTestId("order-requirement")).toContainText("杯装水瓜汁");
   await expect(page.getByTestId("order-history").first()).toContainText("已交付");
   const paidBalance = await page.getByTestId("energy").innerText();
   expect(paidBalance).toMatch(/\d+/);
   await page.getByTestId("accept-order").click();
+  await enterGarden(page);
 
   const pos = await fruitAt(page, record.indices[1]);
   await page.mouse.click(pos.x, pos.y);
   await expect(page.getByTestId("seed-item")).toHaveCount(2);
-  await dragMouse(page, await scenePoint(page, 0.36, 0.69), await boxCenter(page, "peel-drop"));
+  await dragMouse(page, await scenePoint(page, 0.36, 0.69), await boxCenter(page, "region-inventory"));
+  await backWorkshop(page);
+  await dragMouse(page, await boxCenter(page, "fruit-inventory"), await boxCenter(page, "peel-drop"));
   await page.getByTestId("peel-action").click();
   await dragMouse(page, await boxCenter(page, "peel-item"), await boxCenter(page, "juice-drop"));
   await page.getByTestId("juice-action").click();
@@ -90,6 +96,7 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   await expect(page.getByTestId("order-history").first()).toContainText("已交付");
   await expect(page.getByTestId("order-requirement")).toContainText("完整水瓜");
 
+  await enterGarden(page);
   await page.getByTestId("unlock-P02").click();
   await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await dragMouse(page, await boxCenter(page, "seed-item"), await plotPoint(page, 1));
@@ -100,8 +107,9 @@ test("Batch A desktop: two real fruit commissions, provenance seed and P02 plant
   await page.screenshot({ path: info.outputPath("batch-a-desktop-1600x900.png") });
   await page.reload();
   await expect(page.getByTestId("seed-item")).toHaveCount(1);
-  await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   await expect(page.getByTestId("order-history")).toHaveCount(2);
+  await enterGarden(page);
+  await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
 });
 
 test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stream", async ({ browser }, info) => {
@@ -114,6 +122,7 @@ test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stre
     await ready(page);
     const data = await mature(page, 1);
     await page.getByTestId("accept-order").tap();
+    await enterGarden(page, true);
     const at = await fruitAt(page, data.indices[0]);
     await page.touchscreen.tap(at.x, at.y);
     await expect(page.getByTestId("feedback")).toContainText("已采摘");
@@ -127,8 +136,10 @@ test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stre
     };
     await dragTouch(await scenePoint(page, 0.36, 0.69), await boxCenter(page, "region-storage"));
     await expect(page.getByTestId("fruit-storage")).toHaveCount(1);
+    await backWorkshop(page, true);
     await page.getByTestId("deliver-order").tap();
     await expect(page.getByTestId("order-requirement")).toContainText("杯装水瓜汁");
+    await enterGarden(page, true);
     await page.getByTestId("unlock-P02").tap();
     await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
     await dragTouch(await boxCenter(page, "seed-item"), await plotPoint(page, 1));
@@ -137,6 +148,7 @@ test("Batch A touch: harvest, deliver, unlock and plant with actual pointer stre
     await page.screenshot({ path: info.outputPath("batch-a-touch-1280x720.png") });
     await expect(page.getByTestId("save-status")).toContainText("已保存");
     await page.reload();
+    await enterGarden(page, true);
     await expect(page.getByTestId("unlock-P02")).toHaveCount(0);
   } finally { await context.close(); }
 });

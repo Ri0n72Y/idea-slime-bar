@@ -4,7 +4,7 @@ import "./u4.css";
 import "./batch-a.css";
 import "./batch-b.css";
 import "./batch-c.css";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
 import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
@@ -18,6 +18,7 @@ import { growthStageLabel, itemLocationLabel, playerEventText, plotLabel } from 
 import { eligibleOrderItems, itemTitle, nextActionHint, orderItemTitle, orderSelectionWarning } from "./experience";
 import "./experience.css";
 import { SaveManager } from "./SaveManager";
+import "./workshop.css";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -54,14 +55,50 @@ export function App() {
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
+  // Real touch and CDP drag gestures may suppress the synthesized click.
+  // A tap activates on pointer-up and ignores its subsequent synthetic click.
+  const buttonTouchStart = useRef<{ key: string; id: number; x: number; y: number } | null>(null);
+  const lastButtonTouch = useRef<{ at: number; x: number; y: number } | null>(null);
+  const tapAction = (key: string, action: () => void) => ({
+    onPointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === "touch")
+        buttonTouchStart.current = { key, id: e.pointerId, x: e.clientX, y: e.clientY };
+    },
+    onPointerUp: (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType !== "touch") return;
+      const start = buttonTouchStart.current;
+      buttonTouchStart.current = null;
+      if (!start || start.key !== key || start.id !== e.pointerId ||
+        Math.hypot(e.clientX - start.x, e.clientY - start.y) > 12) return;
+      lastButtonTouch.current = { at: Date.now(), x: e.clientX, y: e.clientY };
+      action();
+    },
+    onPointerCancel: (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType === "touch") buttonTouchStart.current = null;
+    },
+    onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
+      if (e.detail > 0 && lastButtonTouch.current &&
+        Date.now() - lastButtonTouch.current.at < 1000 &&
+        Math.hypot(e.clientX - lastButtonTouch.current.x,
+          e.clientY - lastButtonTouch.current.y) < 16) return;
+      action();
+    },
+  });
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
+  const [scene, setScene] = useState<"workshop" | "garden">("workshop");
+  const navigateScene = (destination: "workshop" | "garden") => {
+    dragRef.current = null;
+    setDrag(null);
+    setScene(destination);
+  };
   const [saveManagerOpen, setSaveManagerOpen] = useState(false);
   const [worldEpoch, setWorldEpoch] = useState(0);
   const worldChanged = () => {
     dragRef.current = null;
     setDrag(null);
     setMapOpen(false);
+    setScene("workshop");
     setReportDismissed(null);
     setWorldEpoch(epoch => epoch + 1);
     setSaveManagerOpen(false);
@@ -201,34 +238,8 @@ export function App() {
   const visiting = visitorPresent(state);
   const choices = visitorChoices(state);
   const showReport = !!report && report.toDay !== reportDismissed;
-  return (
-    <div className="game-shell">
-      <header className="header-area region" data-testid="region-header">
-        <div className="brand">
-          <span className="brand-kicker">LIYUE · KITCHEN</span>
-          <h1>璃月厨房 <small>还得自己种</small></h1>
-        </div>
-        <div className="header-stats">
-          <span className="pill" data-testid="day">第 {state.day} 天</span>
-          <span className="pill" data-testid="energy">洞天仙力 {state.adeptalEnergy.balance}</span>
-          <span className="pill" data-testid="quota">凝聚 {remainingCondenses(state)}/{state.dayCondenseLimit}</span>
-        </div>
-        <button type="button" className="action" data-testid="condense" disabled={state.phase !== "DAY_WORK" || remainingCondenses(state) <= 0}
-          onClick={() => gameStore.dispatch({ type: "CONDENSE" })}>凝聚元素</button>
-        {state.technology.collectBag && (
-          <button type="button" className="action" data-testid="collect-all"
-            disabled={state.phase !== "DAY_WORK" || !Object.keys(state.looseBalls).length}
-            onClick={() => gameStore.dispatch({ type: "COLLECT_ALL_BALLS" })}>
-            收集袋 · 全部收集
-          </button>
-        )}
-        <button type="button" className="action" data-testid="save-open" onClick={() => setSaveManagerOpen(true)}>存档</button>
-        <button type="button" className="action" data-testid="end-day" disabled={state.phase !== "DAY_WORK"}
-          onClick={() => gameStore.dispatch({ type: "REQUEST_END_DAY" })}>结束今日</button>
-      </header>
-
-      <main className="main-area">
-        <section className="region visitors" aria-label="访客区" data-testid="region-visitors">
+  const visitorPanel = (
+<section className="region visitors" aria-label="访客区" data-testid="region-visitors">
           <h2>访客与对话</h2>
           {visiting ? (
             <div className="visitor-panel" data-testid="visitor-panel" data-visitor-id={VISITOR_ID}>
@@ -249,8 +260,8 @@ export function App() {
                     data-testid={`visitor-choice-${choice.id}`}
                     title={choice.hint}
                     disabled={state.phase !== "DAY_WORK"}
-                    onClick={() => gameStore.dispatch({ type: "TALK_VISITOR",
-                      visitorId: VISITOR_ID, action: choice.id })}>
+                    {...tapAction(`visitor-${choice.id}`, () => gameStore.dispatch({ type: "TALK_VISITOR",
+                      visitorId: VISITOR_ID, action: choice.id }))}>
                     {choice.text}
                   </button>
                 ))}
@@ -266,8 +277,9 @@ export function App() {
           {report && <button type="button" className="report-reopen" data-testid="reopen-report"
             onClick={() => setReportDismissed(null)}>查看第 {report.fromDay} 天夜间简报</button>}
         </section>
-
-        <section className="region crystal-region" aria-label="洞天水晶球" data-testid="region-crystal">
+  );
+  const crystalPanel = (
+<section className="region crystal-region" aria-label="洞天水晶球" data-testid="region-crystal">
           <div className="crystal-title">
             <h2>洞天水晶球</h2>
             <span>{Object.keys(state.looseBalls).length} 枚元素球待收集 · 点击收集</span>
@@ -291,9 +303,9 @@ export function App() {
             </div>
           </div>
         </section>
-
-        <aside className="right-column">
-          <section className="region orders" aria-label="限时委托" data-testid="region-orders">
+  );
+  const ordersPanel = (
+<section className="region orders" aria-label="限时委托" data-testid="region-orders">
             <h2>限时委托</h2>
             <div className="orders-scroller">
             {activeOrders.length ? activeOrders.map(order => (
@@ -309,7 +321,7 @@ export function App() {
                 </p>
                 {order.state === "available" ? (
                   <button type="button" data-testid="accept-order" disabled={state.phase !== "DAY_WORK"}
-                    onClick={() => gameStore.dispatch({ type: "ACCEPT_ORDER", orderId: order.id })}>
+                    {...tapAction(`accept-${order.id}`, () => gameStore.dispatch({ type: "ACCEPT_ORDER", orderId: order.id }))}>
                     接受委托
                   </button>
                 ) : (
@@ -336,7 +348,7 @@ export function App() {
                       </div>
                     )}
                     <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
-                      onClick={() => deliver(order)}>交付选中物品 / 仓储材料</button>
+                      {...tapAction(`deliver-${order.id}`, () => deliver(order))}>交付选中物品 / 仓储材料</button>
                   </>
                 )}
               </div>
@@ -347,7 +359,9 @@ export function App() {
             </div>
 
           </section>
-          <section className="region exploration" aria-label="探索地图" data-testid="region-exploration">
+  );
+  const explorationPanel = (
+<section className="region exploration" aria-label="探索地图" data-testid="region-exploration">
             <h2>探索地图</h2>
             <div className="exploration-summary">
               <strong data-testid="discovery-progress">已发现 {discoveredCount} 项</strong>
@@ -357,11 +371,9 @@ export function App() {
               查看探索图谱与科技
             </button>
           </section>
-        </aside>
-      </main>
-
-      <div className="bottom-area">
-        <section className="region peeling" aria-label="剥壳工作台" data-testid="region-peeling">
+  );
+  const peelPanel = (
+<section className="region peeling" aria-label="剥壳工作台" data-testid="region-peeling">
           <h2>剥壳工作台</h2>
           <div className="workbench-placeholder workbench-drop" data-item-drop-zone="peel" data-testid="peel-drop">
             {peelItem ? (
@@ -376,11 +388,12 @@ export function App() {
           </div>
           <button type="button" data-testid="peel-action"
             disabled={state.phase !== "DAY_WORK" || peelItem?.kind !== "Aquamelon"}
-            onClick={() => peelItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: peelItem.id, action: "PEEL" })}>剥壳</button>
+            {...tapAction("peel", () => peelItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: peelItem.id, action: "PEEL" }))}>剥壳</button>
         </section>
-        <div className="bottom-center">
-          <section className="region inventory" aria-label="物品栏" data-testid="region-inventory" data-item-drop-zone="inventory">
-            <h2>物品栏 <small>{inventoryItems.length} 件</small></h2>
+  );
+  const inventoryPanel = (
+<section className="region inventory" aria-label="物品栏" data-testid="region-inventory" data-item-drop-zone="inventory">
+            <h2>工作桌 · 物品栏 <small>{inventoryItems.length} 件</small></h2>
             <div className="inventory-line">
 {inventoryItems.map(item => (
                 <div key={item.id} role="button" tabIndex={0}
@@ -398,10 +411,12 @@ export function App() {
               <span className="hint">成熟水瓜留种一枚；拖动后续种子播种，旧树已采完可换种</span>
             </div>
           </section>
-          <section className="region storage" aria-label="仓储区" data-testid="region-storage" data-item-drop-zone="storage">
-            <h2>仓储区 <small>元素养分 · {storageItems.length} 件物品</small></h2>
+  );
+  const storagePanel = (
+<section className="region storage" aria-label="仓储区" data-testid="region-storage" data-item-drop-zone="storage">
+            <h2>仓储区 <small>{storageItems.length} 件物品 · 元素养分已收集 {state.heldElements.reduce((a, b) => a + b, 0).toFixed(0)}V</small></h2>
             <div className="held-elements" data-testid="held-elements">
-              {ELEMENTS.map(element => {
+              {scene === "garden" && ELEMENTS.map(element => {
                 const v = state.heldElements[ELEMENTS.indexOf(element)];
                 if (v <= 0) return null;
                 const info = ELEMENT_VIEW[element];
@@ -410,7 +425,7 @@ export function App() {
                   onClick={() => state.selectedPlotId && gameStore.dispatch({ type: "WATER_PLOT", element, plotId: state.selectedPlotId })}>
                   {info.icon} {info.name} · 浇灌</button>;
               })}
-              {!state.heldElements.some(v => v > 0) && <p className="hint">收集元素球后在此选择浇灌</p>}
+              {scene === "garden" && !state.heldElements.some(v => v > 0) && <p className="hint">收集元素球后在此选择浇灌</p>}
               {storageItems.map(item => (
                 <div key={item.id} role="button" tabIndex={0} className="seed-item"
                   data-testid="fruit-storage" data-item-id={item.id}
@@ -421,8 +436,9 @@ export function App() {
               ))}
             </div>
           </section>
-        </div>
-        <section className="region juicing" aria-label="榨汁与装杯" data-testid="region-juicing">
+  );
+  const juicePanel = (
+<section className="region juicing" aria-label="榨汁与装杯" data-testid="region-juicing">
           <h2>榨汁与装杯</h2>
           <div className="workbench-placeholder workbench-drop" data-item-drop-zone="juice" data-testid="juice-drop">
             {juiceItem ? (
@@ -438,13 +454,82 @@ export function App() {
           <div className="actions">
             <button type="button" data-testid="juice-action"
               disabled={state.phase !== "DAY_WORK" || juiceItem?.kind !== "PeeledFlesh"}
-              onClick={() => juiceItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: juiceItem.id, action: "JUICE" })}>榨汁</button>
+              {...tapAction("juice", () => juiceItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: juiceItem.id, action: "JUICE" }))}>榨汁</button>
             <button type="button" data-testid="cup-action"
               disabled={state.phase !== "DAY_WORK" || juiceItem?.kind !== "RawJuice"}
-              onClick={() => juiceItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: juiceItem.id, action: "CUP" })}>装杯</button>
+              {...tapAction("cup", () => juiceItem && gameStore.dispatch({ type: "PROCESS_ITEM", itemId: juiceItem.id, action: "CUP" }))}>装杯</button>
           </div>
         </section>
-      </div>
+  );
+  return (
+    <div className="game-shell">
+      <header className="header-area region" data-testid="region-header">
+        <div className="brand">
+          <span className="brand-kicker">LIYUE · KITCHEN</span>
+          <h1>璃月厨房 <small>还得自己种</small></h1>
+        </div>
+        <div className="header-stats">
+          <span className="pill" data-testid="day">第 {state.day} 天</span>
+          <span className="pill" data-testid="energy">洞天仙力 {state.adeptalEnergy.balance}</span>
+          <span className="pill" data-testid="quota">凝聚 {remainingCondenses(state)}/{state.dayCondenseLimit}</span>
+        </div>
+        {scene === "garden" && <button type="button" className="action" data-testid="back-workshop"
+          onClick={() => navigateScene("workshop")}>返回工坊</button>}
+        <button type="button" className="action" data-testid="condense" disabled={state.phase !== "DAY_WORK" || remainingCondenses(state) <= 0}
+          onClick={() => gameStore.dispatch({ type: "CONDENSE" })}>凝聚元素</button>
+        {state.technology.collectBag && (
+          <button type="button" className="action" data-testid="collect-all"
+            disabled={state.phase !== "DAY_WORK" || !Object.keys(state.looseBalls).length}
+            onClick={() => gameStore.dispatch({ type: "COLLECT_ALL_BALLS" })}>
+            收集袋 · 全部收集
+          </button>
+        )}
+        <button type="button" className="action" data-testid="save-open" onClick={() => setSaveManagerOpen(true)}>存档</button>
+        <button type="button" className="action" data-testid="end-day" disabled={state.phase !== "DAY_WORK"}
+          onClick={() => gameStore.dispatch({ type: "REQUEST_END_DAY" })}>结束今日</button>
+      </header>
+
+      {scene === "workshop" ? (
+        <main className="workshop-scene" data-testid="workshop-scene">
+          <aside className="workshop-shelf" aria-label="材料货架">
+            <section className="region garden-entry" aria-label="园地入口" data-testid="garden-entry">
+              <h2>水晶球 · 园地入口</h2>
+              <button type="button" className="garden-portal" data-testid="enter-garden"
+                onClick={() => navigateScene("garden")}>
+                <span className="portal-orb" aria-hidden="true">◉</span>
+                <strong>前往园地</strong>
+                <small>查看植物 · 采摘 · 元素球</small>
+              </button>
+              <p data-testid="garden-overview" className="garden-overview">
+                已开垦 {Object.values(state.plots).filter(plot => plot.open).length}/7 格 ·
+                待收集元素球 {Object.keys(state.looseBalls).length} 枚 ·
+                挂果 {Object.values(state.plots).reduce((n, plot) =>
+                  n + (plot.plant?.leaves.filter(leaf => leaf.fruit !== null).length ?? 0), 0)} 枚
+              </p>
+            </section>
+            {storagePanel}
+            {explorationPanel}
+          </aside>
+          <div className="workshop-center" aria-label="工坊交易与工作桌">
+            {visitorPanel}
+            {ordersPanel}
+            {inventoryPanel}
+          </div>
+          <aside className="workshop-machines" aria-label="加工设备">
+            {peelPanel}
+            {juicePanel}
+          </aside>
+        </main>
+      ) : (
+        <main className="garden-scene" data-testid="garden-scene">
+          {crystalPanel}
+          <aside className="garden-sidebar" aria-label="园地收纳与浇灌">
+            {inventoryPanel}
+            {storagePanel}
+            {explorationPanel}
+          </aside>
+        </main>
+      )}
 
       {mapOpen && (
         <div className="dialog-backdrop discovery-dialog" role="dialog" aria-modal="true"
