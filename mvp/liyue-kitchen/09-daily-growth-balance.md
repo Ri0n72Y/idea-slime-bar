@@ -35,8 +35,8 @@
 | 参数 | 原24uh等量 | 新1d候选 |
 | --- | ---: | ---: |
 | Soil 每日保留率 | 0.99^24 ≈ 78.6% | **80%/d** |
-| Seed 根系总吸收速率上限 | 48V/d | **50V/d** |
-| Seedling 根系总吸收速率上限 | 44.4V/d | **40V/d** |
+| Seed 根系总吸收速率上限 | 48V/d | **70V/d** |
+| Seedling 根系总吸收速率上限 | 44.4V/d | **70V/d** |
 | Sapling 根系总吸收速率上限 | 384V/d | **400V/d** |
 | Sapling Growth 参考预算 B0 | 129.6V/d | **130V/d** |
 | 土壤容量（七维合计） | 1000V | **1000V** |
@@ -51,7 +51,7 @@
 | 原阶段事件 | 旧阈值 | 新候选 |
 | --- | ---: | ---: |
 | Seed → Seedling | Tree累计45G | **50G** |
-| Seedling → Sapling | 同一Tree累计90G | **90G** |
+| Seedling → Sapling | 同一Tree累计90G | **100G** |
 | Active Bud → SmallLeaf | Bud20G | **20G** |
 | SmallLeaf → LargeLeaf + FlowerBud | 本叶26G | **30G** |
 | FlowerBud → Flower | 生殖累计12G | **15G** |
@@ -83,7 +83,7 @@ Seed/Seedling的Tree Growth为同一累计账户；Sapling开始先转为Reserve
 | 当日关店结算 | 期望次晨可见结果 | 主要Growth账户 |
 | --- | --- | --- |
 | D1→D2 | Seedling | Tree 累计达到50G |
-| D2→D3 | Sapling＋首芽 | Tree 累计达到90G |
+| D2→D3 | Sapling＋首芽 | Tree 累计达到100G |
 | D3→D4 | SmallLeaf | Bud 达20G |
 | D4→D5 | LargeLeaf＋FlowerBud | Leaf 达30G |
 | D5→D6 | Flower→GreenFruit | 生殖累计达到40G，期间穿过15G开花门槛 |
@@ -99,10 +99,10 @@ Seed/Seedling的Tree Growth为同一累计账户；Sapling开始先转为Reserve
 
 ## 6. 下轮数值细拆：必须解决的约束
 
-**已确认的前期整数候选：Seed根吸收上限50V/d，Seedling为40V/d；Tree累计50G进入Seedling，累计90G进入Sapling。**两个阶段若分别满额吸收，理论两日可累计 **50+40=90G**。但原根系规则仍乘土壤效率并受到七通道约束，因此真实每日吸收可能低于上限；D2发芽、D3幼树仍属体验目标，下一轮须校准实际到账与阶段时点，不能把90G当成自动保证。
+**已确认的前期阶段阈值：**Seed的Tree Growth累计50G成为Seedling，Seedling继续累积50G、达到总计100G进入Sapling；两个阶段根系吸收上限均采用**70V/d**。按照D1 NPC道具补满1000V、教程七元素保底、NPC引导每日完整浇灌，以及七维等量补土/浇灌的标定条件，以80%/d保留率和原根系对数公式按1/24d内部子步估算：**D1约65G，D2经过约13/24d达到100G并进入Sapling**。这些是设计计算参考，后续开发以领域实现对账；不需要随机种子批量测试。
 
 此外逐日拆解：
-1. D1–D3：以D1 NPC道具将首块土地补满1000V、教程七元素保底、NPC引导完整浇灌为既定前提，细拆50/40V/d上限、土壤留存和实际Tree G与出苗、幼树节点的对应关系。
+1. D1–D3：以D1 NPC道具将首块土地补满1000V、教程七元素保底、NPC引导完整浇灌为既定前提，确认70/70V/d上限与累计50/100G阈值的领域实现和状态转换；沿原根系对数公式与七通道吸收计算，不另加补偿机制。
 2. D3–D5：180V Reserve、B0=130V/d、当前S型充盈和Bud/Leaf预算分流，核算首芽、20G小叶和30G大叶的日终节奏。
 3. D5–D7：生殖预算先后达到15/40/90G，以及多个叶位同时生长时的真实竞争关系；调到第七天可达首果目标。
 4. 才讨论每日300–500V供给和Buff、玩家对顾客类型与后续随机结果的调节、外购与自产收益差异、委托和经济数值。
