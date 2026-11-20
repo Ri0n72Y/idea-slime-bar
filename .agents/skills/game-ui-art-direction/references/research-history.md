@@ -23,7 +23,7 @@ When a game relies on the player operating visible items in a single workbench, 
 - `src/experience.css` allows persistent next-action guidance to occupy up to 49% of the bottom bar, while `workshop.css` sets that bar to 7% of screen height. The hint is shown by default unless localStorage holds `liyue-kitchen-guidance=hidden`.
 - `src/scene/CrystalScene.tsx` uses geometric text/dots for tree states; `plotGeometry.ts` hard caps hex radius at 70 screen pixels and draws the enclosing circle at 2.96× that radius. The separate garden scene displays all 7 hexes, including locked plots.
 - We inspected archived browser screenshots from the earlier U1–U9 layout (`liyue-ui-evidence.zip`). They prove the old rectangular experience at 1600×900 but **do not verify the currently deployed workshop**. Current structural conclusions are code-derived. Live QA / current screenshots remain required.
-- The approved planning document `mvp/liyue-kitchen/10-workshop-first-layout.md` (design branch as of 2026-11-19) intentionally keeps **workshop first, garden as second scene**, and gives plant growth a preview on the portal. The 2026-11-20 user revision requests smaller NPC emphasis, larger recognizable sphere, truthful plant miniatures, and less guidance occupation. Preserve the two-scene and state contracts while changing visual weights.
+- The approved planning document `mvp/liyue-kitchen/10-workshop-first-layout.md` (design branch as of 2026-11-19) keeps **workshop first, garden as second scene**, and the garden portal may preview real plant growth. A first 2026-11-20 art proposal enlarged the orb into the central focus; the user then explicitly corrected the composition: **the orb is an ordinary device on the left; customer window ~30% of screen width; shelving to the right of the window; machines, workbench, and actual item storage all in the foreground.** Preserve the two-scene and state contracts while keeping truthful plant thumbnails and compact guidance.
 
 ## Design interpretation and alternatives
 
@@ -31,7 +31,7 @@ When a game relies on the player operating visible items in a single workbench, 
 - Reject returning to a primary screen with seven large locked hex cards: this conflicts with the agreed workshop-first architecture and user request to hide unopened plots.
 - Reject replacing the portal with a static ornamental crystal: the portal must reflect the real current plant and fruit states, and must open the real garden.
 - Reject eliminating help entirely: wrong-drop guidance and optional next-step instructions are necessary for recoverable, non-punitive play.
-- Favor a hybrid: physical workshop with an always-visible meaningful orb preview, small visitor window, storage and tools around the counter, and details shown contextually; garden continues to hold full plant-level controls.
+- Favor a **counter-first spatial layout**: small left-side orb device with meaningful growth preview, a customer-facing window of ~30% screen width, shelving to its right, actual processing and storage in a **continuous foreground counter**; garden continues to hold full plant-level controls. The orb's need for a legible preview does not imply it should dominate the main room.
 
 ## Revision test
 
