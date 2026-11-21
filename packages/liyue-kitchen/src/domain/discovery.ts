@@ -1,3 +1,4 @@
+import { BALANCE } from "./balance.ts";
 import type { GameEvent, GameState } from "./game.ts";
 
 /** Author-defined content graph. Missing hidden nodes are excluded from every UI list/count. */
@@ -8,7 +9,7 @@ export const DISCOVERY_NODES = [
   { id: "A03", title: "第一夜", category: "种植", prerequisites: ["A01"], visibility: "visible", hint: "让植株经过有效夜间生长", fact: "GROWTH_CONFIRMED" },
   { id: "A07", title: "今日委托", category: "经营", prerequisites: ["A00"], visibility: "visible", hint: "接受委托板的真实订单", fact: "ORDER_ACCEPTED" },
   { id: "A12", title: "初次成熟", category: "种植", prerequisites: ["A03"], visibility: "visible", hint: "种出第一枚成熟水瓜", fact: "FRUIT_MATURED" },
-  { id: "A18", title: "熟练收集", category: "技术", prerequisites: ["A02"], visibility: "visible", hint: "亲手收集三枚不同元素球", fact: "THIRD_MANUAL_COLLECTION" },
+  { id: "A18", title: "熟练收集", category: "技术", prerequisites: ["A02"], visibility: "visible", hint: `亲手收集${BALANCE.technology.manualRequired}枚不同元素球`, fact: "THIRD_MANUAL_COLLECTION" },
   { id: "A17", title: "剥壳的发现", category: "加工", prerequisites: ["A12"], visibility: "visible", hint: "完成真实剥壳并取得果壳", fact: "FRUIT_PEELED" },
   { id: "A14", title: "第一杯水瓜汁", category: "加工", prerequisites: ["A17"], visibility: "visible", hint: "将原汁装入机器自带的杯子", fact: "JUICE_CUPPED" },
   { id: "A11", title: "期限之约", category: "经营", prerequisites: ["A07"], visibility: "visible", hint: "在截止日内交付真实订单", fact: "ORDER_DELIVERED" },
@@ -86,14 +87,14 @@ export function migrateDiscoveryEvidence(state: GameState): void {
       if (cupId) synthetic.push({ ...e, fact: "JUICE_CUPPED", sourceId: cupId });
     }
   }
-  if (state.labor.manualBallIds.length === 3) {
-    const third = state.labor.manualBallIds[2];
+  if (state.labor.manualBallIds.length === BALANCE.technology.manualRequired) {
+    const third = state.labor.manualBallIds[BALANCE.technology.manualRequired - 1];
     const event = state.eventLog.find(e => e.kind === "collect" &&
       e.message.includes(`收集 ${third}：`));
     if (event) synthetic.push({ ...event, fact: "THIRD_MANUAL_COLLECTION", sourceId: third });
   }
-  if (state.labor.wateredElements.length >= 2) {
-    const second = state.labor.wateredElements[1];
+  if (state.labor.wateredElements.length >= BALANCE.technology.wateredElementsRequired) {
+    const second = state.labor.wateredElements[BALANCE.technology.wateredElementsRequired - 1];
     const event = state.eventLog.find(e => e.kind === "water" &&
       e.message.startsWith(`灌注 ${second} `));
     if (event) synthetic.push({ ...event, fact: "SECOND_ELEMENT_WATERED", sourceId: event.message });

@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit",
     "test:domain": "node --experimental-strip-types --test src/domain/game.test.ts src/domain/u4.test.ts src/domain/batch-a.test.ts src/domain/batch-b.test.ts src/domain/batch-c.test.ts src/uiLabels.test.ts src/experience.test.ts src/domain/save-management.test.ts",
     "test:e2e": "playwright test",
-    "simulate:balance": "node --experimental-strip-types scripts/simulate-batch-a.ts"
+    "simulate:balance": "node --experimental-strip-types scripts/simulate-batch-a.ts",
+    "test:balance-config": "node --experimental-strip-types scripts/check-balance-variants.mjs",
+    "test:balance-browser": "node scripts/verify-balance-browser.mjs"
   },
   "dependencies": {
     "pixi.js": "^8.17.1",

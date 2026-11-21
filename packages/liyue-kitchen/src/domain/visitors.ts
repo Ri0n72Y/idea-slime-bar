@@ -1,3 +1,4 @@
+import { BALANCE } from "./balance.ts";
 import type { GameState } from "./game.ts";
 import { createOrder } from "./orders.ts";
 import { rewardEnergy } from "./economy.ts";
@@ -23,7 +24,7 @@ export const newVisitor = (): VisitorState => ({
   lastLine: "旅人似乎在观察洞天里的水瓜树。",
 });
 export const visitorPresent = (state: GameState): boolean =>
-  state.day >= 2 && !!state.discoveries.A03;
+  state.day >= BALANCE.visitors.arrivalDay && !!state.discoveries.A03;
 export function visitorChoices(state: GameState): VisitorChoice[] {
   if (!visitorPresent(state)) return [];
   const v = state.visitor;
@@ -56,16 +57,16 @@ export function interactVisitor(state: GameState, action: VisitorAction): Intera
   switch (action) {
     case "greet": {
       v.metAtDay = state.day;
-      rewardEnergy(state, "visitor:yan:greet", 2);
+      rewardEnergy(state, "visitor:yan:greet", BALANCE.visitors.rewards.greet);
       v.lastLine = "我是往来璃月各地的阿砚。你的水瓜树长得很好，想听听路上的故事吗？";
-      return { ok: true, message: "结识旅人阿砚，获得 2 洞天仙力。",
+      return { ok: true, message: `结识旅人阿砚，获得 ${BALANCE.visitors.rewards.greet} 洞天仙力。`,
         fact: "VISITOR_MET", sourceId: "visitor:yan:greet" };
     }
     case "ask_clue": {
       v.clueAtDay = state.day;
-      rewardEnergy(state, "visitor:yan:clue", 3);
+      rewardEnergy(state, "visitor:yan:clue", BALANCE.visitors.rewards.clue);
       v.lastLine = "山道边的旧木牌记着一条果汁商路。人们会把熟透的水瓜榨成杯装饮品，带往更远的集市。";
-      return { ok: true, message: "发现商路线索，获得 3 洞天仙力。",
+      return { ok: true, message: `发现商路线索，获得 ${BALANCE.visitors.rewards.clue} 洞天仙力。`,
         fact: "VISITOR_CLUE_FOUND", sourceId: "visitor:yan:clue" };
     }
     case "accept_gift": {
@@ -91,9 +92,9 @@ export function interactVisitor(state: GameState, action: VisitorAction): Intera
     }
     case "thank": {
       v.thankedAtDay = state.day;
-      rewardEnergy(state, "visitor:yan:thanks", 4);
+      rewardEnergy(state, "visitor:yan:thanks", BALANCE.visitors.rewards.thank);
       v.lastLine = "这杯水瓜汁已经送到了。谢谢你，洞天外的人也会记得它的味道。";
-      return { ok: true, message: "完成旅人的故事，获得 4 洞天仙力。",
+      return { ok: true, message: `完成旅人的故事，获得 ${BALANCE.visitors.rewards.thank} 洞天仙力。`,
         fact: "VISITOR_THANKED", sourceId: "visitor:yan:thanks" };
     }
     case "chat": {
