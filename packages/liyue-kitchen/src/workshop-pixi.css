@@ -348,3 +348,171 @@
   .workshop-machines-overlay .workbench-placeholder p {font-size:.68em;}
   .workshop-cabinet-overlay .hint {display:none;}
 }
+
+/* Production QA: keep the one real order action in view at both viewport sizes.
+   The other metadata is disclosed on demand; never bury accept/deliver under
+   a tiny vertical scroller or a transparent Pixi hit area. */
+.workshop-center-overlay .orders {
+  overflow: hidden;
+}
+.workshop-center-overlay .orders-scroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: stretch;
+  min-height: 0;
+}
+.workshop-center-overlay .order-panel {
+  flex: 1 0 min(43%, 245px);
+  width: auto;
+  min-width: min(43%, 210px);
+  max-width: none;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: 2px;
+  padding: 2px 5px;
+  font-size: clamp(12px, .95vw, 15px);
+}
+.workshop-center-overlay .order-panel > .order-main-action {
+  order: -2;
+  flex: 0 0 auto;
+  align-self: stretch;
+  display: block;
+  min-height: 38px;
+  font-size: clamp(14px, 1.03vw, 17px);
+  font-weight: 700;
+  line-height: 1.15;
+  padding: 6px 8px;
+  background: #f5e6bd;
+  border: 2px solid #82673f;
+  border-radius: 7px;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.workshop-center-overlay .order-primary-label {
+  order: -1;
+  flex: 0 0 auto;
+  margin: 0;
+  color: #463723;
+  font-size: clamp(11px, .87vw, 14px);
+  line-height: 1.18;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workshop-center-overlay .order-details {
+  order: 3;
+  min-height: 18px;
+  max-height: 36px;
+  flex: 0 0 auto;
+  overflow: auto;
+  font-size: clamp(11px, .85vw, 13px);
+  pointer-events: auto;
+}
+.workshop-center-overlay .order-details summary {
+  cursor: pointer;
+  color: #574834;
+  font-weight: 600;
+  min-height: 18px;
+}
+.workshop-center-overlay .order-details p { margin: 2px 0; }
+.workshop-center-overlay .order-candidates {
+  order: 0;
+  max-height: 31px;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  display: flex;
+  gap: 3px;
+  pointer-events: auto;
+}
+.workshop-center-overlay .order-candidates button {
+  flex: 0 0 auto;
+  min-height: 27px;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+.workshop-center-overlay .order-warning { order: 0; margin: 0; font-size: 11px; }
+
+/* Full counter depth belongs to the machines; stop shrinking real controls
+   into 7px text and 19×14px touch targets. */
+.workshop-left-overlay { padding: 3px; }
+.workshop-machines-overlay {
+  height: 98%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 5px;
+}
+.workshop-machines-overlay .peeling,
+.workshop-machines-overlay .juicing {
+  height: 100%;
+  gap: 3px;
+  padding: 4px;
+  overflow: hidden;
+}
+.workshop-machines-overlay .region h2 {
+  font-size: clamp(13px, .94vw, 16px);
+  line-height: 1.15;
+  margin: 0;
+}
+.workshop-machines-overlay .workbench-placeholder {
+  min-height: 43px;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 3px;
+}
+.workshop-machines-overlay .workbench-placeholder p { font-size: 12px; line-height: 1.15; }
+.workshop-machines-overlay .workbench-item {
+  min-height: 34px;
+  font-size: 12px;
+}
+.workshop-machines-overlay .actions { display: flex; flex-wrap: nowrap; gap: 3px; }
+.workshop-machines-overlay .region button,
+.workshop-machines-overlay .actions button {
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  font-size: clamp(13px, .94vw, 16px);
+  line-height: 1.2;
+  font-weight: 700;
+  touch-action: manipulation;
+  pointer-events: auto;
+}
+.workshop-machines-overlay .region > button { width: 100%; }
+.workshop-machines-overlay .actions button { flex: 1 1 0; }
+.workshop-shelf-overlay .exploration {
+  height: auto;
+  min-height: 48px;
+  margin-bottom: 18px;
+  padding: 4px 7px;
+  gap: 7px;
+}
+.workshop-shelf-overlay .exploration h2 { font-size: clamp(13px, .96vw, 16px); }
+.workshop-shelf-overlay .exploration button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  white-space: normal;
+  font-size: clamp(14px, 1vw, 17px);
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 5px 9px;
+  pointer-events: auto;
+}
+/* Keep the portal wholly above the countertop: the left machine polygon
+   begins at world y=352, while the crystal's old bottom button was behind it. */
+.workshop-pixi-scene .workshop-orb-link {
+  position: absolute;
+  bottom: 24%;
+  width: 64%;
+  height: 11%;
+  min-height: 34px;
+  margin: 0;
+  z-index: 5;
+  font-size: clamp(12px, .84vw, 15px);
+  font-weight: 700;
+  touch-action: manipulation;
+}

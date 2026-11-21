@@ -102,6 +102,8 @@ export function App() {
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [scene, setScene] = useState<"workshop" | "garden">("workshop");
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
   const navigateScene = (destination: "workshop" | "garden") => {
     dragRef.current = null;
     setDrag(null);
@@ -177,7 +179,9 @@ export function App() {
       if (current.kind === "Seed") {
         if (target.scene.plotId && !target.zone)
           gameStore.dispatch({ type: "PLANT_SEED", itemId: current.itemId, plotId: target.scene.plotId });
-        else gameStore.dispatch({ type: "REJECT_DROP", reason: "种子需拖到已开垦、空置的地格；未消耗种子。" });
+        else gameStore.dispatch({ type: "REJECT_DROP", reason: sceneRef.current === "workshop"
+          ? "工坊水晶球是园地入口。先点「前往园地」，再将种子拖至开放空地格；种子未消耗。"
+          : "种子需拖到园地里已开垦、空置的地格；未消耗种子。" });
       } else {
         const destination: ItemLocation | null =
           target.zone === "peel" || target.zone === "juice"
@@ -330,16 +334,21 @@ export function App() {
             {activeOrders.length ? activeOrders.map(order => (
               <div className="order-panel" key={order.id} data-testid="active-order"
                 data-order-id={order.id} data-visitor-id={order.visitorId}>
-                <p data-testid="order-origin">{order.visitorId === "board" ? "委托板" : "旅人阿砚"}</p>
-                <p data-testid="order-requirement">{orderName(order)} × {order.quantity}</p>
-                <p data-testid="order-deadline">第 {order.dueDay} 天截止（含当日）</p>
-                <p>奖励 {order.rewards} 洞天仙力</p>
-                <p data-testid="order-status">{order.state === "available" ? "待接受" : "已接受"}</p>
-                <p className="order-location-hint" data-testid={`order-location-${order.id}`}>
-                  交单材料须放入物品栏或仓储区；水晶球地面的水瓜需先搬运。
+                <p data-testid="order-requirement" className="order-primary-label">
+                  {order.visitorId === "board" ? "委托板" : "旅人阿砚"} · {orderName(order)} × {order.quantity}
                 </p>
+                <details className="order-details">
+                  <summary>委托详情</summary>
+                  <p data-testid="order-origin">{order.visitorId === "board" ? "委托板" : "旅人阿砚"}</p>
+                  <p data-testid="order-deadline">第 {order.dueDay} 天截止（含当日）</p>
+                  <p>奖励 {order.rewards} 洞天仙力</p>
+                  <p data-testid="order-status">{order.state === "available" ? "待接受" : "已接受"}</p>
+                  <p className="order-location-hint" data-testid={`order-location-${order.id}`}>
+                    交单材料须放入物品栏或仓储区；水晶球地面的水瓜需先搬运。
+                  </p>
+                </details>
                 {order.state === "available" ? (
-                  <button type="button" data-testid="accept-order" disabled={state.phase !== "DAY_WORK"}
+                  <button type="button" className="order-main-action" data-testid="accept-order" disabled={state.phase !== "DAY_WORK"}
                     {...tapAction(`accept-${order.id}`, () => gameStore.dispatch({ type: "ACCEPT_ORDER", orderId: order.id }))}>
                     接受委托
                   </button>
@@ -366,7 +375,7 @@ export function App() {
                         ))}
                       </div>
                     )}
-                    <button type="button" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
+                    <button type="button" className="order-main-action" data-testid="deliver-order" disabled={state.phase !== "DAY_WORK"}
                       {...tapAction(`deliver-${order.id}`, () => deliver(order))}>交付选中物品 / 仓储材料</button>
                   </>
                 )}
@@ -516,7 +525,7 @@ export function App() {
           <section className="region garden-entry workshop-orb-overlay" aria-label="水晶球设备"
             data-testid="garden-entry">
             <button type="button" className="workshop-orb-link" data-testid="enter-garden"
-              onClick={() => navigateScene("garden")}>
+              {...tapAction("enter-garden", () => navigateScene("garden"))}>
               <strong>前往园地</strong>
               <small>查看植物、元素球与采摘</small>
             </button>
@@ -670,7 +679,7 @@ export function App() {
             onClick={() => setShowGuidance(!showGuidance)}>
             {showGuidance ? "收起提示" : "显示下一步"}
           </button>
-          {showGuidance && <span data-testid="next-step-text">{nextActionHint(state)}</span>}
+          {showGuidance && <span data-testid="next-step-text">{nextActionHint(state, scene)}</span>}
         </div>
         <strong>状态反馈</strong>
         <span data-testid="feedback">{playerEventText(state.notice.message)}</span>
