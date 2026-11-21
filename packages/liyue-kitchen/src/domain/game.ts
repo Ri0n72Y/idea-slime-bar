@@ -125,7 +125,7 @@ export function newGame(seed = 0x17a5b7e1): GameState {
     eventLog: [{ id: "event:initial-seed", day: 1, worldUH: 0, kind: "seed",
       message: "获得唯一开局种子 item:seed:1", fact: "SEED_OBTAINED",
       sourceId: "item:seed:1" }], lastNightReport: null,
-    notice: { kind: "info", message: "拖动物品栏中唯一的种子到水晶球中心地格。" },
+    notice: { kind: "info", message: "先点「前往园地」，再将物品栏中的种子拖到开放的空地格播种。" },
   };
 }
 
