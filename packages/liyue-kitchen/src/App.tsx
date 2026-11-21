@@ -9,6 +9,7 @@ import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
 import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
+import { WorkshopScene, type WorkshopZone } from "./scene/WorkshopScene";
 import { ECONOMY_CANDIDATE } from "./domain/economy";
 import type { KitchenOrder } from "./domain/orders";
 import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
@@ -19,6 +20,7 @@ import { eligibleOrderItems, itemTitle, nextActionHint, orderItemTitle, orderSel
 import "./experience.css";
 import { SaveManager } from "./SaveManager";
 import "./workshop.css";
+import "./workshop-pixi.css";
 
 /** Fixed, authored knowledge graph coordinates; hidden discoveries have no visible node/edge. */
 const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
@@ -38,11 +40,19 @@ type Drag = {
   originX: number; originY: number; target: DropTarget | null;
 };
 const emptyScene: SceneDropTarget = { plotId: null, ground: null };
-function dropTargetAt(x: number, y: number, pick: ((x: number, y: number) => SceneDropTarget) | null): DropTarget {
+function dropTargetAt(x: number, y: number,
+  pick: ((x: number, y: number) => SceneDropTarget) | null,
+  workshopPick: ((x: number, y: number) => WorkshopZone) | null): DropTarget {
   const element = document.elementFromPoint(x, y);
-  const zone = element?.closest("[data-item-drop-zone]")?.getAttribute("data-item-drop-zone");
+  const domZone = element?.closest("[data-item-drop-zone]")?.getAttribute("data-item-drop-zone");
+  // Exact DOM targets keep accessibility and precise item cards; the Pixi
+  // polygon is the fallback for countertop/cabinet areas outside DOM boxes.
+  const semantic = workshopPick?.(x, y);
+  const polygonZone = semantic === "peel" || semantic === "juice" ||
+    semantic === "storage" || semantic === "inventory" ? semantic : null;
   return {
-    zone: zone === "inventory" || zone === "storage" || zone === "peel" || zone === "juice" ? zone : null,
+    zone: domZone === "inventory" || domZone === "storage" ||
+      domZone === "peel" || domZone === "juice" ? domZone : polygonZone,
     scene: pick?.(x, y) ?? emptyScene,
   };
 }
@@ -55,6 +65,11 @@ export function App() {
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const pickRef = useRef<((x: number, y: number) => SceneDropTarget) | null>(null);
+  const workshopPickRef = useRef<((x: number, y: number) => WorkshopZone) | null>(null);
+  const registerWorkshopPick = useCallback((pick: (x: number, y: number) => WorkshopZone) => {
+    workshopPickRef.current = pick;
+    return () => { if (workshopPickRef.current === pick) workshopPickRef.current = null; };
+  }, []);
   // Real touch and CDP drag gestures may suppress the synthesized click.
   // A tap activates on pointer-up and ignores its subsequent synthetic click.
   const buttonTouchStart = useRef<{ key: string; id: number; x: number; y: number } | null>(null);
@@ -147,7 +162,7 @@ export function App() {
     const move = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current);
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, workshopPickRef.current);
       const next = { ...current, x: event.clientX, y: event.clientY, target };
       dragRef.current = next;
       setDrag(next);
@@ -155,7 +170,7 @@ export function App() {
     const up = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current);
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, workshopPickRef.current);
       dragRef.current = null;
       setDrag(null);
       if (Math.hypot(event.clientX - current.originX, event.clientY - current.originY) < 8) return;
@@ -466,7 +481,7 @@ export function App() {
         </section>
   );
   return (
-    <div className="game-shell">
+    <div className={`game-shell ${scene === "workshop" ? "workshop-shell" : "garden-shell"}`}>
       <header className="header-area region" data-testid="region-header">
         <div className="brand">
           <span className="brand-kicker">LIYUE · KITCHEN</span>
@@ -494,35 +509,50 @@ export function App() {
       </header>
 
       {scene === "workshop" ? (
-        <main className="workshop-scene" data-testid="workshop-scene">
-          <aside className="workshop-shelf" aria-label="材料货架">
-            <section className="region garden-entry" aria-label="园地入口" data-testid="garden-entry">
-              <h2>水晶球 · 园地入口</h2>
-              <button type="button" className="garden-portal" data-testid="enter-garden"
-                onClick={() => navigateScene("garden")}>
-                <span className="portal-orb" aria-hidden="true">◉</span>
-                <strong>前往园地</strong>
-                <small>查看植物 · 采摘 · 元素球</small>
-              </button>
-              <p data-testid="garden-overview" className="garden-overview">
-                已开垦 {Object.values(state.plots).filter(plot => plot.open).length}/7 格 ·
-                待收集元素球 {Object.keys(state.looseBalls).length} 枚 ·
-                挂果 {Object.values(state.plots).reduce((n, plot) =>
-                  n + (plot.plant?.leaves.filter(leaf => leaf.fruit !== null).length ?? 0), 0)} 枚
-              </p>
-            </section>
-            {storagePanel}
-            {explorationPanel}
-          </aside>
-          <div className="workshop-center" aria-label="工坊交易与工作桌">
+        <main className="workshop-scene workshop-pixi-scene" data-testid="workshop-scene"
+          aria-label="璃月厨房工坊与 U 型连体柜台">
+          <WorkshopScene state={state} onEnterGarden={() => navigateScene("garden")}
+            onRegisterHitTest={registerWorkshopPick} />
+          <section className="region garden-entry workshop-orb-overlay" aria-label="水晶球设备"
+            data-testid="garden-entry">
+            <button type="button" className="workshop-orb-link" data-testid="enter-garden"
+              onClick={() => navigateScene("garden")}>
+              <strong>前往园地</strong>
+              <small>查看植物、元素球与采摘</small>
+            </button>
+            <span className="workshop-orb-accessible" data-testid="orb-plant-preview"
+              data-stage={state.plots.P01.plant?.stage ?? "Empty"}
+              data-leaf-count={state.plots.P01.plant?.leaves.length ?? 0}>
+              {state.plots.P01.plant ? growthStageLabel(state.plots.P01.plant.stage) : "空地"}
+            </span>
+            <span className="garden-overview" data-testid="garden-overview">
+              已开垦 {Object.values(state.plots).filter(p => p.open).length}/7 格 ·
+              待收集元素球 {Object.keys(state.looseBalls).length} 枚 ·
+              挂果 {Object.values(state.plots).reduce((n, plot) =>
+                n + (plot.plant?.leaves.filter(leaf => leaf.fruit !== null).length ?? 0), 0)} 枚
+            </span>
+          </section>
+          <div className="workshop-customer-overlay" data-testid="customer-window">
             {visitorPanel}
-            {ordersPanel}
-            {inventoryPanel}
           </div>
-          <aside className="workshop-machines" aria-label="加工设备">
-            {peelPanel}
-            {juicePanel}
-          </aside>
+          <div className="workshop-shelf-overlay" data-testid="display-shelf">
+            {explorationPanel}
+          </div>
+          <div className="workshop-left-overlay" data-testid="counter-left">
+            <div className="workshop-machines-overlay">
+              {peelPanel}
+              {juicePanel}
+            </div>
+          </div>
+          <div className="workshop-center-overlay" data-testid="counter-middle">
+            {ordersPanel}
+          </div>
+          <div className="workshop-right-overlay" data-testid="counter-right"
+            aria-label="右侧操作台（目前保留设备扩展位）" />
+          <div className="workshop-cabinet-overlay" data-testid="counter-cabinets">
+            <div className="workshop-storage-overlay">{storagePanel}</div>
+            <div className="workshop-inventory-overlay">{inventoryPanel}</div>
+          </div>
         </main>
       ) : (
         <main className="garden-scene" data-testid="garden-scene">
