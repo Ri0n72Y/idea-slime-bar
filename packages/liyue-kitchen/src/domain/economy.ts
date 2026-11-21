@@ -1,20 +1,18 @@
+import { BALANCE } from "./balance.ts";
 import type { GameState, PlotId } from "./game.ts";
 
-/** Playtest candidates; final reward and land costs require Lead approval. */
-export const ECONOMY_CANDIDATE = Object.freeze({
-  growthCycle: 6,
-  matureHarvest: 2,
-  orderDelivery: 16,
-  plotCosts: { P02: 8, P03: 16, P04: 24, P05: 32, P06: 40, P07: 48 },
-});
+/** Compatibility alias, values are read from the single balance file. */
+export const ECONOMY_CANDIDATE = BALANCE.economy;
 export type EnergyAccount = {
   balance: number;
   earnedTotal: number;
   spentTotal: number;
+  /** Recorded actual purchase prices; never recompute historical spend from current config. */
+  spendLedger: Record<string, number>;
   rewardedIds: string[];
 };
 export const newEnergyAccount = (): EnergyAccount =>
-  ({ balance: 0, earnedTotal: 0, spentTotal: 0, rewardedIds: [] });
+  ({ balance: 0, earnedTotal: 0, spentTotal: 0, spendLedger: {}, rewardedIds: [] });
 
 /** Mutates an applyCommand-local state only; repeated source keys never mint energy. */
 export function rewardEnergy(state: GameState, sourceId: string, amount: number): boolean {
@@ -36,6 +34,7 @@ export function unlockPlot(state: GameState, plotId: PlotId):
     return { ok: false, reason: `洞天仙力不足，${plotId} 需 ${cost}，当前 ${state.adeptalEnergy.balance}。` };
   state.adeptalEnergy.balance -= cost;
   state.adeptalEnergy.spentTotal += cost;
+  state.adeptalEnergy.spendLedger["plot:" + plotId] = cost;
   plot.open = true;
   return { ok: true, cost };
 }

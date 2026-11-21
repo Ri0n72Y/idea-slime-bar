@@ -1,3 +1,4 @@
+import { BALANCE } from "./balance.ts";
 import type { GameState } from "./game.ts";
 import { ECONOMY_CANDIDATE, rewardEnergy } from "./economy.ts";
 
@@ -9,11 +10,11 @@ export type KitchenOrder = {
   state: OrderState; deliveredItemIds: string[]; rewards: number;
 };
 /** Deadlines and rewards are candidates pending reproducible growth calibration. */
-export const ORDER_CANDIDATE = Object.freeze({ firstWindowDays: 45, renewalWindowDays: 40 });
+export const ORDER_CANDIDATE = BALANCE.orders;
 export function createOrder(id: string, day: number, kind: OrderKind, isFirst = false, visitorId = "board"): KitchenOrder {
   return { id, visitorId, postedDay: day, acceptedDay: null,
     dueDay: day + (isFirst ? ORDER_CANDIDATE.firstWindowDays : ORDER_CANDIDATE.renewalWindowDays),
-    itemKind: kind, quantity: 1, state: "available", deliveredItemIds: [],
+    itemKind: kind, quantity: ORDER_CANDIDATE.quantity, state: "available", deliveredItemIds: [],
     rewards: ECONOMY_CANDIDATE.orderDelivery };
 }
 export const initialOrders = (): Record<string, KitchenOrder> => ({

@@ -72,7 +72,8 @@ export function validateSave(value: unknown): GameState | null {
   if (g.schemaVersion !== value.version || !Number.isSafeInteger(g.day) || (g.day as number) < 1 ||
       !Number.isSafeInteger(g.worldUH) || (g.worldUH as number) < 0 ||
       !Number.isSafeInteger(g.nextObjectSeq) || (g.nextObjectSeq as number) < 2 ||
-      !Number.isSafeInteger(g.dayCondenseLimit) || !Number.isSafeInteger(g.dayCondenseUsed) ||
+      !Number.isSafeInteger(g.dayCondenseLimit) || (g.dayCondenseLimit as number) < 0 ||
+      !Number.isSafeInteger(g.dayCondenseUsed) || (g.dayCondenseUsed as number) < 0 ||
       (g.dayCondenseUsed as number) > (g.dayCondenseLimit as number) ||
       !Number.isSafeInteger(g.randomState) || (g.randomState as number) < 1 ||
       (g.randomState as number) > 0xffffffff || !isVector(g.heldElements) ||
@@ -85,7 +86,9 @@ export function validateSave(value: unknown): GameState | null {
     const plot = g.plots[id];
     if (!isObject(plot) || plot.id !== id || typeof plot.open !== "boolean" || (index === 0 && !plot.open) ||
         (value.version < 4 && plot.open !== (index === 0)) || !isVector(plot.soil) ||
-        plot.soil.reduce((a, b) => a + b, 0) > 1000 + 1e-6) return null;
+        // Reject impossible numeric floods independent of the CURRENT tuning.
+        // A prior valid save may exceed a newly lowered soilCapacityV.
+        plot.soil.reduce((a, b) => a + b, 0) > 1e10) return null;
     if (!plot.open && plot.plant !== null) return null;
     if (plot.plant !== null) {
       const tree = plot.plant;
@@ -165,7 +168,7 @@ export function validateSave(value: unknown): GameState | null {
   }
   const manual = g.labor.manualBallIds;
   const elements = g.labor.wateredElements;
-  if (manual.length > COLLECT_BAG.manualRequired ||
+  if (manual.length > 100 ||
       manual.some(id => typeof id !== "string" || !/^ball:\d+$/.test(id)) ||
       new Set(manual).size !== manual.length ||
       elements.some(el => !ELEMENTS.includes(el as never)) ||
@@ -174,8 +177,9 @@ export function validateSave(value: unknown): GameState | null {
   const bag = g.technology.collectBag;
   if (bag !== null && (!isObject(bag) || !Number.isSafeInteger(bag.unlockedAtDay) ||
       (bag.unlockedAtDay as number) < 1 || (bag.unlockedAtDay as number) > (g.day as number) ||
-      !Array.isArray(bag.evidenceIds) || (bag.evidenceIds as unknown[]).length !== COLLECT_BAG.manualRequired ||
-      !manual.every(id => (bag.evidenceIds as string[]).includes(id)) ||
+      !Array.isArray(bag.evidenceIds) || (bag.evidenceIds as unknown[]).length < 1 ||
+      (bag.evidenceIds as unknown[]).length > manual.length ||
+      !(bag.evidenceIds as string[]).every(id => manual.includes(id)) ||
       !Object.hasOwn(g.discoveries, "A18"))) return null;
   if (!isObject(g.visitor) || g.visitor.id !== VISITOR_ID ||
       !Array.isArray(g.visitor.issuedOrderIds) ||
@@ -187,7 +191,7 @@ export function validateSave(value: unknown): GameState | null {
   const issued = v.issuedOrderIds as string[];
   for (const field of ["metAtDay", "clueAtDay", "giftAtDay", "thankedAtDay"]) {
     const day = v[field];
-    if (day !== null && (!Number.isSafeInteger(day) || (day as number) < 2 || (day as number) > (g.day as number)))
+    if (day !== null && (!Number.isSafeInteger(day) || (day as number) < 1 || (day as number) > (g.day as number)))
       return null;
   }
   if ((v.clueAtDay !== null && v.metAtDay === null) ||
@@ -209,6 +213,35 @@ export function validateSave(value: unknown): GameState | null {
       !Array.isArray(a.rewardedIds) ||
       a.rewardedIds.some(id => typeof id !== "string" || !id) ||
       new Set(a.rewardedIds).size !== a.rewardedIds.length) return null;
+  // Existing v1-v6 saves predate historical receipts; migrate once without
+  // changing spentTotal or inferring past purchases from the *current* prices.
+  if (!Object.hasOwn(a, "spendLedger")) a.spendLedger = { legacy: a.spentTotal };
+  if (!isObject(a.spendLedger)) return null;
+  const receipts = Object.entries(a.spendLedger);
+  if (receipts.some(([key, amount]) =>
+        !(/^plot:P0[2-7]$/.test(key) || key === "tech:collectBag" || key === "legacy") ||
+        !Number.isSafeInteger(amount) || (amount as number) < 0) ||
+      receipts.reduce((sum, [, amount]) => sum + (amount as number), 0) !== a.spentTotal)
+    return null;
+  const legacy = Object.hasOwn(a.spendLedger, "legacy");
+  for (const id of PLOT_IDS.slice(1)) {
+    const paid = Object.hasOwn(a.spendLedger, "plot:" + id);
+    if (paid && (!(g.plots as Record<string, {open:boolean}>)[id].open ||
+        (a.spendLedger["plot:" + id] as number) < 1)) return null;
+  }
+  if (Object.hasOwn(a.spendLedger, "tech:collectBag") &&
+      (!bag || (a.spendLedger["tech:collectBag"] as number) < 1)) return null;
+  if (!legacy) {
+    for (const id of PLOT_IDS.slice(1))
+      if ((g.plots as Record<string, {open:boolean}>)[id].open &&
+          !Object.hasOwn(a.spendLedger, "plot:" + id)) return null;
+    if (bag && !Object.hasOwn(a.spendLedger, "tech:collectBag")) return null;
+  }
+  // Every purchase currently costs at least one unit. The ledger, not today's
+  // config, establishes its historical exact cost.
+  const actualPurchases = PLOT_IDS.slice(1).filter(id =>
+    (g.plots as Record<string, {open:boolean}>)[id].open).length + (bag ? 1 : 0);
+  if ((a.spentTotal as number) < actualPurchases) return null;
   if ((v.metAtDay !== null) !== a.rewardedIds.includes("visitor:yan:greet") ||
       (v.clueAtDay !== null) !== a.rewardedIds.includes("visitor:yan:clue") ||
       (v.thankedAtDay !== null) !== a.rewardedIds.includes("visitor:yan:thanks")) return null;
@@ -218,9 +251,6 @@ export function validateSave(value: unknown): GameState | null {
         sourceKeys.has(key)) return null;
     sourceKeys.add(key);
   }
-  const unlockedCost = PLOT_IDS.slice(1).reduce((sum, id) =>
-    sum + ((g.plots as Record<string, { open: boolean }>)[id].open ? ECONOMY_CANDIDATE.plotCosts[id as keyof typeof ECONOMY_CANDIDATE.plotCosts] : 0), 0);
-  if ((a.spentTotal as number) < unlockedCost + (bag ? COLLECT_BAG.cost : 0)) return null;
   const orderRecords = g.orders as Record<string, unknown>;
   const usedDeliveryIds = new Set<string>();
   for (const [id, raw] of Object.entries(g.orders)) {
@@ -266,7 +296,11 @@ export function validateSave(value: unknown): GameState | null {
   if (g.selectedItemId !== null &&
       (typeof g.selectedItemId !== "string" || !Object.hasOwn(g.items, g.selectedItemId))) return null;
   if (Object.values(g.looseBalls).some(ball => !isObject(ball) || !ball.id ||
-      ball.initialV !== 50 || !Number.isInteger(ball.createdUH) ||
+      !ELEMENTS.includes(ball.element as never) ||
+      typeof ball.initialV !== "number" || !Number.isFinite(ball.initialV) ||
+      ball.initialV <= 0 || ball.initialV > 1e10 ||
+      !Number.isSafeInteger(ball.slot) || (ball.slot as number) < 0 ||
+      !Number.isInteger(ball.createdUH) || (ball.createdUH as number) < 0 ||
       (ball.createdUH as number) > (g.worldUH as number))) return null;
 
   // A harvested source can persist after its tree is replaced, but its

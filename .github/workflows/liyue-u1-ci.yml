@@ -31,5 +31,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen typecheck
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen test:domain
+      - run: pnpm --filter @idea-slime-bar/liyue-kitchen test:balance-config
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen simulate:balance
       - run: pnpm --filter @idea-slime-bar/liyue-kitchen build

@@ -222,11 +222,15 @@ export function App() {
   const deliver = (o: KitchenOrder) => {
     const kind = o.itemKind === "aquamelon" ? "Aquamelon" : "AquamelonJuiceCup";
     // The explicitly selected material wins, even when invalid; domain returns a rejection.
-    const candidate = state.selectedItemId && state.items[state.selectedItemId] ?
-      [state.selectedItemId] : Object.values(state.items)
-        .filter(item => item.kind === kind &&
-          (item.location.kind === "storage" || item.location.kind === "inventory"))
-        .slice(0, o.quantity).map(item => item.id);
+    const preferred = state.selectedItemId && state.items[state.selectedItemId] ?
+      [state.selectedItemId] : [];
+    // A deliberate invalid selection remains visible to the domain guard.
+    // For configured multi-item commissions, fill only the remaining slots.
+    const additional = Object.values(state.items)
+      .filter(item => item.kind === kind && !preferred.includes(item.id) &&
+        (item.location.kind === "storage" || item.location.kind === "inventory"))
+      .slice(0, Math.max(0, o.quantity - preferred.length)).map(item => item.id);
+    const candidate = [...preferred, ...additional];
     gameStore.dispatch({ type: "DELIVER_ORDER", orderId: o.id, itemIds: candidate });
   };
   const discoveries = visibleDiscoveries(state);

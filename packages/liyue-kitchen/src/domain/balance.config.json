@@ -1,0 +1,82 @@
+{
+  "world": {
+    "condensesPerDay": 8,
+    "nightUH": 24,
+    "ballInitialV": 50,
+    "ballHalfLifeUH": 0.25,
+    "ballMinimumCollectV": 1,
+    "soilCapacityV": 1000,
+    "soilRetentionPerUH": 0.99,
+    "reserveCapacityV": 180,
+    "reserveBudgetVPerUH": 5.4
+  },
+  "affinity": {
+    "rootPreference": [0.8, 1, 0.85, 0.75, 1, 0.7, 0.9],
+    "treeBase": [0.85, 1.15, 0.9, 0.75, 1.2, 0.7, 0.95],
+    "leafTemplate": [0.75, 1.1, 1, 0.85, 1.3, 0.9, 0.8],
+    "fruitTemplate": [1, 1, 1, 1, 1, 1, 1]
+  },
+  "growth": {
+    "inheritanceWeight": 0.5,
+    "reserveCurveMidpointV": 95,
+    "reserveCurveWidthV": 12,
+    "rootReserveSoftStartV": 100,
+    "rootReserveSpanV": 80,
+    "rootCap": {"Seed": 2, "Seedling": 1.85, "Sapling": 16},
+    "rootSoilScaleV": 200,
+    "rootBudgetLogBase": 6,
+    "rootChannelShare": 0.3,
+    "seedlingThresholdG": 45,
+    "saplingThresholdG": 90,
+    "budThresholdG": 20,
+    "largeLeafThresholdG": 26,
+    "flowerThresholdG": 12,
+    "greenFruitThresholdG": 40,
+    "matureFruitThresholdG": 90,
+    "treeCycleThresholdG": 100,
+    "maxLeaves": 3,
+    "leafBudgetShare": 0.3,
+    "youngFruitShare": 0.8,
+    "matureFruitShare": 0.4,
+    "matureEnrichmentScale": 0.5,
+    "matureEnrichmentMassCeilingG": 150,
+    "matureEnrichmentWindowG": 60,
+    "largeLeafEfficiency": 0.6,
+    "largeLeafEnvironmentalLoss": 0.4,
+    "budCheckPeriodUH": 24,
+    "budCheckHourUH": 4,
+    "budChanceByLeafCount": [0.8, 0.4, 0.01, 0]
+  },
+  "reactions": {
+    "activeThresholdG": 30,
+    "activeSpendG": 30,
+    "sustainedChargedPerUH": 12,
+    "sustainedBurningPerUH": 12,
+    "chargedStartupG": 12,
+    "burningStartupG": 12,
+    "swirlUnitG": 30,
+    "swirlAuraThresholdG": 15,
+    "swirlSourceFraction": 0.5,
+    "swirlSourceStrength": 0.8,
+    "swirlPropagationThreshold": 0.5,
+    "swirlGainBase": 0.8,
+    "swirlGainScale": 1.25,
+    "swirlGainOffset": 0.04,
+    "swirlDoubleThreshold": 0.8,
+    "pairCosts": {
+      "Fire": {"Electro": 30, "Hydro": 15, "Cryo": 60},
+      "Hydro": {"Fire": 60, "Cryo": 30, "Dendro": 15},
+      "Dendro": {"Electro": 30, "Hydro": 60},
+      "Electro": {"Fire": 30, "Cryo": 30, "Dendro": 30},
+      "Cryo": {"Electro": 30, "Fire": 15, "Hydro": 30},
+      "Geo": {"Electro": 15, "Fire": 15, "Hydro": 15, "Cryo": 15}
+    }
+  },
+  "orders": {"firstWindowDays": 45, "renewalWindowDays": 40, "quantity": 1},
+  "economy": {
+    "growthCycle": 6, "matureHarvest": 2, "orderDelivery": 16,
+    "plotCosts": {"P02": 8, "P03": 16, "P04": 24, "P05": 32, "P06": 40, "P07": 48}
+  },
+  "technology": {"collectBagCost": 12, "manualRequired": 3, "wateredElementsRequired": 2},
+  "visitors": {"arrivalDay": 2, "rewards": {"greet": 2, "clue": 3, "thank": 4}}
+}

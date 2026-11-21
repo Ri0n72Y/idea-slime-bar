@@ -8,6 +8,7 @@ import { acceptOrder, advanceOrdersAtMorning, deliverOrder, initialOrders, type 
 import { reconcileDiscoveries, type DiscoveryId, type DiscoveryRecord } from "./discovery.ts";
 import { newLabor, newTechnology, purchaseCollectBag, type LaborRecord, type TechnologyRecord } from "./technology.ts";
 import { interactVisitor, newVisitor, type VisitorAction, type VisitorState } from "./visitors.ts";
+import { BALANCE } from "./balance.ts";
 
 export const PLOT_IDS = ["P01", "P02", "P03", "P04", "P05", "P06", "P07"] as const;
 export type PlotId = (typeof PLOT_IDS)[number];
@@ -44,7 +45,7 @@ export function fruitMass(item: EdibleItem): number {
   return reproductiveMass(item.free, item.reaction);
 }
 
-export type ElementBall = { id: string; element: Element; initialV: 50; createdUH: number; slot: number };
+export type ElementBall = { id: string; element: Element; initialV: number; createdUH: number; slot: number };
 export type NightReport = {
   fromDay: number; toDay: number; fromUH: number; toUH: number;
   ledger: NightLedger;
@@ -143,15 +144,15 @@ function collectActualBall(state: GameState, ball: ElementBall, manual: boolean)
   const amount = ball.initialV * Math.pow(0.5,
     (state.worldUH - ball.createdUH) / U2_CONFIG.ballHalfLifeUH);
   delete state.looseBalls[ball.id];
-  if (amount < 1) return false;
+  if (amount < U2_CONFIG.ballMinimumCollectV) return false;
   state.heldElements[elementIndex(ball.element)] += amount;
   event(state, "collect", `收集 ${ball.id}：${ball.element} ${amount.toFixed(3)}V`,
     "BALL_COLLECTED", ball.id);
-  if (manual && state.labor.manualBallIds.length < 3 &&
+  if (manual && state.labor.manualBallIds.length < BALANCE.technology.manualRequired &&
       !state.labor.manualBallIds.includes(ball.id)) {
     state.labor.manualBallIds.push(ball.id);
-    if (state.labor.manualBallIds.length === 3) event(state, "labor",
-      "已亲手收集三枚不同元素球", "THIRD_MANUAL_COLLECTION", ball.id);
+    if (state.labor.manualBallIds.length === BALANCE.technology.manualRequired) event(state, "labor",
+      `已亲手收集${BALANCE.technology.manualRequired}枚不同元素球`, "THIRD_MANUAL_COLLECTION", ball.id);
   }
   return true;
 }
@@ -232,7 +233,7 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
     for (const ball of Object.values(state.looseBalls)) {
       const remaining = ball.initialV * Math.pow(0.5, (state.worldUH - ball.createdUH) / U2_CONFIG.ballHalfLifeUH);
       ledger.ballDecayedV += ball.initialV - Math.max(0, remaining);
-      if (remaining < 1) delete state.looseBalls[ball.id];
+      if (remaining < U2_CONFIG.ballMinimumCollectV) delete state.looseBalls[ball.id];
     }
     const plots = Object.fromEntries(PLOT_IDS.map(id => {
       const before = oldSnapshots[id], after = snapshotPlot(state.plots[id]);
@@ -263,6 +264,7 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
     state.phase = "DAY_WORK";
     state.pendingEndDay = null;
     state.dayCondenseUsed = 0;
+    state.dayCondenseLimit = U2_CONFIG.condensesPerDay;
     state.lastNightReport = { fromDay, toDay: state.day, fromUH, toUH: state.worldUH, ledger, plots, events: nightEvents };
     event(state, "morning", `次晨第 ${state.day} 天，凝聚额度已恢复。`);
     return notice(state, "success", `第 ${fromDay} 天结算完成：经过 ${U2_CONFIG.nightUH}uh，今日凝聚额度已重置。`);
@@ -420,8 +422,8 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
         initialV: U2_CONFIG.ballInitialV, createdUH: state.worldUH, slot: state.dayCondenseUsed };
       state.looseBalls[ball.id] = ball;
       state.dayCondenseUsed++;
-      event(state, "condense", `凝聚 ${ball.id}：${element}，初始 50V`);
-      return notice(state, "success", `元素球已凝聚。请点击水晶球旁的元素球收集。`);
+      event(state, "condense", `凝聚 ${ball.id}：${element}，初始 ${U2_CONFIG.ballInitialV}V`);
+      return notice(state, "success", `元素球已凝聚（初始 ${U2_CONFIG.ballInitialV}V）。请点击水晶球旁的元素球收集。`);
     }
     case "COLLECT_BALL": {
       const ball = Object.hasOwn(state.looseBalls, command.ballId) ?
@@ -460,7 +462,7 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
         "SOIL_WATERED", `${p.id}/${command.element}`);
       if (!state.labor.wateredElements.includes(command.element)) {
         state.labor.wateredElements.push(command.element);
-        if (state.labor.wateredElements.length === 2) event(state, "discovery",
+        if (state.labor.wateredElements.length === BALANCE.technology.wateredElementsRequired) event(state, "discovery",
           "两种不同元素首次注入土壤", "SECOND_ELEMENT_WATERED", `${p.id}/${command.element}`);
       }
       return notice(state, "success", `${p.id} 土壤已浇灌 ${command.element}；夜间将按根系规则吸收。`);

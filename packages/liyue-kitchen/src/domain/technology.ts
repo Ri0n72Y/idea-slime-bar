@@ -1,6 +1,8 @@
+import { BALANCE } from "./balance.ts";
 import type { GameState } from "./game.ts";
 import type { Element } from "./config.ts";
-export const COLLECT_BAG = { id: "collectBag", title: "收集袋", cost: 12, manualRequired: 3 } as const;
+export const COLLECT_BAG = Object.freeze({ id: "collectBag", title: "收集袋",
+  cost: BALANCE.technology.collectBagCost, manualRequired: BALANCE.technology.manualRequired });
 export type TechnologyRecord = { unlockedAtDay: number; evidenceIds: string[] };
 export type LaborRecord = { manualBallIds: string[]; wateredElements: Element[] };
 export const newLabor = (): LaborRecord => ({ manualBallIds: [], wateredElements: [] });
@@ -10,11 +12,12 @@ export function purchaseCollectBag(state: GameState):
   { ok: true; cost: number } | { ok: false; reason: string } {
   if (state.technology.collectBag) return { ok: false, reason: "收集袋已经解锁，不重复扣费。" };
   if (state.labor.manualBallIds.length < COLLECT_BAG.manualRequired ||
-      !state.discoveries.A18) return { ok: false, reason: "请先亲手收集三枚不同元素球。" };
+      !state.discoveries.A18) return { ok: false, reason: `请先亲手收集${COLLECT_BAG.manualRequired}枚不同元素球。` };
   if (state.adeptalEnergy.balance < COLLECT_BAG.cost)
     return { ok: false, reason: `洞天仙力不足，收集袋需 ${COLLECT_BAG.cost}。` };
   state.adeptalEnergy.balance -= COLLECT_BAG.cost;
   state.adeptalEnergy.spentTotal += COLLECT_BAG.cost;
+  state.adeptalEnergy.spendLedger["tech:collectBag"] = COLLECT_BAG.cost;
   state.technology.collectBag = {
     unlockedAtDay: state.day, evidenceIds: [...state.labor.manualBallIds],
   };
