@@ -103,6 +103,15 @@ export function validateBalanceConfig(candidate: unknown): Readonly<BalanceConfi
   if (requireNumber(candidate, "reactions.swirlSourceFraction", 0, 1) <= 0)
     throw new Error("Invalid balance config: swirl source fraction must exceed zero");
   const capacity = requireNumber(candidate, "world.reserveCapacityV", 1e-8, 1e9);
+  // Normalizing the sigmoid over [0, capacity] requires a resolvable
+  // denominator. Extreme but otherwise legal midpoints can round both
+  // endpoints to exactly zero (or one) and produce 0/0 -> NaN in growth.
+  const midpoint = requireNumber(candidate, "growth.reserveCurveMidpointV", 0, 1e9);
+  const width = requireNumber(candidate, "growth.reserveCurveWidthV", 1e-8, 1e9);
+  const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+  const range = sigmoid((capacity - midpoint) / width) - sigmoid(-midpoint / width);
+  if (!(range > 1e-12))
+    throw new Error("Invalid balance config: reserve S curve cannot be normalized across reserve capacity");
   const soft = requireNumber(candidate, "growth.rootReserveSoftStartV", 0, 1e9);
   const span = requireNumber(candidate, "growth.rootReserveSpanV", 1e-8, 1e9);
   if (Math.abs(capacity - soft - span) > 1e-7)

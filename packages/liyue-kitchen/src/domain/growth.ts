@@ -146,7 +146,11 @@ export function advancePlotOneUH(plot: GardenPlot, hour: number, random: () => n
   const remaining = [...budget] as Vector;
   const growthAdded = new Map<Leaf, Vector>();
 
-  // At most three independent leaf budgets, 30% nominal each. No duplicate budget.
+  // Existing leaves may outnumber the CURRENT maxLeaves after a config
+  // change. Split a single hourly budget among the actual leaves; never
+  // grant more than its full amount or reject a valid historical save.
+  const leafBudgetShare = tree.leaves.length > 0
+    ? Math.min(BALANCE.growth.leafBudgetShare, 1 / tree.leaves.length) : 0;
   for (const leaf of tree.leaves) {
     const leafAffinity = effectiveAffinity(leaf.baseAffinity, leaf.growth);
     const newFruitGrowth = zeros();
@@ -161,7 +165,7 @@ export function advancePlotOneUH(plot: GardenPlot, hour: number, random: () => n
       ? BALANCE.growth.matureEnrichmentScale * Math.max(0, Math.min(1,
           (BALANCE.growth.matureEnrichmentMassCeilingG - fruitMassAtStepStart) / BALANCE.growth.matureEnrichmentWindowG)) : 1;
     for (let i = 0; i < 7; i++) {
-      const grant = budget[i] * BALANCE.growth.leafBudgetShare * Math.min(1, Math.max(0, leafAffinity[i]));
+      const grant = budget[i] * leafBudgetShare * Math.min(1, Math.max(0, leafAffinity[i]));
       if (grant <= 0) continue;
       const fruitShare = fruit ? (fruit.stage === "MatureFruit" ? BALANCE.growth.matureFruitShare : BALANCE.growth.youngFruitShare) : 0;
       const fruitGrantV = grant * fruitShare;
