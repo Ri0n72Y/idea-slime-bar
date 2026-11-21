@@ -1,0 +1,350 @@
+/* Source-of-truth coordinates are in scene/WorkshopScene.tsx as 1600×900
+   world coordinates; the scene starts at y=56 and ends at y=865. */
+.game-shell.workshop-shell {
+  grid-template-rows: 6.222222% 89.888889% 3.888889%;
+}
+.game-shell.garden-shell {
+  grid-template-rows: 10% 83% 7%;
+}
+.workshop-pixi-scene {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #c8d4cf;
+}
+.workshop-pixi-host {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  touch-action: none;
+  overflow: hidden;
+}
+.workshop-pixi-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+/* The interactive silhouette belongs to Pixi. The React regions have only
+   lightweight business controls and do not create rectangular hit blockers. */
+.workshop-pixi-scene > :not(.workshop-pixi-host) {
+  position: absolute;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+.workshop-pixi-scene .region {
+  min-height: 0;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: .25em;
+  font-size: clamp(8px, .77vw, 12.5px);
+  pointer-events: none;
+}
+.workshop-pixi-scene .region h2 {
+  font-size: 1.02em;
+  margin: 0 0 .3em;
+  color: #283b4b;
+  text-shadow: 0 1px 1px #f5eed3;
+}
+.workshop-pixi-scene .region button,
+.workshop-pixi-scene .workbench-drop,
+.workshop-pixi-scene [data-item-drop-zone],
+.workshop-pixi-scene [role="button"],
+.workshop-pixi-scene .seed-item,
+.workshop-pixi-scene .order-panel,
+.workshop-pixi-scene input {
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+/* Material gestures must remain pointer drags on real touch devices.
+   Native pan/scroll was cancelling the inventory → peel gesture. */
+.workshop-pixi-scene .seed-item,
+.workshop-pixi-scene .workbench-item,
+.workshop-pixi-scene [data-item-drop-zone],
+.workshop-pixi-scene [data-item-id][role="button"] {
+  touch-action: none;
+}
+.workshop-pixi-scene .region button {
+  padding: .23em .38em;
+  font-size: .87em;
+  white-space: normal;
+}
+.workshop-pixi-scene .hint,
+.workshop-pixi-scene .order-location-hint {
+  font-size: .79em;
+  color: #203e3c;
+}
+.workshop-orb-overlay {
+  left: 2.5%;
+  top: 4.945%;
+  width: 20.625%;
+  height: 39.555%;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: end;
+  z-index: 2;
+}
+.workshop-pixi-scene .workshop-orb-overlay {
+  background: transparent;
+}
+.workshop-pixi-scene .workshop-orb-link {
+  margin-top: auto;
+  margin-bottom: .38em;
+  width: 62%;
+  height: 10%;
+  min-height: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 2em;
+  background: #e9eee2cb;
+  color: #314d50;
+  border: 1px solid #90a8a9;
+  cursor: pointer;
+  pointer-events: auto;
+  font-size: clamp(7px, .78vw, 12px);
+  line-height: 1.04;
+}
+.workshop-pixi-scene .workshop-orb-link strong { font-size: 1em; }
+.workshop-pixi-scene .workshop-orb-link small { font-size: .7em; white-space: nowrap; }
+.workshop-orb-accessible {
+  position: absolute;
+  top: 61%;
+  right: 6%;
+  color: #2a5661;
+  background: #d3e5edce;
+  border: 1px solid #81a4a8;
+  font-size: clamp(8px, .75vw, 12px);
+  padding: .1em .3em;
+  border-radius: .4em;
+  pointer-events: none;
+}
+.workshop-pixi-scene .garden-overview {
+  position: absolute;
+  top: 0;
+  right: 1%;
+  left: 1%;
+  color: #203f52;
+  text-align: center;
+  font-size: clamp(8px,.82vw,13px);
+  font-weight: bold;
+  background: #d4e2e9db;
+  border-radius: 1em;
+  margin: .2em 0;
+  padding: .22em .3em;
+}
+/* Customer window is physically behind the counter; only dialogue content
+   is overlaid on the actual outside view drawn by Pixi. */
+.workshop-customer-overlay {
+  left: 30%;
+  top: 4.45%;
+  width: 30%;
+  height: 32.14%;
+  z-index: 1 !important;
+  display: flex;
+  flex-direction: column;
+  padding: .35em .6em 0;
+}
+.workshop-customer-overlay .visitors {
+  flex: 1;
+  min-height: 0;
+  color: #263b47;
+  background: transparent;
+}
+.workshop-customer-overlay .visitor-panel {
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+  background: #edf1e2d9;
+  border-radius: .5em;
+  padding: .15em .45em;
+  pointer-events: auto;
+}
+.workshop-customer-overlay .quiet-panel { background:#f2f4e2b3; color:#254152; }
+.workshop-customer-overlay .visitor-portrait { transform: scale(.78); transform-origin: top left; }
+.workshop-customer-overlay .visitor-actions { display:flex; flex-wrap:wrap; gap:.3em; }
+.workshop-shelf-overlay {
+  left: 62.5%;
+  top: 3.955%;
+  width: 32.5%;
+  height: 37.083%;
+  display:flex;
+  align-items:end;
+}
+.workshop-shelf-overlay .exploration {
+  width: 100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  height: 15%;
+  gap: .5em;
+  padding: .35em .6em;
+  background: #edf0e6d6;
+  border-radius: .25em;
+  pointer-events: none;
+}
+.workshop-shelf-overlay .exploration h2 { margin:0; font-size:.9em; }
+.workshop-shelf-overlay .exploration-summary { display:none; }
+.workshop-shelf-overlay .exploration button { white-space:nowrap; font-size:.75em; }
+.workshop-left-overlay {
+  left: 7.5%;
+  top: 36.59%;
+  width: 19.375%;
+  height: 28.18%;
+  z-index: 4 !important;
+  display:flex;
+  align-items:end;
+  padding: .18em .24em;
+}
+.workshop-machines-overlay {
+  width: 100%;
+  height: 69%;
+  min-height: 0;
+  display:grid;
+  grid-template-columns: 45% 55%;
+  gap:.3em;
+}
+.workshop-machines-overlay .peeling,
+.workshop-machines-overlay .juicing {
+  min-width:0;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  padding:.2em;
+  background:#f5e5cbb3;
+  border:1px solid #a28a61;
+  border-radius:.45em;
+}
+.workshop-machines-overlay .region h2 { font-size:.91em; color:#503e2c; }
+.workshop-machines-overlay .workbench-placeholder {
+  min-height:0;
+  flex:1;
+  border:1px dashed #b29672;
+  background:#f1e3cfa1;
+  padding:.1em;
+  overflow:hidden;
+  word-break:break-word;
+  pointer-events:auto;
+}
+.workshop-machines-overlay .workbench-placeholder p { font-size:.75em; margin:0; }
+.workshop-machines-overlay .workbench-placeholder > span { font-size:1.2em; }
+.workshop-machines-overlay .workbench-item { font-size:.83em; padding:.1em; }
+.workshop-machines-overlay .workbench-item small { font-size:.73em; }
+.workshop-machines-overlay .actions { display:flex; flex-wrap:wrap; gap:.1em; }
+.workshop-machines-overlay .region button { font-size:.73em; padding:.14em .2em; }
+.workshop-center-overlay {
+  left:26.875%;
+  top:36.59%;
+  width:36.25%;
+  height:13.844%;
+  z-index:4 !important;
+  padding:.18em .3em;
+  display:flex;
+  flex-direction:column;
+}
+.workshop-center-overlay .orders {
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  min-height:0;
+  padding:.18em .25em;
+}
+.workshop-center-overlay .orders h2 { font-size:.89em; }
+.workshop-center-overlay .orders-scroller {
+  flex:1;
+  display:flex;
+  align-items:start;
+  gap:.4em;
+  overflow:auto;
+  min-height:0;
+}
+.workshop-center-overlay .order-panel {
+  flex: 0 0 auto;
+  min-width: 10em;
+  max-width: 19em;
+  font-size:.77em;
+  border:1px solid #b3a080;
+  background:#f3dfb8c9;
+  border-radius:.3em;
+  padding:.15em .22em;
+}
+.workshop-center-overlay .order-panel p { margin:.1em 0; }
+.workshop-center-overlay .order-candidates {max-height:2.5em; overflow:auto;}
+.workshop-right-overlay {
+  left:63.125%;
+  top:36.59%;
+  width:21.875%;
+  height:28.18%;
+  z-index:4 !important;
+}
+.workshop-cabinet-overlay {
+  left:7.5%;
+  top:64.77%;
+  width:77.5%;
+  height:29.67%;
+  display:grid;
+  grid-template-columns:17.8% 28.8% 33.9% 19.5%;
+  z-index:4 !important;
+  padding:.45em .4em;
+}
+.workshop-storage-overlay { grid-column:2; min-width:0; min-height:0; }
+.workshop-inventory-overlay { grid-column:3; min-width:0; min-height:0; }
+.workshop-cabinet-overlay .storage,
+.workshop-cabinet-overlay .inventory {
+  height:100%;
+  min-height:0;
+  width:100%;
+  padding:.2em .35em;
+  background: #e5ead8d9;
+  border:1px solid #899886;
+  border-radius:.3em;
+  display:flex;
+  flex-direction:column;
+}
+.workshop-cabinet-overlay .storage h2,
+.workshop-cabinet-overlay .inventory h2 { color:#334c4c; }
+.workshop-cabinet-overlay .held-elements,
+.workshop-cabinet-overlay .inventory-line {
+  flex:1;
+  min-height:0;
+  overflow:auto;
+  align-content:start;
+}
+.workshop-cabinet-overlay .inventory-line { display:flex;flex-wrap:wrap;gap:.18em; }
+.workshop-cabinet-overlay .seed-item { margin:.15em; padding:.12em .2em; font-size:.84em; }
+.workshop-cabinet-overlay .hint { font-size:.7em; }
+.workshop-cabinet-overlay .workbench-drop { pointer-events:auto; }
+/* Window-of-interest footer: keep immediate feedback readable at 35px. */
+.game-shell.workshop-shell .status-area {
+  padding:0 .5em;
+  flex-wrap:nowrap;
+  gap:.35em;
+  min-height:0;
+  overflow:hidden;
+  background:#d7e1f1;
+  color:#263b51;
+}
+.game-shell.workshop-shell .status-area .experience-hint {flex:1;min-width:0;}
+.game-shell.workshop-shell .status-area [data-testid="next-step-text"] {
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;
+}
+.game-shell.workshop-shell .status-area [data-testid="feedback"] {
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  flex:1;
+}
+@media (max-width:800px) {
+  .workshop-pixi-scene .region {font-size:clamp(7px,.78vw,10px);}
+  .workshop-pixi-scene .workshop-orb-link small {display:none;}
+  .workshop-machines-overlay .workbench-placeholder p {font-size:.68em;}
+  .workshop-cabinet-overlay .hint {display:none;}
+}
