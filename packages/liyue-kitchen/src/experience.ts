@@ -27,7 +27,7 @@ export function orderSelectionWarning(state: GameState, order: KitchenOrder): st
 }
 
 /** Suggestions follow the real state while leaving operation strategy to the player. */
-export function nextActionHint(state: GameState): string {
+export function nextActionHint(state: GameState, scene: "workshop" | "garden" = "garden"): string {
   if (state.phase === "DAY_CONFIRM") return "可以确认结算观察夜间成长，也可以返回今日继续操作。";
   const items = Object.values(state.items);
   const planted = PLOT_IDS.some(id => state.plots[id].open && !!state.plots[id].plant);
@@ -47,7 +47,9 @@ export function nextActionHint(state: GameState): string {
       items.some(item => item.kind === "Aquamelon" && accessible(item)))
     return "果汁委托需要杯装成品。可以将完整水瓜拖到剥壳台加工。";
   const seed = items.find(item => item.kind === "Seed" && item.location.kind === "inventory");
-  if (!planted && seed) return "从物品栏拖动水瓜种子，播种到水晶球中心的开放地格。";
+  if (!planted && seed) return scene === "workshop"
+    ? "先点击水晶球「前往园地」，再把物品栏的种子拖到已开垦的空地格播种。"
+    : "从园地物品栏拖动水瓜种子，播种到已开垦的空地格。";
   if (PLOT_IDS.some(id => state.plots[id].plant?.leaves.some(leaf => leaf.fruit?.stage === "MatureFruit")))
     return "树上已有成熟水瓜，可以点击果实采摘。";
   if (state.heldElements.some(v => v > 0)) {
