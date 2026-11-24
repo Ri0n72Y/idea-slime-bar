@@ -1,4 +1,5 @@
 import type { EdibleItem, EdibleKind, GameState, ShellItem, WorkbenchSlot } from "./game.ts";
+import { BALANCE } from "./balance.ts";
 
 export type ProcessAction = "PEEL" | "JUICE" | "CUP";
 type Plan = { input: EdibleKind; slot: WorkbenchSlot; output: EdibleKind; title: string };
@@ -24,12 +25,33 @@ export function processWorkbench(state: GameState, itemId: string, action: Proce
       item.location.slot !== plan.slot)
     return { ok: false, reason: "当前工作台缺少正确的加工材料。" };
 
+  if (action === "CUP" && state.opening && item.batchId) {
+    const batch = state.opening.batches[item.batchId];
+    if (!batch || item.volumeMl === undefined || item.volumeMl < batch.cupMl)
+      return { ok: false, reason: "原汁余量不足一杯。" };
+    const id = `item:aquamelonjuicecup:${state.nextObjectSeq++}`;
+    const cup: EdibleItem = { ...structuredClone(item), id, kind: "AquamelonJuiceCup",
+      parentItemId: item.id, volumeMl: batch.cupMl, location: { kind: "storage" } };
+    item.volumeMl -= batch.cupMl;
+    if (item.volumeMl === 0) delete state.items[item.id];
+    state.items[id] = cup;
+    state.selectedItemId = id;
+    return { ok: true, inputId: itemId, outputIds: [id],
+      message: `装杯完成：${batch.cupMl}ml 成品已入仓储；原汁剩余 ${item.volumeMl}ml。` };
+  }
   const edibleId = `item:${plan.output.toLowerCase()}:${state.nextObjectSeq++}`;
   const output: EdibleItem = {
     ...item, id: edibleId, kind: plan.output, parentItemId: item.id,
     // A cup is the finished item. It remains on the machine until the player moves it.
     location: { kind: "workbench", slot: plan.slot },
   };
+  if (action === "JUICE" && state.opening) {
+    const { fruitJuiceMl, cupMl } = BALANCE.processing;
+    output.batchId = output.id;
+    output.volumeMl = fruitJuiceMl;
+    state.opening.batches[output.id] = { source: { ...item.source }, totalMl: fruitJuiceMl,
+      cupMl, delivered: {} };
+  }
   delete state.items[item.id];
   state.items[output.id] = output;
   const outputIds = [output.id];
@@ -37,11 +59,13 @@ export function processWorkbench(state: GameState, itemId: string, action: Proce
     const shell: ShellItem = {
       id: `item:shell:${state.nextObjectSeq++}`, kind: "Shell",
       parentItemId: item.id, source: { ...item.source }, location: { kind: "storage" },
+      ...(state.opening ? { traits: [...(item.lockedAffinity ?? item.baseAffinity)] } : {}),
     };
     state.items[shell.id] = shell;
     outputIds.push(shell.id);
   }
   state.selectedItemId = output.id;
   return { ok: true, inputId: itemId, outputIds,
-    message: `${plan.title}完成：获得 ${plan.output}${action === "PEEL" ? " 和果壳（已入仓储）" : ""}。` };
+    message: action === "JUICE" && output.volumeMl !== undefined ? `榨汁完成：获得 ${output.volumeMl}ml 原汁。` :
+      `${plan.title}完成：获得 ${plan.output}${action === "PEEL" ? " 和果壳（已入仓储）" : ""}。` };
 }

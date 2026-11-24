@@ -1,4 +1,4 @@
-import { applyCommand, newGame, type Command, type GameState } from "./game.ts";
+import { applyCommand, newGame, newOpeningGame, type Command, type GameState } from "./game.ts";
 import { loadGame, saveGame, validateSave, SAVE_VERSION } from "./save.ts";
 import { createWorldSeed } from "./worldSeed.ts";
 
@@ -112,8 +112,8 @@ export function createGameStore(initialState: GameState = newGame(), options: {
   };
 }
 
-export const gameStore = createGameStore(newGame(), {
-  createNew: () => newGame(createWorldSeed()),
+export const gameStore = createGameStore(newOpeningGame(), {
+  createNew: () => newOpeningGame(createWorldSeed()),
   initialReady: false,
   persistence: { load: loadGame, save: saveGame },
 });

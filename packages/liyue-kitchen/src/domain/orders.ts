@@ -1,5 +1,5 @@
 import { BALANCE } from "./balance.ts";
-import type { GameState } from "./game.ts";
+import { OPENING_SOURCE, sourceKey, type GameState } from "./game.ts";
 import { ECONOMY_CANDIDATE, rewardEnergy } from "./economy.ts";
 
 export type OrderKind = "aquamelon" | "juice_cup";
@@ -24,6 +24,7 @@ const neededKind = (kind: OrderKind) => kind === "aquamelon" ? "Aquamelon" : "Aq
 function nextOffer(state: GameState, kind: OrderKind): KitchenOrder {
   const id = `order:${state.nextObjectSeq++}`;
   const offer = createOrder(id, state.day, kind);
+  if (state.opening && !state.opening.firstCupOrderId && kind === "juice_cup") offer.quantity = 1;
   state.orders[id] = offer;
   return offer;
 }
@@ -55,6 +56,23 @@ export function deliverOrder(state: GameState, orderId: string, itemIds: string[
     return { ok: false, reason: "交付物品仍在水晶球地面或加工台，请先拖入物品栏/仓储区。" };
   if (state.adeptalEnergy.rewardedIds.includes(`order:${order.id}`))
     return { ok: false, reason: "此委托奖励已领取。" };
+  // Volume leaves inventory only through a genuine order. The batch keeps
+  // delivered IDs and their capacity for save/reload conservation checks.
+  if (state.opening) {
+    for (const item of items) {
+      if (item?.kind !== "AquamelonJuiceCup" || !item.batchId) continue;
+      const batch = state.opening.batches[item.batchId];
+      if (!batch || item.volumeMl !== batch.cupMl || Object.hasOwn(batch.delivered, item.id))
+        return { ok: false, reason: "杯装容量账本异常，未交付。" };
+    }
+    for (const item of items) {
+      if (item?.kind !== "AquamelonJuiceCup" || !item.batchId) continue;
+      const batch = state.opening.batches[item.batchId];
+      batch.delivered[item.id] = batch.cupMl;
+      if (order.visitorId === "board" && sourceKey(batch.source) === sourceKey(OPENING_SOURCE))
+        state.opening.firstCupOrderId ??= order.id;
+    }
+  }
   for (const id of itemIds) delete state.items[id];
   if (state.selectedItemId && itemIds.includes(state.selectedItemId)) state.selectedItemId = null;
   order.state = "completed";
