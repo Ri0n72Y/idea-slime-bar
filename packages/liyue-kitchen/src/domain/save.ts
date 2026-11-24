@@ -373,11 +373,23 @@ export function validateSave(value: unknown): GameState | null {
     }
     if (!firstCupProven) return null;
   }
-  if (isObject(opening) && isObject(batches) && !usedDeliveryIds.has(OPENING_FRUIT_ID) &&
-      !Object.values(g.items).some(item => isObject(item) && item.kind !== "Shell" && validSource(item.source) &&
-        sourceKey(item.source as SourceIdentity) === initialKey) &&
-      !Object.values(batches).some(batch => isObject(batch) && validSource(batch.source) &&
-        sourceKey(batch.source as SourceIdentity) === initialKey)) return null;
+  if (isObject(opening) && isObject(batches)) {
+    // An opening fruit cannot have been consumed as a whole-fruit order.
+    if (usedDeliveryIds.has(OPENING_FRUIT_ID)) return null;
+    const initialBatch = Object.values(batches).find(batch => isObject(batch) && validSource(batch.source) &&
+      sourceKey(batch.source as SourceIdentity) === initialKey);
+    if (opening.firstCupOrderId === null) {
+      if (isObject(initialBatch)) {
+        const liveMl = Object.values(g.items).reduce<number>((sum, item) =>
+          isObject(item) && validSource(item.source) && sourceKey(item.source as SourceIdentity) === initialKey &&
+          (item.kind === "RawJuice" || item.kind === "AquamelonJuiceCup") &&
+          typeof item.volumeMl === "number" ? sum + item.volumeMl : sum, 0);
+        if (liveMl < (initialBatch.cupMl as number)) return null;
+      } else if (!Object.values(g.items).some(item => isObject(item) &&
+          (item.kind === "Aquamelon" || item.kind === "PeeledFlesh") && validSource(item.source) &&
+          sourceKey(item.source as SourceIdentity) === initialKey)) return null;
+    } else if (!isObject(initialBatch)) return null;
+  }
   const originSeeds = new Set<string>(), occupiedSlots = new Set<string>();
   for (const item of Object.values(g.items)) {
     if (!isObject(item)) return null;

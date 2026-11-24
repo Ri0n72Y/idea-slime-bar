@@ -1,5 +1,5 @@
 import { PLOT_IDS, remainingCondenses, type GameItem, type GameState } from "./domain/game.ts";
-import type { KitchenOrder } from "./domain/orders.ts";
+import { openingDeliveryWarning, type KitchenOrder } from "./domain/orders.ts";
 
 /** UI-only guidance and material choices. No game commands are performed here. */
 export const itemTitle = (item: GameItem): string => ({
@@ -14,7 +14,8 @@ const requiredKind = (order: KitchenOrder): GameItem["kind"] =>
 const accessible = (item: GameItem): boolean =>
   item.location.kind === "inventory" || item.location.kind === "storage";
 export const eligibleOrderItems = (state: GameState, order: KitchenOrder): GameItem[] =>
-  Object.values(state.items).filter(item => item.kind === requiredKind(order) && accessible(item));
+  Object.values(state.items).filter(item => item.kind === requiredKind(order) && accessible(item) &&
+    !openingDeliveryWarning(state, order, item));
 
 export function orderSelectionWarning(state: GameState, order: KitchenOrder): string | null {
   const selected = state.selectedItemId ? state.items[state.selectedItemId] : null;
@@ -23,7 +24,7 @@ export function orderSelectionWarning(state: GameState, order: KitchenOrder): st
     return `已选「${itemTitle(selected)}」，委托需要「${orderItemTitle(order)}」。请显式选用下方合格材料。`;
   if (!accessible(selected))
     return `「${itemTitle(selected)}」仍在${selected.location.kind === "ground" ? "水晶球地面" : "加工台"}。先拖入物品栏或仓储区再交付。`;
-  return null;
+  return openingDeliveryWarning(state, order, selected);
 }
 
 /** Suggestions follow the real state while leaving operation strategy to the player. */
