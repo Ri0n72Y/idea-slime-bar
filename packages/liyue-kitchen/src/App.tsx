@@ -4,7 +4,7 @@ import "./u4.css";
 import "./batch-a.css";
 import "./batch-b.css";
 import "./batch-c.css";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
 import { fruitMass, remainingCondenses, stageLabel, OPENING_SOURCE, sourceKey, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
@@ -19,6 +19,7 @@ import { growthStageLabel, itemLocationLabel, playerEventText, plotLabel } from 
 import { eligibleOrderItems, itemTitle, nextActionHint, orderItemTitle, orderSelectionWarning } from "./experience";
 import "./experience.css";
 import { SaveManager } from "./SaveManager";
+import { createTapAction } from "./tapAction";
 import "./workshop.css";
 import "./workshop-pixi.css";
 
@@ -70,35 +71,7 @@ export function App() {
     workshopPickRef.current = pick;
     return () => { if (workshopPickRef.current === pick) workshopPickRef.current = null; };
   }, []);
-  // Real touch and CDP drag gestures may suppress the synthesized click.
-  // A tap activates on pointer-up and ignores its subsequent synthetic click.
-  const buttonTouchStart = useRef<{ key: string; id: number; x: number; y: number } | null>(null);
-  const lastButtonTouch = useRef<{ at: number; x: number; y: number } | null>(null);
-  const tapAction = (key: string, action: () => void) => ({
-    onPointerDown: (e: ReactPointerEvent<HTMLButtonElement>) => {
-      if (e.pointerType === "touch")
-        buttonTouchStart.current = { key, id: e.pointerId, x: e.clientX, y: e.clientY };
-    },
-    onPointerUp: (e: ReactPointerEvent<HTMLButtonElement>) => {
-      if (e.pointerType !== "touch") return;
-      const start = buttonTouchStart.current;
-      buttonTouchStart.current = null;
-      if (!start || start.key !== key || start.id !== e.pointerId ||
-        Math.hypot(e.clientX - start.x, e.clientY - start.y) > 12) return;
-      lastButtonTouch.current = { at: Date.now(), x: e.clientX, y: e.clientY };
-      action();
-    },
-    onPointerCancel: (e: ReactPointerEvent<HTMLButtonElement>) => {
-      if (e.pointerType === "touch") buttonTouchStart.current = null;
-    },
-    onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
-      if (e.detail > 0 && lastButtonTouch.current &&
-        Date.now() - lastButtonTouch.current.at < 1000 &&
-        Math.hypot(e.clientX - lastButtonTouch.current.x,
-          e.clientY - lastButtonTouch.current.y) < 16) return;
-      action();
-    },
-  });
+  const [tapAction] = useState(createTapAction);
   const [reportDismissed, setReportDismissed] = useState<number | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [scene, setScene] = useState<"workshop" | "garden">("workshop");
@@ -300,7 +273,7 @@ export function App() {
             </div>
           )}
           {report && <button type="button" className="report-reopen" data-testid="reopen-report"
-            onClick={() => setReportDismissed(null)}>查看第 {report.fromDay} 天夜间简报</button>}
+            {...tapAction("reopen-report", () => setReportDismissed(null))}>查看第 {report.fromDay} 天夜间简报</button>}
         </section>
   );
   const crystalPanel = (
@@ -321,7 +294,7 @@ export function App() {
                 .filter(id => !state.plots[id].open).map(id => (
                 <button key={id} type="button" data-testid={`unlock-${id}`}
                   disabled={state.phase !== "DAY_WORK"}
-                  onClick={() => gameStore.dispatch({ type: "UNLOCK_PLOT", plotId: id })}>
+                  {...tapAction(`unlock-${id}`, () => gameStore.dispatch({ type: "UNLOCK_PLOT", plotId: id }))}>
                   开垦{plotLabel(id)} · {ECONOMY_CANDIDATE.plotCosts[id]}仙力
                 </button>
               ))}
@@ -370,7 +343,7 @@ export function App() {
                             data-testid={`choose-order-${order.id}-${item.id}`}
                             aria-pressed={state.selectedItemId === item.id}
                             disabled={state.phase !== "DAY_WORK"}
-                            onClick={() => chooseOrderItem(item.id)}>
+                            {...tapAction(`choose-order-${order.id}-${item.id}`, () => chooseOrderItem(item.id))}>
                             {state.selectedItemId === item.id ? "已选：" : "选用："}{itemTitle(item)}
                             （{item.location.kind === "storage" ? "仓储" : "物品栏"}）
                           </button>
@@ -397,7 +370,7 @@ export function App() {
               <strong data-testid="discovery-progress">已发现 {discoveredCount} 项</strong>
               <small>通过真实种植、加工与交付留下证据</small>
             </div>
-            <button type="button" data-testid="open-discoveries" onClick={() => setMapOpen(true)}>
+            <button type="button" data-testid="open-discoveries" {...tapAction("open-discoveries", () => setMapOpen(true))}>
               查看探索图谱与科技
             </button>
           </section>
@@ -452,7 +425,7 @@ export function App() {
                 const info = ELEMENT_VIEW[element];
                 return <button key={element} type="button" data-testid={`water-${element}`} aria-label={`向所选地格浇灌${info.name}元素`}
                   style={{ borderColor: info.css }} disabled={!state.selectedPlotId || state.phase !== "DAY_WORK"}
-                  onClick={() => state.selectedPlotId && gameStore.dispatch({ type: "WATER_PLOT", element, plotId: state.selectedPlotId })}>
+                  {...tapAction(`water-${element}`, () => state.selectedPlotId && gameStore.dispatch({ type: "WATER_PLOT", element, plotId: state.selectedPlotId }))}>
                   {info.icon} {info.name} · 浇灌</button>;
               })}
               {scene === "garden" && !state.heldElements.some(v => v > 0) && <p className="hint">收集元素球后在此选择浇灌</p>}
@@ -504,19 +477,19 @@ export function App() {
           <span className="pill" data-testid="quota">凝聚 {remainingCondenses(state)}/{state.dayCondenseLimit}</span>
         </div>
         {scene === "garden" && <button type="button" className="action" data-testid="back-workshop"
-          onClick={() => navigateScene("workshop")}>返回工坊</button>}
+          {...tapAction("back-workshop", () => navigateScene("workshop"))}>返回工坊</button>}
         <button type="button" className="action" data-testid="condense" disabled={state.phase !== "DAY_WORK" || remainingCondenses(state) <= 0}
-          onClick={() => gameStore.dispatch({ type: "CONDENSE" })}>凝聚元素</button>
+          {...tapAction("condense", () => gameStore.dispatch({ type: "CONDENSE" }))}>凝聚元素</button>
         {state.technology.collectBag && (
           <button type="button" className="action" data-testid="collect-all"
             disabled={state.phase !== "DAY_WORK" || !Object.keys(state.looseBalls).length}
-            onClick={() => gameStore.dispatch({ type: "COLLECT_ALL_BALLS" })}>
+            {...tapAction("collect-all", () => gameStore.dispatch({ type: "COLLECT_ALL_BALLS" }))}>
             收集袋 · 全部收集
           </button>
         )}
-        <button type="button" className="action" data-testid="save-open" onClick={() => setSaveManagerOpen(true)}>存档</button>
+        <button type="button" className="action" data-testid="save-open" {...tapAction("save-open", () => setSaveManagerOpen(true))}>存档</button>
         <button type="button" className="action" data-testid="end-day" disabled={state.phase !== "DAY_WORK"}
-          onClick={() => gameStore.dispatch({ type: "REQUEST_END_DAY" })}>结束今日</button>
+          {...tapAction("end-day", () => gameStore.dispatch({ type: "REQUEST_END_DAY" }))}>结束今日</button>
       </header>
 
       {scene === "workshop" ? (
@@ -596,7 +569,7 @@ export function App() {
           <div className="dialog-pane discovery-pane">
             <header className="discovery-pane-header">
               <h2>探索图谱</h2>
-              <button type="button" data-testid="close-discoveries" onClick={() => setMapOpen(false)}>
+              <button type="button" data-testid="close-discoveries" {...tapAction("close-discoveries", () => setMapOpen(false))}>
                 返回洞天
               </button>
             </header>
@@ -692,7 +665,7 @@ export function App() {
       <footer className={`region status-area notice-${state.notice.kind}`} aria-live="polite" data-testid="region-feedback">
         <div className="experience-hint" data-testid="next-step-guide">
           <button type="button" data-testid="guide-toggle" aria-expanded={showGuidance}
-            onClick={() => setShowGuidance(!showGuidance)}>
+            {...tapAction("guide-toggle", () => setShowGuidance(v => !v))}>
             {showGuidance ? "收起提示" : "显示下一步"}
           </button>
           {showGuidance && <span data-testid="next-step-text">{nextActionHint(state, scene)}</span>}
@@ -707,8 +680,8 @@ export function App() {
             <h2>结束第 {state.day} 天？</h2>
             <p>将推进 {state.lastNightReport ? "下一轮 " : ""}{U2_CONFIG.nightUH}uh。未收集元素球会消散，随后进入次晨。</p>
             <div className="dialog-actions">
-              <button type="button" data-testid="cancel-day" onClick={() => gameStore.dispatch({ type: "CANCEL_END_DAY" })}>继续今日</button>
-              <button type="button" data-testid="confirm-day" onClick={() => gameStore.dispatch({ type: "CONFIRM_END_DAY", expectedDay: state.day })}>确认结算</button>
+              <button type="button" data-testid="cancel-day" {...tapAction("cancel-day", () => gameStore.dispatch({ type: "CANCEL_END_DAY" }))}>继续今日</button>
+              <button type="button" data-testid="confirm-day" {...tapAction("confirm-day", () => gameStore.dispatch({ type: "CONFIRM_END_DAY", expectedDay: state.day }))}>确认结算</button>
             </div>
           </div>
         </div>
@@ -722,7 +695,7 @@ export function App() {
             <p>果实进度：当前 {report.plots.P01.fruitCountAfter} 个生殖器官；具体成长事件见下方。</p>
             <ul className="event-list">{(report.events.length ? report.events.slice(-12) : ["昨夜没有新的阶段转换"]).map((item, i) => <li key={`${i}-${item}`}>{playerEventText(item)}</li>)}</ul>
             <p className="hint">凝聚额度已重置，可继续培育。</p>
-            <button type="button" data-testid="close-report" onClick={() => setReportDismissed(report.toDay)}>继续劳动</button>
+            <button type="button" data-testid="close-report" {...tapAction("close-report", () => setReportDismissed(report.toDay))}>继续劳动</button>
           </div>
         </div>
       )}
