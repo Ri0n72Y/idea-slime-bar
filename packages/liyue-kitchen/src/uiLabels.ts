@@ -26,6 +26,6 @@ export function playerEventText(message: string): string {
         Dendro: "草", Cryo: "冰", Geo: "岩" } as Record<string, string>)[element]);
 }
 
-export const itemLocationLabel = (kind: "inventory" | "storage" | "ground" | "workbench"): string => ({
-  inventory: "物品栏", storage: "仓储区", ground: "水晶球地面", workbench: "加工台",
+export const itemLocationLabel = (kind: "inventory" | "storage" | "ground" | "workbench" | "workshop-ground"): string => ({
+  inventory: "物品栏", storage: "仓储区", ground: "水晶球地面", workbench: "加工台", "workshop-ground": "工坊地面",
 })[kind];

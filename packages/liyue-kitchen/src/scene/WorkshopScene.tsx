@@ -52,6 +52,7 @@ export const WORKSHOP_GEOMETRY = {
     orb: [100,135,296,270],
     customer: [550,145,520,195],
     shelf: [1190,200,380,205],
+    tasks: [1190,90,380,104],
     left: [245,318,295,239],
     peel: [245,405,175,152],
     juice: [420,318,120,150],
@@ -64,7 +65,10 @@ export const WORKSHOP_GEOMETRY = {
 } satisfies {window: WorldRect;windowFrame: WorldRect;orb:{x:number;y:number;r:number};orbBase: WorldRect;shelf:WorldRect;surface:number[];leftCabinet:number[];leftInner:number[];middleCabinet:number[];rightInner:number[];rightCabinet:number[];floor:number[];rug:number[];sink:WorldRect;peel:WorldRect;machine:WorldRect;machineFoot:WorldRect;storage:WorldRect;inventory:WorldRect;overlays:Record<string,WorldRect>};
 const G = WORKSHOP_GEOMETRY;
 export function workshopOverlay(key: keyof typeof G.overlays, parent?: keyof typeof G.overlays) {
-  const [x,y,w,h] = G.overlays[key];
+  return workshopRectOverlay(G.overlays[key], parent);
+}
+export function workshopRectOverlay(rect: WorldRect, parent?: keyof typeof G.overlays) {
+  const [x,y,w,h] = rect;
   const [px,py,pw,ph]: WorldRect = parent ? G.overlays[parent] : [0,TOP,WIDTH,HEIGHT];
   return { left: `${(x-px)/pw*100}%`, top: `${(y-py)/ph*100}%`,
     width: `${w/pw*100}%`, height: `${h/ph*100}%` };

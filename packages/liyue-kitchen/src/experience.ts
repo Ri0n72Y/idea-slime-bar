@@ -6,7 +6,7 @@ export const itemTitle = (item: GameItem): string => ({
   Seed: "水瓜种子", Aquamelon: "完整水瓜", PeeledFlesh: "水瓜果肉",
   Shell: "水瓜果壳", RawJuice: "水瓜原汁",
   AquamelonJuiceCup: "杯装水瓜汁", VisitorGift: "旅人木牌",
-})[item.kind];
+})[item.kind] + ("volumeMl" in item && item.volumeMl !== undefined ? ` · ${item.volumeMl}ml` : "");
 export const orderItemTitle = (order: KitchenOrder): string =>
   order.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁";
 const requiredKind = (order: KitchenOrder): GameItem["kind"] =>
@@ -31,6 +31,13 @@ export function nextActionHint(state: GameState, scene: "workshop" | "garden" = 
   if (state.phase === "DAY_CONFIRM") return "可以确认结算观察夜间成长，也可以返回今日继续操作。";
   const items = Object.values(state.items);
   const planted = PLOT_IDS.some(id => state.plots[id].open && !!state.plots[id].plant);
+  const openingSeed = state.opening && items.find(item => item.kind === "Seed" && item.id === "item:seed:1");
+  if (openingSeed?.location.kind === "workshop-ground") return scene === "workshop"
+    ? "把工坊地面的种子拖入水晶球的圆形区域，再进入园地。"
+    : "开局种子仍在工坊地面，请返回工坊将种子拖进水晶球。";
+  if (openingSeed?.location.kind === "ground") return scene === "garden"
+    ? "将园地地面上的真实种子拖到开放空地格，完成播种。"
+    : "种子已在园地地面，点击水晶球进入园地后播种。";
   const accepted = Object.values(state.orders).filter(o => o.state === "accepted");
   if (items.some(item => item.kind === "Aquamelon" && item.location.kind === "ground"))
     return "水瓜已采摘，仍在水晶球地面。拖入物品栏或仓储区才能交单；也可拖至剥壳台加工。";
@@ -59,6 +66,7 @@ export function nextActionHint(state: GameState, scene: "workshop" | "garden" = 
   }
   if (Object.keys(state.looseBalls).length)
     return "水晶球附近已有元素球。点击收集养分，也可以继续凝聚探索。";
+  if (state.opening && state.day === 1 && planted) return "首日土壤已充盈；可加工仓储水瓜、完成委托，再结束今日。";
   if (remainingCondenses(state) > 0)
     return planted ? "点击顶栏「凝聚元素」，收集元素球后在仓储区浇灌。" :
       seed ? "可以播种，也可以先凝聚元素观察。" : "可以点击「凝聚元素」，探索可用养分。";
