@@ -45,15 +45,15 @@ function dropTargetAt(x: number, y: number,
   workshopPick: ((x: number, y: number) => WorkshopZone) | null): DropTarget {
   const element = document.elementFromPoint(x, y);
   const domZone = element?.closest("[data-item-drop-zone]")?.getAttribute("data-item-drop-zone");
-  // Exact DOM targets keep accessibility and precise item cards; the Pixi
-  // polygon is the fallback for countertop/cabinet areas outside DOM boxes.
+  // In the workshop only the shared Pixi world geometry authorizes drops.
+  // DOM targets still support interaction, but cannot enlarge device hit areas.
   const semantic = workshopPick?.(x, y);
   const polygonZone = semantic === "peel" || semantic === "juice" ||
     semantic === "storage" || semantic === "inventory" ? semantic : null;
   return {
-    zone: domZone === "inventory" || domZone === "storage" ||
-      domZone === "peel" || domZone === "juice" ? domZone : polygonZone,
-    scene: pick?.(x, y) ?? emptyScene,
+    zone: workshopPick ? polygonZone :
+      domZone === "inventory" || domZone === "storage" ? domZone : null,
+    scene: workshopPick ? emptyScene : pick?.(x, y) ?? emptyScene,
   };
 }
 
@@ -164,7 +164,7 @@ export function App() {
     const move = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, workshopPickRef.current);
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, sceneRef.current === "workshop" ? workshopPickRef.current ?? (() => null) : null);
       const next = { ...current, x: event.clientX, y: event.clientY, target };
       dragRef.current = next;
       setDrag(next);
@@ -172,7 +172,7 @@ export function App() {
     const up = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, workshopPickRef.current);
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, sceneRef.current === "workshop" ? workshopPickRef.current ?? (() => null) : null);
       dragRef.current = null;
       setDrag(null);
       if (Math.hypot(event.clientX - current.originX, event.clientY - current.originY) < 8) return;

@@ -564,3 +564,16 @@
 .workshop-storage-overlay, .workshop-inventory-overlay {
   position:absolute; min-width:0; min-height:0;
 }
+
+/* v5 device drop affordances are anchored to the visible board/machine;
+   controls outside these boxes remain buttons, never drop zones. */
+.workshop-device-control > .peeling, .workshop-device-control > .juicing {
+  position:relative; display:block; overflow:visible; padding:0;
+}
+.workshop-device-control .workbench-drop {
+  position:absolute; margin:0; box-sizing:border-box; min-height:0; overflow:hidden;
+}
+.workshop-device-control .peeling .workbench-drop { left:0; top:59.210526%; width:100%; height:40.789474%; }
+.workshop-device-control .juicing .workbench-drop { left:0; top:11.333333%; width:65%; height:86.666667%; }
+.workshop-device-control .peeling > button { position:absolute; bottom:40.789474%; left:0; width:100%; }
+.workshop-device-control .juicing .actions { position:absolute; left:65%; top:11.333333%; width:35%; flex-direction:column; }
