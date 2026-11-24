@@ -9,7 +9,7 @@ import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
 import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
-import { WorkshopScene, type WorkshopZone } from "./scene/WorkshopScene";
+import { WorkshopScene, workshopOverlay, type WorkshopZone } from "./scene/WorkshopScene";
 import { ECONOMY_CANDIDATE } from "./domain/economy";
 import type { KitchenOrder } from "./domain/orders";
 import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
@@ -522,7 +522,7 @@ export function App() {
           aria-label="璃月厨房工坊与 U 型连体柜台">
           <WorkshopScene state={state} onEnterGarden={() => navigateScene("garden")}
             onRegisterHitTest={registerWorkshopPick} />
-          <section className="region garden-entry workshop-orb-overlay" aria-label="水晶球设备"
+          <section className="region garden-entry workshop-orb-overlay" style={workshopOverlay("orb")} aria-label="水晶球设备"
             data-testid="garden-entry">
             <button type="button" className="workshop-orb-link" data-testid="enter-garden"
               {...tapAction("enter-garden", () => navigateScene("garden"))}>
@@ -541,26 +541,26 @@ export function App() {
                 n + (plot.plant?.leaves.filter(leaf => leaf.fruit !== null).length ?? 0), 0)} 枚
             </span>
           </section>
-          <div className="workshop-customer-overlay" data-testid="customer-window">
+          <div className="workshop-customer-overlay" style={workshopOverlay("customer")} data-testid="customer-window">
             {visitorPanel}
           </div>
-          <div className="workshop-shelf-overlay" data-testid="display-shelf">
+          <div className="workshop-shelf-overlay" style={workshopOverlay("shelf")} data-testid="display-shelf">
             {explorationPanel}
           </div>
-          <div className="workshop-left-overlay" data-testid="counter-left">
+          <div className="workshop-left-overlay" style={workshopOverlay("left")} data-testid="counter-left">
             <div className="workshop-machines-overlay">
-              {peelPanel}
-              {juicePanel}
+              <div className="workshop-device-control" style={workshopOverlay("peel","left")}>{peelPanel}</div>
+              <div className="workshop-device-control" style={workshopOverlay("juice","left")}>{juicePanel}</div>
             </div>
           </div>
-          <div className="workshop-center-overlay" data-testid="counter-middle">
+          <div className="workshop-center-overlay" style={workshopOverlay("order")} data-testid="counter-middle">
             {ordersPanel}
           </div>
-          <div className="workshop-right-overlay" data-testid="counter-right"
+          <div className="workshop-right-overlay" style={workshopOverlay("right")} data-testid="counter-right"
             aria-label="右侧操作台（目前保留设备扩展位）" />
-          <div className="workshop-cabinet-overlay" data-testid="counter-cabinets">
-            <div className="workshop-storage-overlay">{storagePanel}</div>
-            <div className="workshop-inventory-overlay">{inventoryPanel}</div>
+          <div className="workshop-cabinet-overlay" style={workshopOverlay("cabinets")} data-testid="counter-cabinets">
+            <div className="workshop-storage-overlay" style={workshopOverlay("storage","cabinets")}>{storagePanel}</div>
+            <div className="workshop-inventory-overlay" style={workshopOverlay("inventory","cabinets")}>{inventoryPanel}</div>
           </div>
         </main>
       ) : (
