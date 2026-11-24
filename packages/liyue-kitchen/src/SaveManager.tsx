@@ -1,5 +1,5 @@
 import { useState, type ChangeEvent } from "react";
-import { newGame, type GameState } from "./domain/game";
+import { newOpeningGame, type GameState } from "./domain/game";
 import { saveEnvelope, validateSave } from "./domain/save";
 import { gameStore } from "./domain/store";
 import { createWorldSeed } from "./domain/worldSeed";
@@ -88,7 +88,7 @@ export function SaveManager({ onClose, onWorldChanged }: Props) {
     setBusy(true);
     setFeedback("");
     try {
-      await gameStore.replaceGame(newGame(createWorldSeed()));
+      await gameStore.replaceGame(newOpeningGame(createWorldSeed()));
       onWorldChanged();
     } catch (cause) {
       setFeedback(`重新开始失败：${errorText(cause)}。原存档保持不变。`);

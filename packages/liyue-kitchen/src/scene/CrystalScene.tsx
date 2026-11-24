@@ -145,7 +145,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
   }
   // World objects render AFTER cells: their actual Pixi hit areas win overlaps.
   for (const item of Object.values(state.items)) {
-    if (item.kind === "Seed" || item.location.kind !== "ground") continue;
+    if (item.location.kind !== "ground") continue;
     const ix = item.location.x * width, iy = item.location.y * height;
     const selected = state.selectedItemId === item.id;
     const symbol = new Graphics().circle(ix, iy, Math.max(15, radius * 0.26))
@@ -165,7 +165,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
       selectItem(item.id);
     });
     app.stage.addChild(symbol);
-    const tag = new Text({ text: item.kind === "VisitorGift" ? "牌" : item.kind === "Shell" ? "壳" : item.kind === "RawJuice" ? "汁" :
+    const tag = new Text({ text: item.kind === "Seed" ? "种" : item.kind === "VisitorGift" ? "牌" : item.kind === "Shell" ? "壳" : item.kind === "RawJuice" ? "汁" :
       item.kind === "AquamelonJuiceCup" ? "杯" : "瓜",
       style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(14, radius * 0.28),
         fill: 0x35291d, fontWeight: "bold" } });
@@ -173,7 +173,7 @@ function draw(app: Application, state: GameState, hover: PlotId | null,
     tag.position.set(ix, iy);
     tag.eventMode = "none";
     app.stage.addChild(tag);
-    const label = new Text({ text: item.kind === "VisitorGift" ? "纪念物" : `${item.kind === "Shell" ? "0" : fruitMass(item).toFixed(1)}G`,
+    const label = new Text({ text: item.kind === "Seed" ? "水瓜种子" : item.kind === "VisitorGift" ? "纪念物" : `${item.kind === "Shell" ? "0" : fruitMass(item).toFixed(1)}G`,
       style: { fontFamily: "Arial, sans-serif", fontSize: Math.max(10, radius * 0.18),
         fill: 0xf3e6ba } });
     label.anchor.set(0.5);

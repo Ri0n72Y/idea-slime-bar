@@ -1,5 +1,5 @@
 import { BALANCE } from "./balance.ts";
-import type { GameState } from "./game.ts";
+import { OPENING_SOURCE, sourceKey, isEdible, type GameItem, type GameState } from "./game.ts";
 import { ECONOMY_CANDIDATE, rewardEnergy } from "./economy.ts";
 
 export type OrderKind = "aquamelon" | "juice_cup";
@@ -21,9 +21,28 @@ export const initialOrders = (): Record<string, KitchenOrder> => ({
   "order:first": createOrder("order:first", 1, "aquamelon", true),
 });
 const neededKind = (kind: OrderKind) => kind === "aquamelon" ? "Aquamelon" : "AquamelonJuiceCup";
+/** Preserve one route to the tutorial's actual board delivery. While raw
+ * juice remains, all existing cups can be traded; once fully portioned,
+ * reserve one deterministic cup even if it is currently on the ground. */
+export function openingDeliveryWarning(state: GameState, order: KitchenOrder, item: GameItem): string | null {
+  if (!state.opening || state.opening.firstCupOrderId || !isEdible(item) ||
+      sourceKey(item.source) !== sourceKey(OPENING_SOURCE)) return null;
+  if (item.kind === "Aquamelon") return "开局水瓜需保留用于首杯果汁任务，不能作为完整水瓜交付。";
+  if (item.kind !== "AquamelonJuiceCup" || order.visitorId === "board") return null;
+  const batch = item.batchId && state.juiceBatches?.[item.batchId];
+  if (!batch) return "开局果汁批次无效。";
+  const remaining = Object.values(state.items).filter(i => isEdible(i) && i.batchId === item.batchId);
+  if (remaining.some(i => i.kind === "RawJuice" && (isEdible(i) && (i.volumeMl ?? 0) >= batch.cupMl))) return null;
+  const reserved = remaining.filter(i => i.kind === "AquamelonJuiceCup").map(i => i.id).sort()[0];
+  return item.id === reserved ? "需保留一杯开局水瓜汁用于委托板首杯任务，其余杯装果汁可交访客。" : null;
+}
 function nextOffer(state: GameState, kind: OrderKind): KitchenOrder {
+  // Keep a board juice commission available until the specific opening
+  // delivery is recorded; ordinary orders alternate again afterward.
+  if (state.opening && !state.opening.firstCupOrderId) kind = "juice_cup";
   const id = `order:${state.nextObjectSeq++}`;
   const offer = createOrder(id, state.day, kind);
+  if (state.opening && !state.opening.firstCupOrderId && kind === "juice_cup") offer.quantity = 1;
   state.orders[id] = offer;
   return offer;
 }
@@ -53,8 +72,30 @@ export function deliverOrder(state: GameState, orderId: string, itemIds: string[
     return { ok: false, reason: `所选材料类型不符，本单需要${order.itemKind === "aquamelon" ? "完整水瓜" : "杯装水瓜汁"}，请重新选择。` };
   if (items.some(item => item && item.location.kind !== "inventory" && item.location.kind !== "storage"))
     return { ok: false, reason: "交付物品仍在水晶球地面或加工台，请先拖入物品栏/仓储区。" };
+  for (const item of items) {
+    if (!item) continue;
+    const warning = openingDeliveryWarning(state, order, item);
+    if (warning) return { ok: false, reason: warning };
+  }
   if (state.adeptalEnergy.rewardedIds.includes(`order:${order.id}`))
     return { ok: false, reason: "此委托奖励已领取。" };
+  // Volume leaves inventory only through a genuine order. The batch keeps
+  // delivered IDs and their capacity for save/reload conservation checks.
+  if (state.juiceBatches) {
+    for (const item of items) {
+      if (item?.kind !== "AquamelonJuiceCup" || !item.batchId) continue;
+      const batch = state.juiceBatches[item.batchId];
+      if (!batch || item.volumeMl !== batch.cupMl || Object.hasOwn(batch.delivered, item.id))
+        return { ok: false, reason: "杯装容量账本异常，未交付。" };
+    }
+    for (const item of items) {
+      if (item?.kind !== "AquamelonJuiceCup" || !item.batchId) continue;
+      const batch = state.juiceBatches[item.batchId];
+      batch.delivered[item.id] = batch.cupMl;
+      if (state.opening && order.visitorId === "board" && sourceKey(batch.source) === sourceKey(OPENING_SOURCE))
+        state.opening.firstCupOrderId ??= order.id;
+    }
+  }
   for (const id of itemIds) delete state.items[id];
   if (state.selectedItemId && itemIds.includes(state.selectedItemId)) state.selectedItemId = null;
   order.state = "completed";

@@ -7,9 +7,9 @@ import "./batch-c.css";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ELEMENTS, ELEMENT_VIEW, U2_CONFIG } from "./domain/config";
 import { gameStore } from "./domain/store";
-import { fruitMass, remainingCondenses, stageLabel, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
+import { fruitMass, remainingCondenses, stageLabel, OPENING_SOURCE, sourceKey, type GameItem, type ItemLocation, type PlotId, type WorkbenchSlot } from "./domain/game";
 import { CrystalScene, type SceneDropTarget } from "./scene/CrystalScene";
-import { WorkshopScene, type WorkshopZone } from "./scene/WorkshopScene";
+import { WorkshopScene, workshopOverlay, workshopRectOverlay, WORKSHOP_GEOMETRY, type WorkshopZone } from "./scene/WorkshopScene";
 import { ECONOMY_CANDIDATE } from "./domain/economy";
 import type { KitchenOrder } from "./domain/orders";
 import { visibleDiscoveries, type DiscoveryId } from "./domain/discovery";
@@ -33,7 +33,7 @@ const graphCoordinates: Record<DiscoveryId, { x: number; y: number }> = {
   A16: { x: 948, y: 468 },
   V01: { x: 24, y: 465 }, V02: { x: 575, y: 505 },
 };
-type DropTarget = { zone: "inventory" | "storage" | WorkbenchSlot | null; scene: SceneDropTarget };
+type DropTarget = { zone: "inventory" | "storage" | "orb" | WorkbenchSlot | null; scene: SceneDropTarget };
 type Drag = {
   itemId: string; kind: GameItem["kind"];
   pointerId: number; x: number; y: number;
@@ -45,15 +45,15 @@ function dropTargetAt(x: number, y: number,
   workshopPick: ((x: number, y: number) => WorkshopZone) | null): DropTarget {
   const element = document.elementFromPoint(x, y);
   const domZone = element?.closest("[data-item-drop-zone]")?.getAttribute("data-item-drop-zone");
-  // Exact DOM targets keep accessibility and precise item cards; the Pixi
-  // polygon is the fallback for countertop/cabinet areas outside DOM boxes.
+  // In the workshop only the shared Pixi world geometry authorizes drops.
+  // DOM targets still support interaction, but cannot enlarge device hit areas.
   const semantic = workshopPick?.(x, y);
   const polygonZone = semantic === "peel" || semantic === "juice" ||
-    semantic === "storage" || semantic === "inventory" ? semantic : null;
+    semantic === "storage" || semantic === "inventory" || semantic === "orb" ? semantic : null;
   return {
-    zone: domZone === "inventory" || domZone === "storage" ||
-      domZone === "peel" || domZone === "juice" ? domZone : polygonZone,
-    scene: pick?.(x, y) ?? emptyScene,
+    zone: workshopPick ? polygonZone :
+      domZone === "inventory" || domZone === "storage" ? domZone : null,
+    scene: workshopPick ? emptyScene : pick?.(x, y) ?? emptyScene,
   };
 }
 
@@ -164,7 +164,7 @@ export function App() {
     const move = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, workshopPickRef.current);
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, sceneRef.current === "workshop" ? workshopPickRef.current ?? (() => null) : null);
       const next = { ...current, x: event.clientX, y: event.clientY, target };
       dragRef.current = next;
       setDrag(next);
@@ -172,15 +172,19 @@ export function App() {
     const up = (event: PointerEvent) => {
       const current = dragRef.current;
       if (!current || event.pointerId !== current.pointerId) return;
-      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, workshopPickRef.current);
+      const target = dropTargetAt(event.clientX, event.clientY, pickRef.current, sceneRef.current === "workshop" ? workshopPickRef.current ?? (() => null) : null);
       dragRef.current = null;
       setDrag(null);
       if (Math.hypot(event.clientX - current.originX, event.clientY - current.originY) < 8) return;
-      if (current.kind === "Seed") {
+      if (target.zone === "orb") {
+        gameStore.dispatch({ type: "ENTER_ORB", itemId: current.itemId });
+      } else if (current.kind === "Seed") {
         if (target.scene.plotId && !target.zone)
           gameStore.dispatch({ type: "PLANT_SEED", itemId: current.itemId, plotId: target.scene.plotId });
+        else if (target.scene.ground && !target.zone)
+          gameStore.dispatch({ type: "MOVE_ITEM", itemId: current.itemId, destination: { kind: "ground", ...target.scene.ground } });
         else gameStore.dispatch({ type: "REJECT_DROP", reason: sceneRef.current === "workshop"
-          ? "工坊水晶球是园地入口。先点「前往园地」，再将种子拖至开放空地格；种子未消耗。"
+          ? "将真实种子拖到水晶球圆形区域内，再进入园地播种；种子未消耗。"
           : "种子需拖到园地里已开垦、空置的地格；未消耗种子。" });
       } else {
         const destination: ItemLocation | null =
@@ -239,15 +243,13 @@ export function App() {
     if (state.selectedItemId !== id) gameStore.dispatch({ type: "SELECT_ITEM", itemId: id });
   };
   const deliver = (o: KitchenOrder) => {
-    const kind = o.itemKind === "aquamelon" ? "Aquamelon" : "AquamelonJuiceCup";
     // The explicitly selected material wins, even when invalid; domain returns a rejection.
     const preferred = state.selectedItemId && state.items[state.selectedItemId] ?
       [state.selectedItemId] : [];
     // A deliberate invalid selection remains visible to the domain guard.
     // For configured multi-item commissions, fill only the remaining slots.
-    const additional = Object.values(state.items)
-      .filter(item => item.kind === kind && !preferred.includes(item.id) &&
-        (item.location.kind === "storage" || item.location.kind === "inventory"))
+    const additional = eligibleOrderItems(state, o)
+      .filter(item => !preferred.includes(item.id))
       .slice(0, Math.max(0, o.quantity - preferred.length)).map(item => item.id);
     const candidate = [...preferred, ...additional];
     gameStore.dispatch({ type: "DELIVER_ORDER", orderId: o.id, itemIds: candidate });
@@ -403,7 +405,7 @@ export function App() {
   const peelPanel = (
 <section className="region peeling" aria-label="剥壳工作台" data-testid="region-peeling">
           <h2>剥壳工作台</h2>
-          <div className="workbench-placeholder workbench-drop" data-item-drop-zone="peel" data-testid="peel-drop">
+          <div className="workbench-placeholder workbench-drop" style={workshopRectOverlay(WORKSHOP_GEOMETRY.peel, "peel")} data-item-drop-zone="peel" data-testid="peel-drop">
             {peelItem ? (
               <div className="seed-item workbench-item" role="button" tabIndex={0}
                 data-testid="peel-item" data-item-id={peelItem.id}
@@ -468,7 +470,7 @@ export function App() {
   const juicePanel = (
 <section className="region juicing" aria-label="榨汁与装杯" data-testid="region-juicing">
           <h2>榨汁与装杯</h2>
-          <div className="workbench-placeholder workbench-drop" data-item-drop-zone="juice" data-testid="juice-drop">
+          <div className="workbench-placeholder workbench-drop" style={workshopRectOverlay(WORKSHOP_GEOMETRY.machine, "juice")} data-item-drop-zone="juice" data-testid="juice-drop">
             {juiceItem ? (
               <div className="seed-item workbench-item" role="button" tabIndex={0}
                 data-testid="juice-item" data-item-id={juiceItem.id}
@@ -520,9 +522,23 @@ export function App() {
       {scene === "workshop" ? (
         <main className="workshop-scene workshop-pixi-scene" data-testid="workshop-scene"
           aria-label="璃月厨房工坊与 U 型连体柜台">
-          <WorkshopScene state={state} onEnterGarden={() => navigateScene("garden")}
+          <WorkshopScene state={state} onEnterGarden={() => { if (!dragRef.current) navigateScene("garden"); }}
             onRegisterHitTest={registerWorkshopPick} />
-          <section className="region garden-entry workshop-orb-overlay" aria-label="水晶球设备"
+          {Object.values(state.items).map(item => item.location.kind === "workshop-ground" &&
+            <button type="button" key={item.id} className="workshop-ground-item seed-item"
+              style={workshopRectOverlay([item.location.x - 24, item.location.y - 24, 48, 48])}
+              data-testid="workshop-ground-seed" data-item-id={item.id}
+              aria-label="拖动工坊地面的水瓜种子" onPointerDown={e => startDrag(e, item.id)}
+              onClick={() => selectItem(item.id)}>🌰</button>)}
+          {state.opening && <section className="opening-task-board" style={workshopOverlay("tasks")}
+            aria-label="开局任务板" data-testid="opening-task-board">
+            <h2>开局任务</h2>
+            <p data-testid="task-plant" data-completed={!!state.opening.plantedPlantId}>
+              {state.opening.plantedPlantId ? "✓" : "○"} 将种子带入水晶球并播种</p>
+            <p data-testid="task-juice" data-completed={!!state.opening.firstCupOrderId}>
+              {state.opening.firstCupOrderId ? "✓" : "○"} 加工并交付首杯水瓜汁</p>
+          </section>}
+          <section className="region garden-entry workshop-orb-overlay" style={workshopOverlay("orb")} aria-label="水晶球设备"
             data-testid="garden-entry">
             <button type="button" className="workshop-orb-link" data-testid="enter-garden"
               {...tapAction("enter-garden", () => navigateScene("garden"))}>
@@ -541,26 +557,26 @@ export function App() {
                 n + (plot.plant?.leaves.filter(leaf => leaf.fruit !== null).length ?? 0), 0)} 枚
             </span>
           </section>
-          <div className="workshop-customer-overlay" data-testid="customer-window">
+          <div className="workshop-customer-overlay" style={workshopOverlay("customer")} data-testid="customer-window">
             {visitorPanel}
           </div>
-          <div className="workshop-shelf-overlay" data-testid="display-shelf">
+          <div className="workshop-shelf-overlay" style={workshopOverlay("shelf")} data-testid="display-shelf">
             {explorationPanel}
           </div>
-          <div className="workshop-left-overlay" data-testid="counter-left">
+          <div className="workshop-left-overlay" style={workshopOverlay("left")} data-testid="counter-left">
             <div className="workshop-machines-overlay">
-              {peelPanel}
-              {juicePanel}
+              <div className="workshop-device-control" style={workshopOverlay("peel","left")}>{peelPanel}</div>
+              <div className="workshop-device-control" style={workshopOverlay("juice","left")}>{juicePanel}</div>
             </div>
           </div>
-          <div className="workshop-center-overlay" data-testid="counter-middle">
+          <div className="workshop-center-overlay" style={workshopOverlay("order")} data-testid="counter-middle">
             {ordersPanel}
           </div>
-          <div className="workshop-right-overlay" data-testid="counter-right"
+          <div className="workshop-right-overlay" style={workshopOverlay("right")} data-testid="counter-right"
             aria-label="右侧操作台（目前保留设备扩展位）" />
-          <div className="workshop-cabinet-overlay" data-testid="counter-cabinets">
-            <div className="workshop-storage-overlay">{storagePanel}</div>
-            <div className="workshop-inventory-overlay">{inventoryPanel}</div>
+          <div className="workshop-cabinet-overlay" style={workshopOverlay("cabinets")} data-testid="counter-cabinets">
+            <div className="workshop-storage-overlay" style={workshopOverlay("storage","cabinets")}>{storagePanel}</div>
+            <div className="workshop-inventory-overlay" style={workshopOverlay("inventory","cabinets")}>{inventoryPanel}</div>
           </div>
         </main>
       ) : (
@@ -665,7 +681,7 @@ export function App() {
             <>
               <span data-testid="item-mass">{selectedItem.kind === "Shell" ? "0.000" :
                 fruitMass(selectedItem).toFixed(3)}G</span>
-              <span>收获地格：{plotLabel(selectedItem.source.plotId)}</span>
+              <span>来源：{sourceKey(selectedItem.source) === sourceKey(OPENING_SOURCE) ? "开局储藏水瓜" : plotLabel(selectedItem.source.plotId)}</span>
               <span>首反应：{selectedItem.kind === "Shell" ? "无" :
                 selectedItem.reaction.firstReaction ?? "无"}</span>
             </>

@@ -31,6 +31,9 @@ const deepFreeze = <T>(value: T): T => {
 };
 /** Public for validation of a complete alternative config without mutating live gameplay. */
 export function validateBalanceConfig(candidate: unknown): Readonly<BalanceConfig> {
+  const fruitJuiceMl = requireNumber(candidate, "processing.fruitJuiceMl", 1, 1e7, true);
+  const cupMl = requireNumber(candidate, "processing.cupMl", 1, fruitJuiceMl, true);
+  if (fruitJuiceMl % cupMl !== 0) throw new Error("Invalid balance config: juice must divide into whole cups");
   const positives = [
     "world.ballInitialV", "world.ballHalfLifeUH", "world.ballMinimumCollectV",
     "world.soilCapacityV", "world.reserveCapacityV", "world.reserveBudgetVPerUH",

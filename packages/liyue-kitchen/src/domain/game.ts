@@ -1,10 +1,10 @@
 /** U2 authoritative world state. No React, PixiJS or browser APIs in this module. */
 import { ELEMENTS, U2_CONFIG, elementIndex, vectorSum, zeros, type Element, type Vector } from "./config.ts";
 import { advancePlotOneUH, newLedger, newTree, type GardenPlot, type NightLedger, type TreeStage } from "./growth.ts";
-import { reproductiveMass, type ReactionState } from "./reactions.ts";
+import { newReactionState, reproductiveMass, type ReactionState } from "./reactions.ts";
 import { processWorkbench, type ProcessAction } from "./processing.ts";
 import { ECONOMY_CANDIDATE, newEnergyAccount, rewardEnergy, unlockPlot, type EnergyAccount } from "./economy.ts";
-import { acceptOrder, advanceOrdersAtMorning, deliverOrder, initialOrders, type KitchenOrder } from "./orders.ts";
+import { acceptOrder, advanceOrdersAtMorning, createOrder, deliverOrder, initialOrders, type KitchenOrder } from "./orders.ts";
 import { reconcileDiscoveries, type DiscoveryId, type DiscoveryRecord } from "./discovery.ts";
 import { newLabor, newTechnology, purchaseCollectBag, type LaborRecord, type TechnologyRecord } from "./technology.ts";
 import { interactVisitor, newVisitor, type VisitorAction, type VisitorState } from "./visitors.ts";
@@ -20,20 +20,23 @@ export type WorkbenchSlot = "peel" | "juice";
 export type ItemLocation =
   | { kind: "inventory" }
   | { kind: "storage" }
+  | { kind: "workshop-ground"; x: number; y: number }
   | { kind: "ground"; plotId: PlotId; x: number; y: number }
   | { kind: "workbench"; slot: WorkbenchSlot };
 export type SourceIdentity = { plotId: PlotId; plantId: string; leafId: string };
-export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation; origin?: SourceIdentity };
+export type SeedItem = { id: string; kind: "Seed"; location: ItemLocation; origin?: SourceIdentity; affinity?: Vector };
 export type EdibleKind = "Aquamelon" | "PeeledFlesh" | "RawJuice" | "AquamelonJuiceCup";
 export type EdibleItem = {
   id: string; kind: EdibleKind; location: ItemLocation; source: SourceIdentity;
   free: Vector; reaction: ReactionState; baseAffinity: Vector; lockedAffinity: Vector | null;
   parentItemId?: string;
+  batchId?: string; volumeMl?: number;
 };
 export type AquamelonItem = EdibleItem & { kind: "Aquamelon" };
 export type ShellItem = {
   id: string; kind: "Shell"; location: ItemLocation; source: SourceIdentity;
   parentItemId: string; // no edible E_free or Products on a shell
+  traits?: Vector;
 };
 export type VisitorGiftItem = { id: string; kind: "VisitorGift"; location: ItemLocation;
   visitorId: string; eventId: string; title: string };
@@ -58,7 +61,20 @@ export type NightReport = {
   }>;
   events: string[];
 };
+export const OPENING_SOURCE: SourceIdentity = { plotId: "P01", plantId: "opening", leafId: "initial-fruit" };
+export const OPENING_SEED_ID = "item:seed:1";
+export const OPENING_FRUIT_ID = "item:aquamelon:opening";
+export const OPENING_SEED_POSITION = { x: 800, y: 790 } as const;
+export type JuiceBatch = { source: SourceIdentity; traits: Vector; totalMl: number; cupMl: number; delivered: Record<string, number> };
+export type OpeningState = {
+  affinity: Vector; plantedPlantId: string | null; firstCupOrderId: string | null;
+};
+export const sourceKey = (source: SourceIdentity) => `${source.plotId}/${source.plantId}/${source.leafId}`;
 export type GameState = {
+  /** Older worlds have no opening tutorial. The live store enables capacity
+   * accounting for their subsequent juicing without minting legacy material. */
+  opening?: OpeningState;
+  juiceBatches?: Record<string, JuiceBatch>;
   schemaVersion: 6;
   day: number;
   worldUH: number;
@@ -89,6 +105,7 @@ export type GameState = {
 export type Command =
   | { type: "SELECT_PLOT"; plotId: PlotId }
   | { type: "UNLOCK_PLOT"; plotId: PlotId }
+  | { type: "ENTER_ORB"; itemId: string }
   | { type: "PLANT_SEED"; itemId: string; plotId: PlotId }
   | { type: "HARVEST"; plotId: PlotId; plantId: string; leafId: string }
   | { type: "SELECT_ITEM"; itemId: string }
@@ -127,6 +144,32 @@ export function newGame(seed = 0x17a5b7e1): GameState {
       sourceId: "item:seed:1" }], lastNightReport: null,
     notice: { kind: "info", message: "先点「前往园地」，再将物品栏中的种子拖到开放的空地格播种。" },
   };
+}
+
+/** Explicit live-game initialization. The original constructor remains the
+ * legacy scenario used by older snapshots and existing domain simulations. */
+export function newOpeningGame(seed = 0x17a5b7e1): GameState {
+  const state = newGame(seed);
+  const weights = ELEMENTS.map(() => nextRandom(state)) as Vector;
+  const total = vectorSum(weights);
+  const affinity = weights.map(v => v / total * ELEMENTS.length) as Vector;
+  state.opening = { affinity, plantedPlantId: null, firstCupOrderId: null };
+  state.juiceBatches = {};
+  state.plots.P01.soil = affinity.map(v => v / ELEMENTS.length * U2_CONFIG.soilCapacityV) as Vector;
+  state.items[OPENING_SEED_ID] = { id: OPENING_SEED_ID, kind: "Seed", affinity: [...affinity],
+    location: { kind: "workshop-ground", ...OPENING_SEED_POSITION } };
+  state.items[OPENING_FRUIT_ID] = { id: OPENING_FRUIT_ID, kind: "Aquamelon",
+    location: { kind: "storage" }, source: { ...OPENING_SOURCE }, free: zeros(),
+    reaction: newReactionState(), baseAffinity: [...affinity], lockedAffinity: [...affinity] };
+  state.orders = { "order:first": { ...createOrder("order:first", 1, "juice_cup", true), quantity: 1 } };
+  state.notice = { kind: "info", message: "将工坊地面种子拖进水晶球，再进入园地播种；仓储水瓜可以加工交单。" };
+  return state;
+}
+
+/** Upgrade future processing in a loaded historical world without changing
+ * the identity, amount or behavior of already processed legacy items. */
+export function enableCurrentProcessing(state: GameState): GameState {
+  return state.juiceBatches === undefined ? { ...state, juiceBatches: {} } : state;
 }
 
 export function nextRandom(state: GameState): number {
@@ -312,10 +355,22 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
           "FRUIT_ORDER_DELIVERED" : "JUICE_ORDER_DELIVERED", command.orderId);
       return notice(state, "success", result.message);
     }
+    case "ENTER_ORB": {
+      const item = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
+      if (!item || item.location.kind === "ground") return notice(state, "locked", "物品已在园地或不存在。");
+      // Central P01 remains open; independent random offsets keep the object
+      // near the center rather than consuming it in the planting command.
+      item.location = { kind: "ground", plotId: "P01",
+        x: 0.5 + (nextRandom(state) - 0.5) * 0.07,
+        y: 0.5 + (nextRandom(state) - 0.5) * 0.07 };
+      event(state, "move", `物品 ${item.id} 已进入园地地面`);
+      return notice(state, "success", "物品已进入园地，点击水晶球进入园地继续操作。");
+    }
     case "PLANT_SEED": {
       const p = validPlot(state, command.plotId);
       const seed = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
-      if (!seed || seed.kind !== "Seed" || seed.location.kind !== "inventory") return notice(state, "locked", "种子已不存在，无法再次播种。");
+      if (!seed || seed.kind !== "Seed" || (seed.location.kind !== "inventory" && seed.location.kind !== "ground") ||
+          (state.opening && seed.id === OPENING_SEED_ID && seed.location.kind !== "ground")) return notice(state, "locked", "种子已不存在，无法再次播种。");
       if (!p || !p.open) return notice(state, "locked", "此地格未开垦，种子未消耗。");
       if (p.plant) {
         const old = p.plant;
@@ -327,11 +382,14 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
         event(state, "recycle", `清理已采收植株 ${old.id}，在 ${p.id} 开启下一轮种植`);
       }
       const tree = newTree(`plant:${state.nextObjectSeq++}`);
+      if (seed.affinity) tree.treeBaseAffinity = [...seed.affinity];
       p.plant = tree;
+      if (state.opening && seed.id === OPENING_SEED_ID) state.opening.plantedPlantId = tree.id;
       delete state.items[seed.id];
+      if (state.selectedItemId === seed.id) state.selectedItemId = null;
       state.selectedPlotId = p.id;
       event(state, "plant", `种植 ${tree.id} 到 ${p.id}，消耗 ${seed.id}`, "TREE_PLANTED", tree.id);
-      return notice(state, "success", `已在 ${p.id} 播下水瓜种子，开始凝聚元素并浇灌。`);
+      return notice(state, "success", `已在 ${p.id} 播下水瓜种子${state.opening && state.day === 1 ? "，首日土壤已充盈。" : "，开始凝聚元素并浇灌。"}`);
     }
     case "HARVEST": {
       const p = validPlot(state, command.plotId);
@@ -379,8 +437,10 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
     }
     case "MOVE_ITEM": {
       const item = Object.hasOwn(state.items, command.itemId) ? state.items[command.itemId] : null;
-      if (!item || item.kind === "Seed") return notice(state, "locked", "物品不存在或无法搬运。");
+      if (!item) return notice(state, "locked", "物品不存在或无法搬运。");
       const dest = command.destination;
+      if (item.kind === "Seed" && !(item.location.kind === "ground" && dest.kind === "ground"))
+        return notice(state, "locked", "种子需先进入水晶球，再在园地地面移动或播种。");
       if (dest.kind !== "inventory" && dest.kind !== "storage" && dest.kind !== "ground" &&
           dest.kind !== "workbench")
         return notice(state, "locked", "未知放置位置。");
