@@ -1,4 +1,4 @@
-import { applyCommand, newGame, newOpeningGame, type Command, type GameState } from "./game.ts";
+import { applyCommand, newGame, newOpeningGame, enableCurrentProcessing, type Command, type GameState } from "./game.ts";
 import { loadGame, saveGame, validateSave, SAVE_VERSION } from "./save.ts";
 import { createWorldSeed } from "./worldSeed.ts";
 
@@ -7,6 +7,7 @@ type Persistence = { load: () => Promise<GameState | null>; save: (state: GameSt
 /** One state owner, one serialized IndexedDB writer, one hydration decision. */
 export function createGameStore(initialState: GameState = newGame(), options: {
   initialReady?: boolean; persistence?: Persistence; createNew?: () => GameState;
+  prepareLoaded?: (state: GameState) => GameState;
 } = {}) {
   let state = initialState;
   let ready = options.initialReady ?? true;
@@ -34,7 +35,7 @@ export function createGameStore(initialState: GameState = newGame(), options: {
       bootPromise = (async () => {
         try {
           const loaded = await options.persistence!.load();
-          if (loaded) state = loaded;
+          if (loaded) state = options.prepareLoaded?.(loaded) ?? loaded;
           if (!loaded) {
             state = options.createNew?.() ?? state;
             saveStatus = "saving"; emit();
@@ -84,7 +85,7 @@ export function createGameStore(initialState: GameState = newGame(), options: {
      */
     replaceGame: async (candidate: GameState): Promise<void> => {
       if (!ready || replacing) throw new Error("存档正在处理，请稍后再试");
-      const validated = validateSave({ version: SAVE_VERSION, game: candidate });
+      const validated = validateSave({ version: SAVE_VERSION, game: options.prepareLoaded?.(candidate) ?? candidate });
       if (!validated) throw new Error("新存档未通过校验");
       replacing = true;
       saveStatus = "saving"; error = ""; emit();
@@ -114,6 +115,7 @@ export function createGameStore(initialState: GameState = newGame(), options: {
 
 export const gameStore = createGameStore(newOpeningGame(), {
   createNew: () => newOpeningGame(createWorldSeed()),
+  prepareLoaded: enableCurrentProcessing,
   initialReady: false,
   persistence: { load: loadGame, save: saveGame },
 });

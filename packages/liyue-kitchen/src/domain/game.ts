@@ -64,15 +64,17 @@ export type NightReport = {
 export const OPENING_SOURCE: SourceIdentity = { plotId: "P01", plantId: "opening", leafId: "initial-fruit" };
 export const OPENING_SEED_ID = "item:seed:1";
 export const OPENING_FRUIT_ID = "item:aquamelon:opening";
-export type JuiceBatch = { source: SourceIdentity; totalMl: number; cupMl: number; delivered: Record<string, number> };
+export const OPENING_SEED_POSITION = { x: 800, y: 790 } as const;
+export type JuiceBatch = { source: SourceIdentity; traits: Vector; totalMl: number; cupMl: number; delivered: Record<string, number> };
 export type OpeningState = {
   affinity: Vector; plantedPlantId: string | null; firstCupOrderId: string | null;
-  batches: Record<string, JuiceBatch>;
 };
 export const sourceKey = (source: SourceIdentity) => `${source.plotId}/${source.plantId}/${source.leafId}`;
 export type GameState = {
-  /** Absent in pre-D1 saves; preserve their original inventory and processing contract. */
+  /** Older worlds have no opening tutorial. The live store enables capacity
+   * accounting for their subsequent juicing without minting legacy material. */
   opening?: OpeningState;
+  juiceBatches?: Record<string, JuiceBatch>;
   schemaVersion: 6;
   day: number;
   worldUH: number;
@@ -151,16 +153,23 @@ export function newOpeningGame(seed = 0x17a5b7e1): GameState {
   const weights = ELEMENTS.map(() => nextRandom(state)) as Vector;
   const total = vectorSum(weights);
   const affinity = weights.map(v => v / total * ELEMENTS.length) as Vector;
-  state.opening = { affinity, plantedPlantId: null, firstCupOrderId: null, batches: {} };
+  state.opening = { affinity, plantedPlantId: null, firstCupOrderId: null };
+  state.juiceBatches = {};
   state.plots.P01.soil = affinity.map(v => v / ELEMENTS.length * U2_CONFIG.soilCapacityV) as Vector;
   state.items[OPENING_SEED_ID] = { id: OPENING_SEED_ID, kind: "Seed", affinity: [...affinity],
-    location: { kind: "workshop-ground", x: 800, y: 790 } };
+    location: { kind: "workshop-ground", ...OPENING_SEED_POSITION } };
   state.items[OPENING_FRUIT_ID] = { id: OPENING_FRUIT_ID, kind: "Aquamelon",
     location: { kind: "storage" }, source: { ...OPENING_SOURCE }, free: zeros(),
     reaction: newReactionState(), baseAffinity: [...affinity], lockedAffinity: [...affinity] };
   state.orders = { "order:first": { ...createOrder("order:first", 1, "juice_cup", true), quantity: 1 } };
   state.notice = { kind: "info", message: "将工坊地面种子拖进水晶球，再进入园地播种；仓储水瓜可以加工交单。" };
   return state;
+}
+
+/** Upgrade future processing in a loaded historical world without changing
+ * the identity, amount or behavior of already processed legacy items. */
+export function enableCurrentProcessing(state: GameState): GameState {
+  return state.juiceBatches === undefined ? { ...state, juiceBatches: {} } : state;
 }
 
 export function nextRandom(state: GameState): number {
@@ -377,6 +386,7 @@ function applyDomainCommand(previous: GameState, command: Command): GameState {
       p.plant = tree;
       if (state.opening && seed.id === OPENING_SEED_ID) state.opening.plantedPlantId = tree.id;
       delete state.items[seed.id];
+      if (state.selectedItemId === seed.id) state.selectedItemId = null;
       state.selectedPlotId = p.id;
       event(state, "plant", `种植 ${tree.id} 到 ${p.id}，消耗 ${seed.id}`, "TREE_PLANTED", tree.id);
       return notice(state, "success", `已在 ${p.id} 播下水瓜种子${state.opening && state.day === 1 ? "，首日土壤已充盈。" : "，开始凝聚元素并浇灌。"}`);

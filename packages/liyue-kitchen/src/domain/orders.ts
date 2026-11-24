@@ -58,18 +58,18 @@ export function deliverOrder(state: GameState, orderId: string, itemIds: string[
     return { ok: false, reason: "此委托奖励已领取。" };
   // Volume leaves inventory only through a genuine order. The batch keeps
   // delivered IDs and their capacity for save/reload conservation checks.
-  if (state.opening) {
+  if (state.juiceBatches) {
     for (const item of items) {
       if (item?.kind !== "AquamelonJuiceCup" || !item.batchId) continue;
-      const batch = state.opening.batches[item.batchId];
+      const batch = state.juiceBatches[item.batchId];
       if (!batch || item.volumeMl !== batch.cupMl || Object.hasOwn(batch.delivered, item.id))
         return { ok: false, reason: "杯装容量账本异常，未交付。" };
     }
     for (const item of items) {
       if (item?.kind !== "AquamelonJuiceCup" || !item.batchId) continue;
-      const batch = state.opening.batches[item.batchId];
+      const batch = state.juiceBatches[item.batchId];
       batch.delivered[item.id] = batch.cupMl;
-      if (order.visitorId === "board" && sourceKey(batch.source) === sourceKey(OPENING_SOURCE))
+      if (state.opening && order.visitorId === "board" && sourceKey(batch.source) === sourceKey(OPENING_SOURCE))
         state.opening.firstCupOrderId ??= order.id;
     }
   }

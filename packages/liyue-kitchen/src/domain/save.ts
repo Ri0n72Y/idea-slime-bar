@@ -1,4 +1,4 @@
-import { PLOT_IDS, OPENING_SOURCE, OPENING_SEED_ID, sourceKey, type GameItem, type GameState, type ItemLocation, type SourceIdentity } from "./game.ts";
+import { PLOT_IDS, OPENING_SOURCE, OPENING_SEED_ID, OPENING_FRUIT_ID, OPENING_SEED_POSITION, sourceKey, type GameItem, type GameState, type ItemLocation, type SourceIdentity } from "./game.ts";
 import { ECONOMY_CANDIDATE, newEnergyAccount } from "./economy.ts";
 import { DISCOVERY_NODES, migrateDiscoveryEvidence } from "./discovery.ts";
 import { COLLECT_BAG, newLabor, newTechnology } from "./technology.ts";
@@ -22,7 +22,7 @@ const validLocation = (value: unknown): value is ItemLocation => {
     return Object.keys(value).length === 1;
   if (value.kind === "workshop-ground")
     return Object.keys(value).length === 3 && typeof value.x === "number" && typeof value.y === "number" &&
-      Number.isFinite(value.x) && Number.isFinite(value.y) && value.x === 800 && value.y === 790;
+      Number.isFinite(value.x) && Number.isFinite(value.y) && value.x === OPENING_SEED_POSITION.x && value.y === OPENING_SEED_POSITION.y;
   if (value.kind === "workbench")
     return Object.keys(value).length === 2 && (value.slot === "peel" || value.slot === "juice");
   return value.kind === "ground" && PLOT_IDS.includes(value.plotId as never) &&
@@ -318,6 +318,7 @@ export function validateSave(value: unknown): GameState | null {
   // material and seed IDs remain unique and traceable in the archived ledger.
   const edibleSources = new Set<string>(), shellSources = new Set<string>();
   const opening = g.opening;
+  const batches = g.juiceBatches;
   const initialKey = sourceKey(OPENING_SOURCE);
   const sameVector = (a: unknown, b: unknown) => isVector(a) && isVector(b) &&
     a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
@@ -326,7 +327,7 @@ export function validateSave(value: unknown): GameState | null {
         Math.abs(opening.affinity.reduce((a,b)=>a+b,0) - ELEMENTS.length) > 1e-7 ||
         !(opening.plantedPlantId === null || typeof opening.plantedPlantId === "string") ||
         !(opening.firstCupOrderId === null || typeof opening.firstCupOrderId === "string") ||
-        !isObject(opening.batches)) return null;
+        !isObject(batches)) return null;
     const seed = g.items[OPENING_SEED_ID];
     if (opening.plantedPlantId === null) {
       if (!isObject(seed) || seed.kind !== "Seed" || !sameVector(seed.affinity, opening.affinity) ||
@@ -334,21 +335,26 @@ export function validateSave(value: unknown): GameState | null {
     } else if (seed !== undefined || !Object.values(g.plots).some(p =>
         isObject(p) && isObject(p.plant) && p.plant.id === opening.plantedPlantId) &&
         !g.harvestedSources.some(k => typeof k === "string" && k.split("/")[1] === opening.plantedPlantId)) return null;
-    const batchSources = new Set<string>();
-    let firstCupProven = opening.firstCupOrderId === null;
-    for (const [batchId, batch] of Object.entries(opening.batches)) {
-      if (!isObject(batch) || !validSource(batch.source) || !Number.isSafeInteger(batch.totalMl) ||
+  }
+  if (batches !== undefined) {
+    if (!isObject(batches)) return null;
+    const batchSources = new Set<string>(), deliveredBatchIds = new Set<string>();
+    let firstCupProven = !isObject(opening) || opening.firstCupOrderId === null;
+    for (const [batchId, batch] of Object.entries(batches)) {
+      if (!isObject(batch) || !validSource(batch.source) || !isVector(batch.traits) || !Number.isSafeInteger(batch.totalMl) ||
           !Number.isSafeInteger(batch.cupMl) || (batch.cupMl as number) <= 0 ||
           (batch.totalMl as number) < (batch.cupMl as number) ||
           (batch.totalMl as number) > 1e7 || (batch.totalMl as number) % (batch.cupMl as number) !== 0 ||
           !isObject(batch.delivered)) return null;
       const key = sourceKey(batch.source as SourceIdentity);
-      if (batchSources.has(key) || (key !== initialKey && !sourceKeys.has(key))) return null;
+      if (batchSources.has(key) || (!sourceKeys.has(key) && !(key === initialKey && isObject(opening))) ||
+          (key === initialKey && isObject(opening) && !sameVector(batch.traits, opening.affinity))) return null;
       batchSources.add(key);
       let ml = 0, raws = 0;
       for (const item of Object.values(g.items)) {
         if (!isObject(item) || item.batchId !== batchId) continue;
         if (!validSource(item.source) || sourceKey(item.source as SourceIdentity) !== key ||
+            !sameVector(item.lockedAffinity ?? item.baseAffinity, batch.traits) ||
             !Number.isSafeInteger(item.volumeMl) || (item.volumeMl as number) <= 0) return null;
         if (item.kind === "RawJuice") {
           if (++raws > 1 || item.id !== batchId || (item.volumeMl as number) % (batch.cupMl as number) !== 0) return null;
@@ -356,16 +362,22 @@ export function validateSave(value: unknown): GameState | null {
         ml += item.volumeMl as number;
       }
       for (const [id, amount] of Object.entries(batch.delivered)) {
-        if (amount !== batch.cupMl || !usedDeliveryIds.has(id)) return null;
+        if (amount !== batch.cupMl || !usedDeliveryIds.has(id) || deliveredBatchIds.has(id)) return null;
+        deliveredBatchIds.add(id);
         const order = Object.values(orderRecords).find(o => isObject(o) && Array.isArray(o.deliveredItemIds) && o.deliveredItemIds.includes(id));
         if (!isObject(order) || order.itemKind !== "juice_cup") return null;
-        if (key === initialKey && order.id === opening.firstCupOrderId && order.visitorId === "board") firstCupProven = true;
+        if (key === initialKey && isObject(opening) && order.id === opening.firstCupOrderId && order.visitorId === "board") firstCupProven = true;
         ml += amount as number;
       }
       if (ml !== batch.totalMl) return null;
     }
     if (!firstCupProven) return null;
   }
+  if (isObject(opening) && isObject(batches) && !usedDeliveryIds.has(OPENING_FRUIT_ID) &&
+      !Object.values(g.items).some(item => isObject(item) && item.kind !== "Shell" && validSource(item.source) &&
+        sourceKey(item.source as SourceIdentity) === initialKey) &&
+      !Object.values(batches).some(batch => isObject(batch) && validSource(batch.source) &&
+        sourceKey(batch.source as SourceIdentity) === initialKey)) return null;
   const originSeeds = new Set<string>(), occupiedSlots = new Set<string>();
   for (const item of Object.values(g.items)) {
     if (!isObject(item)) return null;
@@ -386,12 +398,12 @@ export function validateSave(value: unknown): GameState | null {
     if (!sourceKeys.has(key) && !(opening !== undefined && key === initialKey)) return null;
     const sourceSet = item.kind === "Shell" ? shellSources : edibleSources;
     if (typeof item.batchId === "string") {
-      if (!isObject(opening) || !isObject(opening.batches) || !Object.hasOwn(opening.batches, item.batchId)) return null;
+      if (!isObject(batches) || !Object.hasOwn(batches, item.batchId)) return null;
     } else {
       if (sourceSet.has(key)) return null;
       sourceSet.add(key);
-      if (isObject(opening) && isObject(opening.batches) && item.kind !== "Shell" &&
-          Object.values(opening.batches).some(b => isObject(b) && validSource(b.source) &&
+      if (isObject(batches) && item.kind !== "Shell" &&
+          Object.values(batches).some(b => isObject(b) && validSource(b.source) &&
             sourceKey(b.source as SourceIdentity) === key)) return null;
     }
     if (key === initialKey && isObject(opening) &&

@@ -25,8 +25,8 @@ export function processWorkbench(state: GameState, itemId: string, action: Proce
       item.location.slot !== plan.slot)
     return { ok: false, reason: "当前工作台缺少正确的加工材料。" };
 
-  if (action === "CUP" && state.opening && item.batchId) {
-    const batch = state.opening.batches[item.batchId];
+  if (action === "CUP" && state.juiceBatches && item.batchId) {
+    const batch = state.juiceBatches[item.batchId];
     if (!batch || item.volumeMl === undefined || item.volumeMl < batch.cupMl)
       return { ok: false, reason: "原汁余量不足一杯。" };
     const id = `item:aquamelonjuicecup:${state.nextObjectSeq++}`;
@@ -45,12 +45,12 @@ export function processWorkbench(state: GameState, itemId: string, action: Proce
     // A cup is the finished item. It remains on the machine until the player moves it.
     location: { kind: "workbench", slot: plan.slot },
   };
-  if (action === "JUICE" && state.opening) {
+  if (action === "JUICE" && state.juiceBatches) {
     const { fruitJuiceMl, cupMl } = BALANCE.processing;
     output.batchId = output.id;
     output.volumeMl = fruitJuiceMl;
-    state.opening.batches[output.id] = { source: { ...item.source }, totalMl: fruitJuiceMl,
-      cupMl, delivered: {} };
+    state.juiceBatches[output.id] = { source: { ...item.source }, traits: [...(item.lockedAffinity ?? item.baseAffinity)],
+      totalMl: fruitJuiceMl, cupMl, delivered: {} };
   }
   delete state.items[item.id];
   state.items[output.id] = output;
@@ -59,7 +59,7 @@ export function processWorkbench(state: GameState, itemId: string, action: Proce
     const shell: ShellItem = {
       id: `item:shell:${state.nextObjectSeq++}`, kind: "Shell",
       parentItemId: item.id, source: { ...item.source }, location: { kind: "storage" },
-      ...(state.opening ? { traits: [...(item.lockedAffinity ?? item.baseAffinity)] } : {}),
+      ...(state.juiceBatches ? { traits: [...(item.lockedAffinity ?? item.baseAffinity)] } : {}),
     };
     state.items[shell.id] = shell;
     outputIds.push(shell.id);
