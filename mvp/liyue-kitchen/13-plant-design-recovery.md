@@ -1,5 +1,7 @@
 # 植物长期培育｜原始设计恢复与版本差异
 
+> **最新规则：** [19｜器官成长与经营合同](19-organ-growth-and-economy-contract.md)。与19冲突的候选和历史算例已替代；不再作为当前产率或经济校准依据。
+
 > 本文是来源梳理和迁移依据，不新增生长公式或批准数值。当前采用[09](09-daily-growth-balance.md)及[12](12-element-ecosystem.md)已批准的1d/24uh及生态规则；历史参数只在明确恢复后进入当前合同。
 
 ## 1. 大树（Mature Tree，不是MatureFruit或Mature Leaf）
