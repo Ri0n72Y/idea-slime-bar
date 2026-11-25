@@ -8,7 +8,7 @@
 - [最早七元素成长](https://github.com/Ri0n72Y/idea-slime-bar/blob/b62d15afae408ec7cc59d02cd235eb9461cd641b/mvp/watermelon-kitchen/growth-system.md) §5：Seedling→Sapling→Mature。各Stage具有独立Base/Effective Affinity、Growth、吸收上限和成长阈值；阶段只向前。早期小树2叶、每叶0.3；正常约2–3周长成Mature，主动掰叶减少分流约1周的快速路线。原体验目标普通玩家每周约2片可收获叶、勤劳玩家约4片（旧时间尺度，不是当前果实产率）。Mature更高吸收、更多叶位，后续Growth用于持续生成器官，消耗Growth不退阶段；具体大树叶位、单叶分流、升级门槛尚待平衡。
 - [早期数值基线](https://github.com/Ri0n72Y/idea-slime-bar/blob/8f356c035220eae962586d14d03ebce59b158d95/mvp/watermelon-kitchen/growth-system.md)：一度各树Stage共用1V/h总上限，明确Sapling→Mature阈值、成熟时间、Reserve及周产量待后续数值。
 - [小树芽叶循环改版](https://github.com/Ri0n72Y/idea-slime-bar/blob/bbc5c913504733e085ccdb2b7e824ff7e99bab5d/mvp/watermelon-kitchen/growth-system.md)：Mature延期、小树成为长期玩法阶段，最多3叶，主干每100G周期塑形而不升级，Bud20G，掐芽返还主干。
-- 当前用户确认恢复长期培养及Mature扩展。保留当前首周小树三叶设计；历史2–3周/约1周加速是体验参考，不能直接套旧现实时间。大树升级与100G周期如何兼容需要迁移确认。未找到已定稿的大树升级阈值、根吸收、Reserve、预算、叶位/分配的完整数值。
+- 当前用户确认恢复长期培养及Mature扩展。小树改为双叶、每叶40%名义预算；历史2–3周/约1周加速是体验参考，不能直接套旧现实时间。大树升级与100G周期如何兼容需要迁移确认。未找到已定稿的大树升级阈值、根吸收、Reserve、预算、叶位/分配的完整数值。
 
 ## 2. 叶片、生殖与采果
 
@@ -35,7 +35,7 @@
 > 大树阶段及主干成长迁移候选见[15｜大树阶段与主干成长](15-mature-tree-and-trunk-growth.md)。
 
 1. 先恢复母叶持续成长和采果后完整预算，确定旧成叶60/40、富集未用预算与同叶复花的最小数值合同。
-2. 再恢复大树阶段与原修剪/主干催长取舍，核对三叶小树和大树吸收/分配。保留首周成长阈值与1d模式。
+2. 再恢复大树阶段与原修剪/主干催长取舍，核对双叶小树和大树储备/吸收/分配。保留首周成长阈值与1d模式。
 3. 叶片染色使用已有数据规则；元素变种及反应形态仅补实际缺失的器官资格和阈值，与美术表现分开。
 4. 按长期培育的情景A复算正常果实产量、V外流与供给；不再使用旧三果清株轨迹作长期依据，不引入低光教程/额外补偿，不批量随机模拟。
 
