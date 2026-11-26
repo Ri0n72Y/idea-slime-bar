@@ -221,7 +221,17 @@ MVP暂不引入等待时间惩罚：既有餐厅合同明确顾客等待上菜�
 | V公式中的5/25 | 数量级候选，未批准 | 真实顾客表和到访频率确定后复算 |
 | 风扩散的品尝事件标记 | 无独立Products | 保留来源事件，不能创建虚假产物 |
 
-## 7. 下一轮最小校准集
+## 7. 当前实现核对（重要缺口）
+
+以下是对main当前代码的读取结果，不代表PR分支已实现：
+
+- EdibleItem目前分别保存free、reaction、baseAffinity、lockedAffinity；它们是现有材料账本与遗传字段。
+- processing.ts创建JuiceBatch时，当前traits取lockedAffinity或baseAffinity。这是亲和度，不是原果E_free/Products的平均元素性状，也不是§2定义的TasteSnapshot。
+- 当前没有独立的FreeTrait[7]、ProductTrait[]品尝快照和三阶段强度计算。不能把Affinity直接当作风味，也不能将真实free/reaction账户与性状快照混为同一份可消耗物质。
+- visitors.ts当前只维护阿砚的固定访客故事状态，没有通用顾客的elementIdentity、preferenceProfile、TasteMatch、满意度或到访元素结算。餐厅旧文档中的随机点单池不能因此解释为匿名随机角色已完成设计。
+- 因此21号§2–§5是未来领域数据合同和数值提案。实现前应由Lead决定是否将平均性状快照作为独立派生字段；本角色不派发Coder任务，也不改源码。
+
+## 8. 下一轮最小校准集
 
 不需要重新建立大规模随机模拟。先用固定输入的手算/小脚本核对下列案例：
 
