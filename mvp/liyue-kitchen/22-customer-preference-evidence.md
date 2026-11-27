@@ -94,3 +94,13 @@
 3. 后续具名顾客的原始角色资料。收到资料后，再逐条提取其明确偏好，给出与既有感官轴对应的候选范围，保留来源证据并交用户确认。
 
 本清单不新增角色、不指定任何角色的元素属性或口味，不修改代码。
+
+
+## 7. 来源
+
+- [08｜访客与剧情交互验收](08-visitor-story-and-evidence.md)：阿砚出现条件、对话、木牌、商路线索、杯装水瓜汁委托与谢意。
+- [visitors.ts](../../packages/liyue-kitchen/src/domain/visitors.ts)：阿砚当前实际身份、事件状态与逐句对话实现。
+- [orders.ts](../../packages/liyue-kitchen/src/domain/orders.ts)：访客订单的真实类型、数量和交付条件。
+- [11｜开局任务与加工维护](11-opening-tasks-and-processing.md)：D1“今天的客人”及首杯交付要求。
+- [05｜七元素感官身份与反应口感](../aquamelon-kitchen/05-sensory-identity.md)、[感官评级与三阶段映射](../../docs/gameplay/sensory-mapping.md)：产品感官语义，不包含角色喜好。
+- [19｜器官成长与经营合同](19-organ-growth-and-economy-contract.md)：每位顾客具有身份、背景和故事链的已确认规则。
