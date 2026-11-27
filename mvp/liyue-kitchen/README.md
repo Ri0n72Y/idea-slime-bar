@@ -42,3 +42,10 @@
 - [03-production-and-state.md](03-production-and-state.md)：生产链、领域状态与存档
 - [04-adeptal-energy-and-plots.md](04-adeptal-energy-and-plots.md)：洞天仙力、地格开垦
 - [05-ui-driven-implementation.md](05-ui-driven-implementation.md)：U1～U9 工作切片与验收
+
+## 数值策划补充
+
+- [19-organ-growth-and-economy-contract.md](19-organ-growth-and-economy-contract.md)：已确认器官与经营规则
+- [20-organ-cycle-and-business-balance.md](20-organ-cycle-and-business-balance.md)：器官循环与经营数值候选
+- [21-sensory-preference-and-customer-yield.md](21-sensory-preference-and-customer-yield.md)：既有感官体系下的角色偏好、满意度与元素供给
+- [22-customer-preference-evidence.md](22-customer-preference-evidence.md)：现有角色事实、偏好证据与资料缺口
